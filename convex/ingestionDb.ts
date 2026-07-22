@@ -1,0 +1,405 @@
+import { v } from "convex/values";
+import {
+  query,
+  mutation,
+  internalQuery,
+  internalMutation,
+} from "./_generated/server";
+import type { Id } from "./_generated/dataModel";
+import { requireAdmin } from "./lib/auth";
+
+const batchPlanValidator = v.array(
+  v.object({
+    index: v.number(),
+    startPage: v.number(),
+    endPage: v.number(),
+  }),
+);
+
+const draftChunkInput = v.object({
+  breadcrumb: v.string(),
+  page: v.optional(v.number()),
+  chunkType: v.string(),
+  scope: v.string(),
+  variantName: v.optional(v.string()),
+  text: v.string(),
+  flags: v.array(v.string()),
+});
+
+const usageValidator = v.object({
+  promptTokens: v.number(),
+  completionTokens: v.number(),
+  totalTokens: v.number(),
+});
+
+// ---------------------------------------------------------------------------
+// Internal — used by the ingestion actions
+// ---------------------------------------------------------------------------
+
+export const getRulebookForIngest = internalQuery({
+  args: { rulebookId: v.id("rulebooks") },
+  handler: async (ctx, { rulebookId }) => {
+    const rb = await ctx.db.get("rulebooks", rulebookId);
+    if (!rb) return null;
+    const game = await ctx.db.get("games", rb.gameId);
+    return {
+      gameId: rb.gameId,
+      gameTitle: game?.title ?? "Unknown game",
+      storageId: rb.storageId,
+      kind: rb.kind ?? ("rulebook" as const),
+    };
+  },
+});
+
+/** Clear any prior draft for this rulebook and start a fresh one. */
+export const createDraft = internalMutation({
+  args: {
+    rulebookId: v.id("rulebooks"),
+    gameId: v.id("games"),
+    gameTitle: v.string(),
+    totalPages: v.number(),
+    batchPlan: batchPlanValidator,
+  },
+  handler: async (ctx, args): Promise<Id<"migrationDrafts">> => {
+    const olds = await ctx.db
+      .query("migrationDrafts")
+      .withIndex("by_rulebook", (q) => q.eq("rulebookId", args.rulebookId))
+      .take(20);
+    for (const old of olds) {
+      const batches = await ctx.db
+        .query("draftBatches")
+        .withIndex("by_draft", (q) => q.eq("draftId", old._id))
+        .take(1000);
+      for (const b of batches) await ctx.db.delete("draftBatches", b._id);
+      const chunks = await ctx.db
+        .query("draftChunks")
+        .withIndex("by_draft", (q) => q.eq("draftId", old._id))
+        .take(5000);
+      for (const c of chunks) await ctx.db.delete("draftChunks", c._id);
+      await ctx.db.delete("migrationDrafts", old._id);
+    }
+
+    await ctx.db.patch("rulebooks", args.rulebookId, { ingestState: "parsing" });
+
+    return await ctx.db.insert("migrationDrafts", {
+      rulebookId: args.rulebookId,
+      gameId: args.gameId,
+      gameTitle: args.gameTitle,
+      status: "parsing",
+      totalPages: args.totalPages,
+      batchPlan: args.batchPlan,
+      nextBatchIndex: 0,
+      iconTokens: [],
+      sectionHeadings: [],
+    });
+  },
+});
+
+export const getDraftForBatch = internalQuery({
+  args: { draftId: v.id("migrationDrafts") },
+  handler: async (ctx, { draftId }) => {
+    const draft = await ctx.db.get("migrationDrafts", draftId);
+    if (!draft) return null;
+    const rb = await ctx.db.get("rulebooks", draft.rulebookId);
+    if (!rb) return null;
+    return {
+      rulebookId: draft.rulebookId,
+      storageId: rb.storageId,
+      batchPlan: draft.batchPlan,
+      nextBatchIndex: draft.nextBatchIndex,
+      iconTokens: draft.iconTokens,
+      sectionHeadings: draft.sectionHeadings,
+    };
+  },
+});
+
+export const saveBatch = internalMutation({
+  args: {
+    draftId: v.id("migrationDrafts"),
+    index: v.number(),
+    startPage: v.number(),
+    endPage: v.number(),
+    markdown: v.string(),
+    newIconTokens: v.array(v.string()),
+    newSectionHeadings: v.array(v.string()),
+    usage: usageValidator,
+  },
+  handler: async (ctx, args) => {
+    const draft = await ctx.db.get("migrationDrafts", args.draftId);
+    if (!draft) return;
+
+    await ctx.db.insert("draftBatches", {
+      draftId: args.draftId,
+      index: args.index,
+      startPage: args.startPage,
+      endPage: args.endPage,
+      markdown: args.markdown,
+    });
+
+    const iconTokens = [
+      ...new Set([...draft.iconTokens, ...args.newIconTokens]),
+    ];
+    const sectionHeadings = [
+      ...new Set([...draft.sectionHeadings, ...args.newSectionHeadings]),
+    ];
+    const prev = draft.geminiUsage ?? {
+      promptTokens: 0,
+      completionTokens: 0,
+      totalTokens: 0,
+    };
+    await ctx.db.patch("migrationDrafts", args.draftId, {
+      nextBatchIndex: args.index + 1,
+      iconTokens,
+      sectionHeadings,
+      geminiUsage: {
+        promptTokens: prev.promptTokens + args.usage.promptTokens,
+        completionTokens: prev.completionTokens + args.usage.completionTokens,
+        totalTokens: prev.totalTokens + args.usage.totalTokens,
+      },
+    });
+
+    await ctx.db.insert("usageLog", {
+      purpose: "parse",
+      model: "gemini-2.5-flash",
+      promptTokens: args.usage.promptTokens,
+      completionTokens: args.usage.completionTokens,
+      totalTokens: args.usage.totalTokens,
+    });
+  },
+});
+
+export const setDraftError = internalMutation({
+  args: { draftId: v.id("migrationDrafts"), error: v.string() },
+  handler: async (ctx, { draftId, error }) => {
+    await ctx.db.patch("migrationDrafts", draftId, { error });
+  },
+});
+
+export const getBatchesMarkdown = internalQuery({
+  args: { draftId: v.id("migrationDrafts") },
+  handler: async (ctx, { draftId }) => {
+    const batches = await ctx.db
+      .query("draftBatches")
+      .withIndex("by_draft", (q) => q.eq("draftId", draftId))
+      .take(1000);
+    return batches
+      .sort((a, b) => a.index - b.index)
+      .map((b) => b.markdown);
+  },
+});
+
+export const saveDraftChunks = internalMutation({
+  args: {
+    draftId: v.id("migrationDrafts"),
+    chunks: v.array(draftChunkInput),
+    startOrder: v.number(),
+  },
+  handler: async (ctx, { draftId, chunks, startOrder }) => {
+    let order = startOrder;
+    for (const c of chunks) {
+      await ctx.db.insert("draftChunks", {
+        draftId,
+        order: order++,
+        breadcrumb: c.breadcrumb,
+        page: c.page,
+        chunkType: c.chunkType,
+        scope: c.scope,
+        variantName: c.variantName,
+        text: c.text,
+        flags: c.flags,
+        accepted: true,
+        edited: false,
+      });
+    }
+  },
+});
+
+export const finishParse = internalMutation({
+  args: { draftId: v.id("migrationDrafts") },
+  handler: async (ctx, { draftId }) => {
+    const draft = await ctx.db.get("migrationDrafts", draftId);
+    if (!draft) return;
+    await ctx.db.patch("migrationDrafts", draftId, { status: "parsed" });
+    await ctx.db.patch("rulebooks", draft.rulebookId, {
+      ingestState: "parsed",
+    });
+  },
+});
+
+export const getAcceptedForCommit = internalQuery({
+  args: { rulebookId: v.id("rulebooks") },
+  handler: async (ctx, { rulebookId }) => {
+    const draft = await ctx.db
+      .query("migrationDrafts")
+      .withIndex("by_rulebook", (q) => q.eq("rulebookId", rulebookId))
+      .order("desc")
+      .first();
+    if (!draft) return null;
+    const chunks = await ctx.db
+      .query("draftChunks")
+      .withIndex("by_draft", (q) => q.eq("draftId", draft._id))
+      .take(5000);
+    const accepted = chunks
+      .filter((c) => c.accepted && c.text.trim())
+      .sort((a, b) => a.order - b.order);
+    return {
+      draftId: draft._id,
+      gameId: draft.gameId,
+      chunks: accepted.map((c) => ({
+        breadcrumb: c.breadcrumb,
+        page: c.page,
+        chunkType: c.chunkType,
+        scope: c.scope,
+        variantName: c.variantName,
+        text: c.text,
+      })),
+    };
+  },
+});
+
+const normChunkType = (t: string): "text" | "table" | "list" | "legend" =>
+  t === "table" || t === "list" || t === "legend" ? t : "text";
+const normScope = (s: string): "main" | "variant" =>
+  s === "variant" ? "variant" : "main";
+
+/** Delete a rulebook's existing committed chunks (call before re-inserting). */
+export const clearRulebookChunks = internalMutation({
+  args: { rulebookId: v.id("rulebooks") },
+  handler: async (ctx, { rulebookId }) => {
+    const existing = await ctx.db
+      .query("chunks")
+      .withIndex("by_rulebook", (q) => q.eq("rulebookId", rulebookId))
+      .take(5000);
+    for (const c of existing) await ctx.db.delete("chunks", c._id);
+  },
+});
+
+/** Insert one batch of embedded chunks. */
+export const insertCommittedChunks = internalMutation({
+  args: {
+    rulebookId: v.id("rulebooks"),
+    gameId: v.id("games"),
+    chunks: v.array(
+      v.object({
+        breadcrumb: v.string(),
+        page: v.optional(v.number()),
+        chunkType: v.string(),
+        scope: v.string(),
+        variantName: v.optional(v.string()),
+        text: v.string(),
+        embedding: v.array(v.float64()),
+      }),
+    ),
+  },
+  handler: async (ctx, { rulebookId, gameId, chunks }) => {
+    for (const c of chunks) {
+      await ctx.db.insert("chunks", {
+        rulebookId,
+        gameId,
+        breadcrumb: c.breadcrumb,
+        page: c.page,
+        chunkType: normChunkType(c.chunkType),
+        scope: normScope(c.scope),
+        variantName: c.variantName,
+        text: c.text,
+        embedding: c.embedding,
+      });
+    }
+  },
+});
+
+/** Mark the rulebook ingested + draft committed, and log embedding usage. */
+export const finalizeCommit = internalMutation({
+  args: {
+    rulebookId: v.id("rulebooks"),
+    draftId: v.id("migrationDrafts"),
+    embedTokens: v.number(),
+  },
+  handler: async (ctx, { rulebookId, draftId, embedTokens }) => {
+    await ctx.db.patch("rulebooks", rulebookId, {
+      isIngested: true,
+      ingestState: "committed",
+    });
+    await ctx.db.patch("migrationDrafts", draftId, { status: "committed" });
+    await ctx.db.insert("usageLog", {
+      purpose: "embed",
+      model: "gemini-embedding-001",
+      promptTokens: embedTokens,
+      completionTokens: 0,
+      totalTokens: embedTokens,
+    });
+  },
+});
+
+// ---------------------------------------------------------------------------
+// Public — the admin review UI
+// ---------------------------------------------------------------------------
+
+export const getIngestStatus = query({
+  args: { rulebookId: v.id("rulebooks") },
+  handler: async (ctx, { rulebookId }) => {
+    await requireAdmin(ctx);
+    const draft = await ctx.db
+      .query("migrationDrafts")
+      .withIndex("by_rulebook", (q) => q.eq("rulebookId", rulebookId))
+      .order("desc")
+      .first();
+    if (!draft) return null;
+    return {
+      draftId: draft._id,
+      status: draft.status,
+      totalPages: draft.totalPages,
+      totalBatches: draft.batchPlan.length,
+      batchesDone: draft.nextBatchIndex,
+      error: draft.error,
+    };
+  },
+});
+
+export const listDraftChunks = query({
+  args: { rulebookId: v.id("rulebooks") },
+  handler: async (ctx, { rulebookId }) => {
+    await requireAdmin(ctx);
+    const draft = await ctx.db
+      .query("migrationDrafts")
+      .withIndex("by_rulebook", (q) => q.eq("rulebookId", rulebookId))
+      .order("desc")
+      .first();
+    if (!draft) return [];
+    const chunks = await ctx.db
+      .query("draftChunks")
+      .withIndex("by_draft", (q) => q.eq("draftId", draft._id))
+      .take(5000);
+    return chunks.sort((a, b) => a.order - b.order);
+  },
+});
+
+export const updateDraftChunk = mutation({
+  args: {
+    draftChunkId: v.id("draftChunks"),
+    text: v.optional(v.string()),
+    accepted: v.optional(v.boolean()),
+  },
+  handler: async (ctx, { draftChunkId, text, accepted }) => {
+    await requireAdmin(ctx);
+    const chunk = await ctx.db.get("draftChunks", draftChunkId);
+    if (!chunk) throw new Error("Chunk not found");
+
+    const patch: Record<string, unknown> = {};
+    if (text !== undefined && text !== chunk.text) {
+      patch.text = text;
+      patch.edited = true;
+      if (chunk.originalText === undefined) patch.originalText = chunk.text;
+    }
+    if (accepted !== undefined) patch.accepted = accepted;
+    if (Object.keys(patch).length > 0) {
+      await ctx.db.patch("draftChunks", draftChunkId, patch);
+      const draft = await ctx.db.get("migrationDrafts", chunk.draftId);
+      if (draft?.status === "parsed") {
+        await ctx.db.patch("migrationDrafts", chunk.draftId, {
+          status: "reviewing",
+        });
+      }
+    }
+  },
+});

@@ -1,26 +1,224 @@
 @import "tailwindcss";
 
+/* Class-based dark mode (toggled on <html> by the theme provider). */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/*
+ * Meepletron palette — matches the original: a blue accent in light mode that
+ * flips to a warm yellow in dark mode, over cool slate surfaces.
+ */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #f7f7f7;
+  --surface: #ffffff;
+  --surface-2: #eef1f4;
+  --foreground: #111827;
+  --muted: #4d515b;
+  --subtle: #8d939d;
+  --border: #e5e7eb;
+  --border-muted: #f1f3f5;
+  --accent: #2563eb; /* blue-600 */
+  --accent-hover: #1d4ed8;
+  --accent-foreground: #ffffff;
+  --ring: #2563eb;
+}
+
+.dark {
+  --background: #0f172a; /* slate-900 */
+  --surface: #1e293b; /* slate-800 */
+  --surface-2: #273449;
+  --foreground: #f8fafc;
+  --muted: #adb9c9;
+  --subtle: #64748b;
+  --border: #334155; /* slate-700 */
+  --border-muted: #1e293b;
+  --accent: #eab308; /* yellow-500 */
+  --accent-hover: #facc15;
+  --accent-foreground: #0f172a;
+  --ring: #eab308;
 }
 
 @theme inline {
   --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-muted: var(--muted);
+  --color-subtle: var(--subtle);
+  --color-border: var(--border);
+  --color-ring: var(--ring);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  /* Aliases used across the app + ported components. */
+  --color-bg: var(--background);
+  --color-surface-muted: var(--surface-2);
+  --color-border-muted: var(--border-muted);
+  --color-primary: var(--accent);
+  --color-primary-hover: var(--accent-hover);
+  --color-primary-fg: var(--accent-foreground);
+  --font-sans: var(--font-poppins), var(--font-geist-sans), system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), monospace;
+  /* Rounder corners to match the original design language (Tailwind v4's
+     defaults are much tighter, which made cards/buttons look blocky). */
+  --radius-sm: 0.5rem;
+  --radius-md: 0.75rem;
+  --radius-lg: 1rem;
+  --radius-xl: 1.25rem;
+  --radius-2xl: 1.5rem;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* Gentle global down-scale — the whole UI is built in rem, so lowering the
+   root size shrinks text and spacing together for a more refined, less bulky
+   feel. Bump toward 16px to enlarge, toward 14px to tighten further. */
+html {
+  font-size: 15px;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Custom scrollbars — desktop (mouse) only; mobile keeps native overlay bars. */
+@media (pointer: fine) {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+  }
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--border);
+    border-radius: 9999px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--muted);
+  }
+}
+
+/* --- Motion --- */
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.animate-in {
+  animation: fade-up 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.fade-in {
+  animation: fade-in 0.6s ease;
+}
+
+@keyframes loader-bob {
+  0%,
+  100% {
+    transform: translateY(0) rotate(-6deg);
+  }
+  50% {
+    transform: translateY(-6px) rotate(6deg);
+  }
+}
+@keyframes loader-halo {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.5;
+  }
+  50% {
+    transform: scale(1.4);
+    opacity: 0;
+  }
+}
+.loader-bob {
+  animation: loader-bob 1.2s ease-in-out infinite;
+}
+.loader-halo {
+  animation: loader-halo 1.5s ease-in-out infinite;
+}
+
+@keyframes phrase-in {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.phrase-in {
+  animation: phrase-in 0.3s ease-out;
+}
+
+/* Lightweight markdown styling for assistant messages. */
+.prose-chat > :first-child {
+  margin-top: 0;
+}
+.prose-chat > :last-child {
+  margin-bottom: 0;
+}
+.prose-chat p {
+  margin: 0.5em 0;
+}
+.prose-chat ul,
+.prose-chat ol {
+  margin: 0.5em 0;
+  padding-left: 1.25em;
+}
+.prose-chat ul {
+  list-style: disc;
+}
+.prose-chat ol {
+  list-style: decimal;
+}
+.prose-chat li {
+  margin: 0.15em 0;
+}
+.prose-chat strong {
+  font-weight: 600;
+}
+.prose-chat code {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  background: var(--surface-2);
+  padding: 0.1em 0.3em;
+  border-radius: 0.25rem;
+}
+.prose-chat h1,
+.prose-chat h2,
+.prose-chat h3 {
+  font-weight: 600;
+  margin: 0.6em 0 0.3em;
+}
+
+/* Respect users who prefer reduced motion. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
 }
