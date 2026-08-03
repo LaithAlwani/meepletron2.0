@@ -50,6 +50,10 @@ export const viewport: Viewport = {
 // of the wrong theme. Matches the app's chosen theme, not the OS preference.
 const themeScript = `(function(){try{var t=localStorage.getItem('theme');var d=t==='dark'||((!t||t==='system')&&window.matchMedia('(prefers-color-scheme: dark)').matches);document.documentElement.classList.toggle('dark',d);var m=document.querySelector('meta[name=theme-color]');if(m)m.setAttribute('content',d?'#0f172a':'#f7f7f7');}catch(e){}})();`;
 
+// Capture the PWA install prompt as early as possible — it can fire before any
+// React component mounts. Stashed on window for the InstallPrompt card to use.
+const installCaptureScript = `(function(){window.addEventListener('beforeinstallprompt',function(e){e.preventDefault();window.__bip=e;window.dispatchEvent(new Event('bip-ready'));});window.addEventListener('appinstalled',function(){window.__bip=null;});})();`;
+
 export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
@@ -61,6 +65,7 @@ export default function RootLayout({
     >
       <body className="flex min-h-full flex-col font-sans">
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
+        <script dangerouslySetInnerHTML={{ __html: installCaptureScript }} />
         <Providers>
           <SiteHeader />
           <main className="flex-1">{children}</main>

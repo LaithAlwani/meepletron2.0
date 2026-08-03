@@ -14,6 +14,7 @@ import { useAuthActions } from "@convex-dev/auth/react";
 import { api } from "@/convex/_generated/api";
 import type { Doc } from "@/convex/_generated/dataModel";
 import { useToast } from "@/components/ui/Toast";
+import { InstallPrompt } from "@/components/InstallPrompt";
 
 const icon = "h-4 w-4";
 const CalendarIcon = (
@@ -145,6 +146,9 @@ function ProfileBody() {
           </button>
         )}
       </div>
+
+      {/* Install the PWA */}
+      <InstallPrompt />
 
       {/* Personal info */}
       {!isGuest && <PersonalInfo me={me} />}
