@@ -22,15 +22,9 @@ export default function manifest(): MetadataRoute.Manifest {
     background_color: "#0f172a",
     theme_color: "#0f172a",
     categories: ["games", "reference", "utilities"],
-    icons: [
-      ...icons,
-      // Maskable variant so Android crops it into the adaptive-icon shape.
-      {
-        src: "/icons/icon-512x512.webp",
-        sizes: "512x512",
-        type: "image/webp",
-        purpose: "maskable",
-      },
-    ],
+    // No "maskable" variant: the current icons fill the whole square (no safe
+    // zone), so declaring them maskable makes the OS crop the logo. Using "any"
+    // shows the full logo. Add a real padded maskable icon later for Android.
+    icons,
   };
 }

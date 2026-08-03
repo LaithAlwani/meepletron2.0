@@ -10,6 +10,9 @@ function applyTheme(theme: Theme) {
     (theme === "system" &&
       window.matchMedia("(prefers-color-scheme: dark)").matches);
   document.documentElement.classList.toggle("dark", isDark);
+  // Keep the mobile status-bar colour matched to the app's theme.
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.setAttribute("content", isDark ? "#0f172a" : "#f7f7f7");
 }
 
 const SunIcon = (

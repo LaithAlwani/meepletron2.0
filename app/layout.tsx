@@ -41,14 +41,14 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#f7f7f7" },
-    { media: "(prefers-color-scheme: dark)", color: "#0f172a" },
-  ],
+  // A single default; the script + ThemeToggle keep it in sync with the actual
+  // (class-based) theme so the mobile status bar always matches the app.
+  themeColor: "#0f172a",
 };
 
-// Runs before paint to set the theme class and avoid a flash of the wrong theme.
-const themeScript = `(function(){try{var t=localStorage.getItem('theme');var d=t==='dark'||((!t||t==='system')&&window.matchMedia('(prefers-color-scheme: dark)').matches);document.documentElement.classList.toggle('dark',d);}catch(e){}})();`;
+// Runs before paint to set the theme class + status-bar colour, avoiding a flash
+// of the wrong theme. Matches the app's chosen theme, not the OS preference.
+const themeScript = `(function(){try{var t=localStorage.getItem('theme');var d=t==='dark'||((!t||t==='system')&&window.matchMedia('(prefers-color-scheme: dark)').matches);document.documentElement.classList.toggle('dark',d);var m=document.querySelector('meta[name=theme-color]');if(m)m.setAttribute('content',d?'#0f172a':'#f7f7f7');}catch(e){}})();`;
 
 export default function RootLayout({
   children,
