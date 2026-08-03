@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { usePaginatedQuery, useMutation } from "convex/react";
+import { useEffect, useRef, useState } from "react";
+import { usePaginatedQuery, useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { GameCard } from "@/components/boardgames/GameCard";
 import { GameListItem } from "@/components/boardgames/GameListItem";
@@ -86,6 +86,17 @@ export default function BoardgamesPage() {
     { initialNumItems: 24 },
   );
 
+  const browseTotal = useQuery(
+    api.games.browseCount,
+    searching
+      ? "skip"
+      : {
+          players: filters.players ?? undefined,
+          time: filters.time ?? undefined,
+          hasExpansions: filters.hasExpansions || undefined,
+        },
+  );
+
   const logSearch = useMutation(api.search.logSearch);
   useEffect(() => {
     // `debounced` is already delayed, so log the settled term directly.
@@ -95,6 +106,24 @@ export default function BoardgamesPage() {
   const active = searching ? search : browse;
   const loadingFirst = active.status === "LoadingFirstPage";
   const results = active.results;
+
+  // Auto-load the next page when the sentinel scrolls into view (a bit before,
+  // via rootMargin) so paging feels seamless — no button press.
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+  const status = active.status;
+  const loadMore = active.loadMore;
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el || status !== "CanLoadMore") return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) loadMore(24);
+      },
+      { rootMargin: "600px" },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [status, loadMore]);
   const activeFilterCount =
     (filters.players ? 1 : 0) + (filters.time ? 1 : 0) + (filters.hasExpansions ? 1 : 0);
 
@@ -108,12 +137,24 @@ export default function BoardgamesPage() {
           </p>
           <h1 className="text-3xl font-bold">
             Board games
-            {results.length > 0 && (
-              <span className="ml-2 text-base font-normal text-subtle">
-                ({results.length}
-                {active.status === "CanLoadMore" || active.status === "LoadingMore" ? "+" : ""})
-              </span>
-            )}
+            {/* When browsing, show the exact base-game total; when searching,
+                show how many results matched so far. */}
+            {searching
+              ? results.length > 0 && (
+                  <span className="ml-2 text-base font-normal text-subtle">
+                    ({results.length}
+                    {active.status === "CanLoadMore" ||
+                    active.status === "LoadingMore"
+                      ? "+"
+                      : ""}
+                    )
+                  </span>
+                )
+              : browseTotal !== undefined && (
+                  <span className="ml-2 text-base font-normal text-subtle">
+                    ({browseTotal})
+                  </span>
+                )}
           </h1>
         </div>
 
@@ -254,16 +295,8 @@ export default function BoardgamesPage() {
             </div>
           )}
 
-          {active.status === "CanLoadMore" && (
-            <div className="mt-8 text-center">
-              <button
-                onClick={() => active.loadMore(24)}
-                className="rounded-lg border border-border bg-surface px-6 py-2.5 font-medium hover:bg-surface-2"
-              >
-                Load more
-              </button>
-            </div>
-          )}
+          {/* Invisible sentinel — scrolling near it auto-loads the next page. */}
+          <div ref={sentinelRef} aria-hidden className="h-px" />
           {active.status === "LoadingMore" && (
             <p className="mt-8 text-center text-sm text-muted">Loading…</p>
           )}

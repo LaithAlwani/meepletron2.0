@@ -131,6 +131,57 @@ export const browsePaginated = query({
   },
 });
 
+/**
+ * Exact count of base games matching the library filters — for the "Board
+ * games (N)" header. Scans only base games (~a few hundred), no media.
+ * Keep the filter logic in sync with `browsePaginated`.
+ */
+export const browseCount = query({
+  args: {
+    players: v.optional(v.number()),
+    time: v.optional(
+      v.union(v.literal("quick"), v.literal("standard"), v.literal("epic")),
+    ),
+    hasExpansions: v.optional(v.boolean()),
+  },
+  handler: async (ctx, { players, time, hasExpansions }) => {
+    const base = ctx.db
+      .query("games")
+      .withIndex("by_isExpansion", (q) => q.eq("isExpansion", false));
+
+    const needsFilter = players != null || time != null || hasExpansions;
+    const q = needsFilter
+      ? base.filter((fq) => {
+          const conds = [];
+          if (players != null) {
+            conds.push(
+              fq.and(
+                fq.lte(fq.field("minPlayers"), players),
+                fq.gte(fq.field("maxPlayers"), players),
+              ),
+            );
+          }
+          if (time === "quick") conds.push(fq.lte(fq.field("maxPlayTime"), 30));
+          else if (time === "standard")
+            conds.push(
+              fq.and(
+                fq.gt(fq.field("maxPlayTime"), 30),
+                fq.lte(fq.field("maxPlayTime"), 90),
+              ),
+            );
+          else if (time === "epic")
+            conds.push(fq.gt(fq.field("maxPlayTime"), 90));
+          if (hasExpansions)
+            conds.push(fq.eq(fq.field("hasExpansions"), true));
+          return fq.and(...conds);
+        })
+      : base;
+
+    const rows = await q.collect();
+    return rows.length;
+  },
+});
+
 /** Assemble a game detail: the game (with media), parent, expansions, rulebooks. */
 async function gameDetail(ctx: QueryCtx, game: Doc<"games">) {
   const [expansions, rulebookDocs, parentDoc] = await Promise.all([
@@ -239,7 +290,22 @@ export const adminList = query({
   handler: async (ctx) => {
     await requireAdmin(ctx);
     const games = await ctx.db.query("games").order("desc").take(500);
-    return await Promise.all(games.map((g) => withMedia(ctx, g)));
+    return await Promise.all(
+      games.map(async (g) => {
+        const rulebooks = await ctx.db
+          .query("rulebooks")
+          .withIndex("by_game", (q) => q.eq("gameId", g._id))
+          // Only chat rulebooks are ingestable; "download" add-ons are not.
+          .collect();
+        const files = rulebooks.filter((r) => (r.kind ?? "rulebook") !== "download");
+        const ingested = files.filter((r) => r.isIngested).length;
+        return {
+          ...(await withMedia(ctx, g)),
+          fileCount: files.length,
+          ingestedCount: ingested,
+        };
+      }),
+    );
   },
 });
 
