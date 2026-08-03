@@ -52,19 +52,22 @@ function MessageActions({ message }: { message: Doc<"messages"> }) {
     }
   }
 
+  // Layout only — no text color here so an active rating's color isn't
+  // overridden by an idle `hover:text-*` on hover.
   const base =
-    "flex h-7 w-7 items-center justify-center rounded-md text-muted transition-colors hover:bg-surface-2 hover:text-foreground";
+    "flex h-7 w-7 items-center justify-center rounded-md transition-colors hover:bg-surface-2";
+  const idle = "text-muted hover:text-foreground";
 
   return (
     <div className="mt-2 flex items-center gap-0.5 opacity-70 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
-      <button onClick={copy} aria-label="Copy answer" className={base}>
+      <button onClick={copy} aria-label="Copy answer" className={`${base} ${idle}`}>
         {copied ? <span className="text-green-600 dark:text-green-400">{CheckIcon}</span> : CopyIcon}
       </button>
       <button
         onClick={() => rate({ messageId: message._id, rating: "up" })}
         aria-label="Helpful"
         aria-pressed={rating === "up"}
-        className={`${base} ${rating === "up" ? "text-green-600 hover:text-green-600 dark:text-green-400 dark:hover:text-green-400" : ""}`}
+        className={`${base} ${rating === "up" ? "text-green-600 dark:text-green-400" : idle}`}
       >
         <ThumbUpIcon filled={rating === "up"} />
       </button>
@@ -72,7 +75,7 @@ function MessageActions({ message }: { message: Doc<"messages"> }) {
         onClick={() => rate({ messageId: message._id, rating: "down" })}
         aria-label="Not helpful"
         aria-pressed={rating === "down"}
-        className={`${base} ${rating === "down" ? "text-red-600 hover:text-red-600 dark:text-red-400 dark:hover:text-red-400" : ""}`}
+        className={`${base} ${rating === "down" ? "text-red-600 dark:text-red-400" : idle}`}
       >
         <ThumbDownIcon filled={rating === "down"} />
       </button>

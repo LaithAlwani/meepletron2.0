@@ -34,7 +34,7 @@ export function ChatInput({
         e.preventDefault();
         submit();
       }}
-      className="flex items-end gap-1.5 rounded-2xl bg-surface px-2 py-1.5 ring-1 ring-border transition-shadow focus-within:ring-2 focus-within:ring-ring"
+      className="flex items-center gap-1.5 rounded-2xl bg-surface px-2 py-1.5 ring-1 ring-border transition-shadow focus-within:ring-2 focus-within:ring-ring"
     >
       <textarea
         ref={taRef}
@@ -59,7 +59,7 @@ export function ChatInput({
         type="submit"
         disabled={disabled || !text.trim()}
         aria-label="Send"
-        className="mb-0.5 flex shrink-0 items-center justify-center rounded-xl bg-accent p-2.5 text-accent-foreground shadow-sm transition-opacity hover:opacity-90 disabled:opacity-40"
+        className="flex shrink-0 items-center justify-center rounded-xl bg-accent p-2.5 text-accent-foreground shadow-sm transition-opacity hover:opacity-90 disabled:opacity-40"
       >
         {SendIcon}
       </button>

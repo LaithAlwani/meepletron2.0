@@ -185,6 +185,50 @@ export const getByHandle = query({
   },
 });
 
+/**
+ * Chat sources for a game family, grouped by game (base first, then expansions
+ * that have ingested rulebooks). Only ingested rulebooks — the ones the chat can
+ * actually retrieve from. `gameId` is resolved to its base game.
+ */
+export const chatSources = query({
+  args: { gameId: v.id("games") },
+  handler: async (ctx, { gameId }) => {
+    const game = await ctx.db.get("games", gameId);
+    if (!game) return [];
+    const baseId =
+      game.isExpansion && game.parentId ? game.parentId : game._id;
+    const base = baseId === game._id ? game : await ctx.db.get("games", baseId);
+    if (!base) return [];
+
+    const expansions = await ctx.db
+      .query("games")
+      .withIndex("by_parent", (q) => q.eq("parentId", baseId))
+      .take(100);
+
+    const groupFor = async (g: Doc<"games">, isBase: boolean) => {
+      const rbs = await ctx.db
+        .query("rulebooks")
+        .withIndex("by_game", (q) => q.eq("gameId", g._id))
+        .take(50);
+      return {
+        gameId: g._id,
+        gameTitle: g.title,
+        isBase,
+        rulebooks: rbs
+          .filter((r) => r.isIngested)
+          .map((r) => ({ _id: r._id, label: r.label })),
+      };
+    };
+
+    const groups = [await groupFor(base, true)];
+    for (const exp of expansions) {
+      const grp = await groupFor(exp, false);
+      if (grp.rulebooks.length > 0) groups.push(grp);
+    }
+    return groups;
+  },
+});
+
 // ---------------------------------------------------------------------------
 // Admin CRUD
 // ---------------------------------------------------------------------------

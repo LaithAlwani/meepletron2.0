@@ -248,7 +248,11 @@ export default function GameDetailPage({
           <div className="flex flex-wrap gap-3">
             {ingestedCount > 0 ? (
               <Link
-                href={`/boardgames/${game.slug}/chat`}
+                href={
+                  game.parent
+                    ? `/boardgames/${game.parent.slug}/chat?module=${game._id}`
+                    : `/boardgames/${game.slug}/chat`
+                }
                 className="inline-flex items-center gap-2 rounded-xl bg-accent px-4 py-2.5 text-sm font-semibold text-accent-foreground shadow-sm transition-opacity hover:opacity-90"
               >
                 💬 Chat about rules

@@ -2,6 +2,7 @@
 
 import {
   Fragment,
+  Suspense,
   use,
   useEffect,
   useLayoutEffect,
@@ -10,6 +11,7 @@ import {
   useMemo,
 } from "react";
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   useQuery,
   useMutation,
@@ -76,7 +78,20 @@ export default function ChatPage({
 }) {
   const { slug: handle } = use(params);
   const game = useQuery(api.games.getByHandle, { handle });
-  if (game === undefined) {
+  const router = useRouter();
+
+  // One chat per family: an expansion routes to the base game's chat, carrying
+  // a `module` param so the expansion's rulebooks get pre-selected there.
+  const isExpansion = !!(game && game.isExpansion && game.parent);
+  useEffect(() => {
+    if (game && game.isExpansion && game.parent) {
+      router.replace(
+        `/boardgames/${game.parent.slug}/chat?module=${game._id}`,
+      );
+    }
+  }, [game, router]);
+
+  if (game === undefined || isExpansion) {
     return (
       <div className="flex h-dvh items-center justify-center text-muted">
         Loading…
@@ -90,7 +105,17 @@ export default function ChatPage({
       </div>
     );
   }
-  return <ChatView gameId={game._id} slug={game.slug} />;
+  return (
+    <Suspense
+      fallback={
+        <div className="flex h-dvh items-center justify-center text-muted">
+          Loading…
+        </div>
+      }
+    >
+      <ChatView gameId={game._id} slug={game.slug} />
+    </Suspense>
+  );
 }
 
 function ChatView({ gameId, slug }: { gameId: Id<"games">; slug: string }) {
@@ -99,7 +124,11 @@ function ChatView({ gameId, slug }: { gameId: Id<"games">; slug: string }) {
   const getOrCreateChat = useMutation(api.chat.getOrCreateChat);
   const postMessage = useMutation(api.chat.postMessage);
   const setSelected = useMutation(api.chat.setSelectedRulebooks);
+  const addModule = useMutation(api.chat.addModuleRulebooks);
   const token = useAuthToken();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const moduleParam = searchParams.get("module");
 
   const me = useQuery(api.users.me);
   const isGuest = me?.isAnonymous === true;
@@ -112,6 +141,7 @@ function ChatView({ gameId, slug }: { gameId: Id<"games">; slug: string }) {
   const [resourcesOpen, setResourcesOpen] = useState(false);
 
   const game = useQuery(api.games.getById, { gameId });
+  const sources = useQuery(api.games.chatSources, { gameId });
   const chat = useQuery(api.chat.getChat, chatId ? { chatId } : "skip");
   const {
     results: pagedMessages,
@@ -134,6 +164,7 @@ function ChatView({ gameId, slug }: { gameId: Id<"games">; slug: string }) {
   );
   const nearBottomRef = useRef(true);
   const signingIn = useRef(false);
+  const moduleApplied = useRef(false);
 
   // Brand-new visitors get an anonymous identity automatically so they can
   // chat right away (and their daily budget is enforced server-side).
@@ -157,6 +188,18 @@ function ChatView({ gameId, slug }: { gameId: Id<"games">; slug: string }) {
       active = false;
     };
   }, [isAuthenticated, gameId, getOrCreateChat]);
+
+  // Pre-select an expansion's modules when arriving via `?module=<expansionId>`
+  // (from an expansion's Chat button), then drop the param so a refresh won't
+  // re-apply it. Non-destructive — it unions into the existing selection.
+  useEffect(() => {
+    if (!chatId || !moduleParam || moduleApplied.current) return;
+    moduleApplied.current = true;
+    void addModule({
+      chatId,
+      moduleGameId: moduleParam as Id<"games">,
+    }).finally(() => router.replace(`/boardgames/${slug}/chat`));
+  }, [chatId, moduleParam, addModule, router, slug]);
 
   // Reset scroll bookkeeping when switching chats.
   useEffect(() => {
@@ -258,8 +301,8 @@ function ChatView({ gameId, slug }: { gameId: Id<"games">; slug: string }) {
     void setSelected({ chatId, rulebookIds: [...set] });
   }
 
-  const rulebooks = game?.rulebooks ?? [];
-  const resourceCount = rulebooks.filter((r) => r.isIngested).length;
+  const groups = useMemo(() => sources ?? [], [sources]);
+  const resourceCount = groups.reduce((n, g) => n + g.rulebooks.length, 0);
   const coverUrl = game?.imageUrl ?? game?.thumbnailUrl ?? null;
   const loadingMessages = msgStatus === "LoadingFirstPage";
   const isEmpty =
@@ -329,7 +372,7 @@ function ChatView({ gameId, slug }: { gameId: Id<"games">; slug: string }) {
           <div
             ref={scrollRef}
             onScroll={handleScroll}
-            className="flex-1 space-y-4 overflow-y-auto py-4"
+            className="chat-scroll flex-1 space-y-4 overflow-y-auto py-4"
           >
           {msgStatus === "LoadingMore" && (
             <p className="py-2 text-center text-xs text-muted">
@@ -437,7 +480,7 @@ function ChatView({ gameId, slug }: { gameId: Id<"games">; slug: string }) {
       <ResourcesSideNav
         open={resourcesOpen}
         onClose={() => setResourcesOpen(false)}
-        rulebooks={rulebooks}
+        groups={groups}
         selectedIds={chat?.selectedRulebookIds ?? []}
         onToggle={toggleSource}
       />

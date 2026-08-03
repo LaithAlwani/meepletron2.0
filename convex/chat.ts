@@ -35,24 +35,50 @@ async function ingestedRulebookIds(
   return rulebooks.filter((r) => r.isIngested).map((r) => r._id);
 }
 
+/** A chat is anchored on the base game — resolve an expansion to its parent. */
+async function resolveBaseGameId(
+  ctx: QueryCtx,
+  gameId: Id<"games">,
+): Promise<Id<"games">> {
+  const game = await ctx.db.get("games", gameId);
+  if (game?.isExpansion && game.parentId) return game.parentId;
+  return gameId;
+}
+
 /**
- * Keep only selected rulebooks that still exist, are ingested, and belong to
- * this game. If none survive (e.g. the rulebook was deleted/re-ingested), fall
- * back to all of the game's currently-ingested rulebooks — so a chat never ends
- * up pointing at a stale/empty rulebook and silently losing retrieval.
+ * Every ingested rulebook a base game's chat may use: the base game's own plus
+ * all of its expansions'. This is the "allowed set" the chat validates against.
+ */
+async function familyRulebookIds(
+  ctx: QueryCtx,
+  baseGameId: Id<"games">,
+): Promise<Set<Id<"rulebooks">>> {
+  const expansions = await ctx.db
+    .query("games")
+    .withIndex("by_parent", (q) => q.eq("parentId", baseGameId))
+    .take(100);
+  const ids = new Set<Id<"rulebooks">>();
+  for (const gid of [baseGameId, ...expansions.map((e) => e._id)]) {
+    for (const rid of await ingestedRulebookIds(ctx, gid)) ids.add(rid);
+  }
+  return ids;
+}
+
+/**
+ * Keep only selected rulebooks that still exist, are ingested, and belong to the
+ * chat's game family (base game + its expansions). If none survive (e.g. deleted/
+ * re-ingested), fall back to the base game's own ingested rulebooks — so a chat
+ * never points at a stale/empty selection and silently loses retrieval.
  */
 async function effectiveRulebookIds(
   ctx: QueryCtx,
-  gameId: Id<"games">,
+  baseGameId: Id<"games">,
   selected: Id<"rulebooks">[],
 ): Promise<Id<"rulebooks">[]> {
-  const valid: Id<"rulebooks">[] = [];
-  for (const rid of selected) {
-    const rb = await ctx.db.get("rulebooks", rid);
-    if (rb && rb.isIngested && rb.gameId === gameId) valid.push(rid);
-  }
+  const allowed = await familyRulebookIds(ctx, baseGameId);
+  const valid = selected.filter((rid) => allowed.has(rid));
   if (valid.length > 0) return valid;
-  return await ingestedRulebookIds(ctx, gameId);
+  return await ingestedRulebookIds(ctx, baseGameId);
 }
 
 async function loadOwnedChat(
@@ -74,18 +100,20 @@ export const getOrCreateChat = mutation({
   args: { gameId: v.id("games") },
   handler: async (ctx, { gameId }): Promise<Id<"chats">> => {
     const user = await requireUser(ctx);
+    // One chat per game family — anchor it on the base game.
+    const baseId = await resolveBaseGameId(ctx, gameId);
     const existing = await ctx.db
       .query("chats")
       .withIndex("by_user_and_game", (q) =>
-        q.eq("userId", user._id).eq("gameId", gameId),
+        q.eq("userId", user._id).eq("gameId", baseId),
       )
       .unique();
     if (existing) {
       // Prune stale/deleted rulebook selections (keeps retrieval + the source
-      // panel in sync with the game's current rulebooks).
+      // panel in sync with the family's current rulebooks).
       const effective = await effectiveRulebookIds(
         ctx,
-        gameId,
+        baseId,
         existing.selectedRulebookIds,
       );
       const changed =
@@ -99,10 +127,11 @@ export const getOrCreateChat = mutation({
       return existing._id;
     }
 
-    const selectedRulebookIds = await ingestedRulebookIds(ctx, gameId);
+    // Default selection: the base game's own rulebooks only (expansions off).
+    const selectedRulebookIds = await ingestedRulebookIds(ctx, baseId);
     return await ctx.db.insert("chats", {
       userId: user._id,
-      gameId,
+      gameId: baseId,
       selectedRulebookIds,
       lastMessage: "",
       lastMessageAt: Date.now(),
@@ -166,8 +195,33 @@ export const setSelectedRulebooks = mutation({
   },
   handler: async (ctx, { chatId, rulebookIds }) => {
     const user = await requireUser(ctx);
-    await loadOwnedChat(ctx, chatId, user._id);
-    await ctx.db.patch("chats", chatId, { selectedRulebookIds: rulebookIds });
+    const chat = await loadOwnedChat(ctx, chatId, user._id);
+    // Only allow rulebooks from this chat's game family (retrieval trusts this).
+    const allowed = await familyRulebookIds(ctx, chat.gameId);
+    const filtered = rulebookIds.filter((id) => allowed.has(id));
+    await ctx.db.patch("chats", chatId, { selectedRulebookIds: filtered });
+  },
+});
+
+/**
+ * Union a module's (base game or one of its expansions') ingested rulebooks into
+ * the chat's selection. Used when opening the chat from an expansion page so its
+ * modules are pre-selected. Non-destructive + idempotent.
+ */
+export const addModuleRulebooks = mutation({
+  args: { chatId: v.id("chats"), moduleGameId: v.id("games") },
+  handler: async (ctx, { chatId, moduleGameId }) => {
+    const user = await requireUser(ctx);
+    const chat = await loadOwnedChat(ctx, chatId, user._id);
+    const allowed = await familyRulebookIds(ctx, chat.gameId);
+    const toAdd = (await ingestedRulebookIds(ctx, moduleGameId)).filter((id) =>
+      allowed.has(id),
+    );
+    if (toAdd.length === 0) return;
+    const next = new Set([...chat.selectedRulebookIds, ...toAdd]);
+    await ctx.db.patch("chats", chatId, {
+      selectedRulebookIds: [...next],
+    });
   },
 });
 
@@ -269,16 +323,16 @@ export const getStreamContext = internalQuery({
     // ingested for this game. Respect an EXPLICIT empty selection (the user
     // deselected everything) so the caller can ask them to pick a resource —
     // only a non-empty selection that went entirely stale falls back to "all".
+    // Valid = still-ingested rulebooks anywhere in this chat's game family
+    // (base game + expansions). A non-empty selection that went entirely stale
+    // falls back to the base game's own rulebooks.
     const stored = chat.selectedRulebookIds;
-    const valid: Id<"rulebooks">[] = [];
-    for (const rid of stored) {
-      const rb = await ctx.db.get("rulebooks", rid);
-      if (rb && rb.isIngested && rb.gameId === chat.gameId) valid.push(rid);
-    }
-    const allIngested = await ingestedRulebookIds(ctx, chat.gameId);
+    const allowed = await familyRulebookIds(ctx, chat.gameId);
+    const valid = stored.filter((rid) => allowed.has(rid));
+    const baseIngested = await ingestedRulebookIds(ctx, chat.gameId);
     const selectedRulebookIds =
-      stored.length === 0 ? [] : valid.length > 0 ? valid : allIngested;
-    const hasIngested = allIngested.length > 0;
+      stored.length === 0 ? [] : valid.length > 0 ? valid : baseIngested;
+    const hasIngested = allowed.size > 0;
 
     const config = await ctx.db.query("siteConfig").order("desc").take(1);
     const historyLimit = config[0]?.historyMessageLimit ?? 6;
