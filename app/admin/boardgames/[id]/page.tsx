@@ -35,11 +35,11 @@ export default function EditGamePage({
 
   return (
     <div className="max-w-2xl space-y-8">
-      <div className="flex items-center justify-between">
-        <h2 className="font-semibold">Edit “{game.title}”</h2>
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+        <h2 className="min-w-0 truncate font-semibold">Edit “{game.title}”</h2>
         <Link
           href={`/boardgames/${gameId}`}
-          className="text-sm text-muted hover:text-foreground"
+          className="shrink-0 text-sm text-muted hover:text-foreground"
         >
           View public page →
         </Link>

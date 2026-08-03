@@ -61,6 +61,26 @@ function ChipList({ items }: { items: string[] }) {
   );
 }
 
+/** Comma-joined list that shows the first `max` items, then a "+N more" toggle. */
+function ExpandableInline({ items, max = 2 }: { items: string[]; max?: number }) {
+  const [expanded, setExpanded] = useState(false);
+  if (items.length <= max) {
+    return <p className="text-sm text-muted">{items.join(", ")}</p>;
+  }
+  const shown = expanded ? items : items.slice(0, max);
+  return (
+    <p className="text-sm text-muted">
+      {shown.join(", ")}{" "}
+      <button
+        onClick={() => setExpanded((v) => !v)}
+        className="font-medium text-accent hover:underline"
+      >
+        {expanded ? "show less" : `+${items.length - max} more`}
+      </button>
+    </p>
+  );
+}
+
 const iconClass = "h-[18px] w-[18px]";
 const PeopleIcon = (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={iconClass}>
@@ -105,6 +125,12 @@ export default function GameDetailPage({
   const game = useQuery(api.games.getByHandle, { handle });
   const me = useQuery(api.users.me);
   const isAdmin = me?.role === "admin";
+
+  // Jump straight to the top when switching games (e.g. base → expansion),
+  // which reuse this same route and would otherwise keep the scroll position.
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [handle]);
   const [zoomed, setZoomed] = useState(false);
 
   // Close the artwork lightbox on Escape.
@@ -171,36 +197,28 @@ export default function GameDetailPage({
 
       {/* Hero */}
       <div className="mb-10 flex flex-col gap-8 sm:flex-row">
-        <div className="mx-auto w-44 shrink-0 sm:mx-0">
-          <div className="relative aspect-3/4 w-full overflow-hidden rounded-2xl bg-surface-2 shadow-lg">
-            {cover ? (
-              <button
-                type="button"
-                onClick={() => setZoomed(true)}
-                aria-label="View full artwork"
-                className="group block h-full w-full cursor-zoom-in"
-              >
-                {/* Blurred fill so the full (uncropped) art can show contained. */}
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={cover}
-                  alt=""
-                  aria-hidden
-                  className="absolute inset-0 h-full w-full scale-110 object-cover opacity-50 blur-md"
-                />
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={cover}
-                  alt={game.title}
-                  className="relative h-full w-full object-contain transition-transform group-hover:scale-[1.03]"
-                />
-              </button>
-            ) : (
-              <div className="flex h-full w-full items-center justify-center text-5xl opacity-40">
-                🎲
-              </div>
-            )}
-          </div>
+        <div className="mx-auto w-fit shrink-0 sm:mx-0">
+          {cover ? (
+            <button
+              type="button"
+              onClick={() => setZoomed(true)}
+              aria-label="View full artwork"
+              className="group block cursor-zoom-in overflow-hidden rounded-2xl bg-surface-2 shadow-lg"
+            >
+              {/* Capped to 160px tall; width follows the natural aspect ratio,
+                  so the whole cover shows whether it's square or wide. */}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={cover}
+                alt={game.title}
+                className="block max-h-40 w-auto transition-transform group-hover:scale-[1.03]"
+              />
+            </button>
+          ) : (
+            <div className="flex aspect-3/4 h-40 items-center justify-center rounded-2xl bg-surface-2 text-5xl opacity-40 shadow-lg">
+              🎲
+            </div>
+          )}
         </div>
 
         <div className="min-w-0 flex-1">
@@ -302,7 +320,7 @@ export default function GameDetailPage({
           )}
           {game.publishers.length > 0 && (
             <InfoSection title="Publishers">
-              <p className="text-sm text-muted">{game.publishers.join(", ")}</p>
+              <ExpandableInline items={game.publishers} />
             </InfoSection>
           )}
         </div>
@@ -363,10 +381,41 @@ export default function GameDetailPage({
       {/* Expansions */}
       {game.expansions.length > 0 && (
         <InfoSection title={`Expansions (${game.expansions.length})`}>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+          {/* Mobile: a compact list. */}
+          <ul className="space-y-2 sm:hidden">
+            {game.expansions.map((exp) => (
+              <li key={exp._id}>
+                <Link
+                  href={`/boardgames/${exp.slug}`}
+                  className="group flex items-center gap-3 rounded-lg border border-border bg-surface p-2 transition-colors hover:bg-surface-2"
+                >
+                  <div className="h-12 w-12 shrink-0 overflow-hidden rounded-md bg-surface-2">
+                    {exp.thumbnailUrl || exp.imageUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={exp.thumbnailUrl ?? exp.imageUrl ?? ""}
+                        alt=""
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center opacity-40">
+                        🎲
+                      </div>
+                    )}
+                  </div>
+                  <span className="min-w-0 flex-1 truncate text-sm font-medium transition-colors group-hover:text-accent">
+                    {exp.title}
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+
+          {/* Desktop: a smaller cover grid. */}
+          <div className="hidden gap-3 sm:grid sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6">
             {game.expansions.map((exp) => (
               <Link key={exp._id} href={`/boardgames/${exp.slug}`} className="group flex flex-col">
-                <div className="aspect-3/4 overflow-hidden rounded-xl bg-surface-2 shadow-sm">
+                <div className="aspect-3/4 overflow-hidden rounded-lg bg-surface-2 shadow-sm">
                   {exp.thumbnailUrl || exp.imageUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
@@ -375,12 +424,12 @@ export default function GameDetailPage({
                       className="h-full w-full object-cover transition-transform group-hover:scale-105"
                     />
                   ) : (
-                    <div className="flex h-full w-full items-center justify-center text-2xl opacity-40">
+                    <div className="flex h-full w-full items-center justify-center text-xl opacity-40">
                       🎲
                     </div>
                   )}
                 </div>
-                <p className="mt-1.5 truncate px-0.5 text-xs font-medium leading-tight">
+                <p className="mt-1 truncate px-0.5 text-xs font-medium leading-tight">
                   {exp.title}
                 </p>
               </Link>

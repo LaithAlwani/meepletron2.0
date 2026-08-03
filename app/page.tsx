@@ -1,77 +1,64 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import Image from "next/image";
-import ContactForm from "@/components/ContactForm";
 
-export default function HomePage() {
+export const metadata: Metadata = {
+  title: "Be right back",
+  description: "Meepletron is leveling up. Back soon — smarter and tidier.",
+};
+
+export default function MaintenancePage() {
   return (
-    <>
-      <div className="mx-auto max-w-5xl px-4">
-      <section className="animate-in flex flex-col items-center py-16 text-center sm:py-24">
-        <Image
-          src="/logo.webp"
-          alt="Meepletron"
-          width={128}
-          height={160}
-          priority
-          className="mb-6 h-32 w-auto"
-        />
-        <h1 className="max-w-2xl text-balance text-4xl font-extrabold tracking-tight sm:text-5xl">
-          Ask your board game rules. Get answers from the rulebook.
-        </h1>
-        <p className="mt-4 max-w-xl text-balance text-lg text-muted">
-          Meepletron reads the actual rulebook and answers your questions with
-          citations — no more digging through 40 pages mid-game.
-        </p>
-        <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
-          <Link
-            href="/boardgames"
-            className="rounded-lg bg-accent px-5 py-3 font-semibold text-accent-foreground transition-opacity hover:opacity-90"
-          >
-            Browse games
-          </Link>
-          <Link
-            href="/tuckbox"
-            className="rounded-lg border border-border bg-surface px-5 py-3 font-semibold transition-colors hover:bg-surface-2"
-          >
-            Tuckbox generator
-          </Link>
-        </div>
-      </section>
+    <main className="flex min-h-dvh flex-col items-center justify-center px-6 py-16 text-center">
+      <Image
+        src="/logo.webp"
+        alt="Meepletron"
+        width={128}
+        height={160}
+        priority
+        className="mb-8 h-28 w-auto drop-shadow-lg"
+      />
 
-      <section className="grid gap-4 pb-20 sm:grid-cols-3">
-        {[
-          {
-            icon: "📖",
-            title: "Grounded answers",
-            body: "Every answer is drawn from the uploaded rulebook and cites its source passage.",
-          },
-          {
-            icon: "🧩",
-            title: "Expansions & modes",
-            body: "Pick exactly which rulebooks — base game, solo mode, expansions — you're asking about.",
-          },
-          {
-            icon: "✂️",
-            title: "Tuckbox maker",
-            body: "Design a print-ready card box using a game's cover art, right in the browser.",
-          },
-        ].map((f, i) => (
-          <div
-            key={f.title}
-            style={{ animationDelay: `${100 + i * 80}ms` }}
-            className="animate-in rounded-xl border border-border bg-surface p-5 transition-all duration-200 hover:-translate-y-1 hover:border-accent/40 hover:shadow-lg"
-          >
-            <div className="mb-2 text-2xl" aria-hidden>
-              {f.icon}
-            </div>
-            <h2 className="font-semibold">{f.title}</h2>
-            <p className="mt-1 text-sm text-muted">{f.body}</p>
-          </div>
-        ))}
-      </section>
+      <h1 className="animate-in max-w-2xl text-balance text-3xl font-extrabold tracking-tight sm:text-4xl">
+        Meepletron is re-rolling{" "}
+        {/* The die is the secret door — no visible tell; those who know click it. */}
+        <Link
+          href="/boardgames"
+          aria-label="Enter Meepletron"
+          className="cursor-text"
+        >
+          🎲
+        </Link>
+      </h1>
+
+      <p
+        className="animate-in mt-4 max-w-xl text-balance text-lg text-muted"
+        style={{ animationDelay: "100ms" }}
+      >
+        We hit pause to shuffle in some upgrades — a sharper brain, a tidier
+        rulebook library, and fewer bugs (the software kind, not the ones you
+        find under the couch cushions with the missing meeple).
+      </p>
+
+      <p
+        className="animate-in mt-3 max-w-md text-balance text-sm text-subtle"
+        style={{ animationDelay: "200ms" }}
+      >
+        Refill the dice tower and grab a snack — we&apos;ll be back before your
+        turn. And no, we didn&apos;t lose the rulebook. We&apos;re just{" "}
+        <em>actually reading it</em> this time.
+      </p>
+
+      <div
+        className="animate-in mt-9 inline-flex items-center gap-2 rounded-full border border-border bg-surface px-4 py-2 text-xs font-medium text-muted"
+        style={{ animationDelay: "320ms" }}
+      >
+        <span className="relative flex h-2 w-2">
+          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-accent opacity-60" />
+          <span className="relative inline-flex h-2 w-2 rounded-full bg-accent" />
+        </span>
+        Reshuffling the deck…
       </div>
-
-      <ContactForm />
-    </>
+    </main>
   );
 }

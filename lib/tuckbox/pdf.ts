@@ -4,10 +4,6 @@ import {
   type FaceAssets,
   type FaceImageData,
   type FaceKey,
-  type FaceLabels,
-  type FontFamily,
-  type FontStyle,
-  type TextLabel,
   type TuckboxLayout,
 } from "./types";
 
@@ -20,41 +16,10 @@ const FACE_KEYS: FaceKey[] = [
   "bottom",
 ];
 
-const FAMILY_MAP: Record<FontFamily, "helvetica" | "times" | "courier"> = {
-  sans: "helvetica",
-  serif: "times",
-  mono: "courier",
-};
-
-const STYLE_MAP: Record<FontStyle, "normal" | "bold" | "italic" | "bolditalic"> = {
-  normal: "normal",
-  bold: "bold",
-  italic: "italic",
-  bolditalic: "bolditalic",
-};
-
 const PX_PER_MM = 6;
 
 function inToMm(value: number) {
   return value * 25.4;
-}
-
-function hexToRgb(hex: string): [number, number, number] {
-  const cleaned = hex.replace("#", "");
-  const full =
-    cleaned.length === 3
-      ? cleaned
-          .split("")
-          .map((character) => character + character)
-          .join("")
-      : cleaned;
-  const numericValue = parseInt(full, 16);
-  if (Number.isNaN(numericValue)) return [0, 0, 0];
-  return [
-    (numericValue >> 16) & 0xff,
-    (numericValue >> 8) & 0xff,
-    numericValue & 0xff,
-  ];
 }
 
 async function cropImageToDataUrl(
@@ -101,7 +66,6 @@ async function cropImageToDataUrl(
 export async function renderTuckboxPdf(
   layout: TuckboxLayout,
   assets: FaceAssets,
-  labels: FaceLabels,
   wrapAsset?: FaceImageData,
 ): Promise<Blob> {
   const toMm = layout.unit === "in" ? inToMm : (value: number) => value;
@@ -181,14 +145,6 @@ export async function renderTuckboxPdf(
     }
   }
 
-  for (const key of FACE_KEYS) {
-    const panel = layout.panels.find((p) => p.key === key);
-    if (!panel) continue;
-    const label = labels[key];
-    if (!label || !label.text.trim()) continue;
-    drawLabel(doc, label, panel, toMm);
-  }
-
   doc.setLineWidth(0.2);
   doc.setDrawColor(120, 120, 120);
   doc.setLineDashPattern([2, 1.5], 0);
@@ -214,36 +170,6 @@ export async function renderTuckboxPdf(
   }
 
   return doc.output("blob");
-}
-
-function drawLabel(
-  doc: jsPDF,
-  label: TextLabel,
-  panel: {
-    positionX: number;
-    positionY: number;
-    width: number;
-    height: number;
-    key: string;
-  },
-  toMm: (value: number) => number,
-) {
-  doc.setFont(FAMILY_MAP[label.family], STYLE_MAP[label.style]);
-  doc.setFontSize(label.sizePt);
-  const [red, green, blue] = hexToRgb(label.color || "#000000");
-  doc.setTextColor(red, green, blue);
-
-  const centerXMm = toMm(panel.positionX + panel.width * label.anchorX);
-  const centerYMm = toMm(panel.positionY + panel.height * label.anchorY);
-
-  const isSpine = panel.key === "leftSide" || panel.key === "rightSide";
-  const angle = isSpine ? 90 : 0;
-
-  doc.text(label.text, centerXMm, centerYMm, {
-    align: "center",
-    baseline: "middle",
-    angle,
-  });
 }
 
 export function triggerDownload(blob: Blob, filename: string) {

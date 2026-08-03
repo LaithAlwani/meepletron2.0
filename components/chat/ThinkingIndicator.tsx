@@ -3,31 +3,28 @@
 import { useEffect, useState } from "react";
 import { Loader } from "@/components/ui/Loader";
 
-// Rotating status phrases while the AI works (ported from the original).
-const PHRASES = [
-  "Searching the rulebook…",
-  "Flipping through the manual…",
-  "Looking it up…",
-  "Scanning the pages…",
-  "Checking the index…",
-  "Cross-referencing…",
-  "Reading the relevant section…",
-  "Processing…",
-  "Putting it together…",
+// Ordered to mirror the real pipeline: understand the question → vector search →
+// rerank the hits → read the chosen passages → generate the grounded answer.
+// It advances in order and holds on the last (generation is the long tail).
+const STAGES = [
+  "Reading your question…",
+  "Flipping through the rulebook…",
+  "Finding the relevant rules…",
+  "Double-checking the wording…",
+  "Writing your answer…",
 ];
 
-function pick(exclude?: string) {
-  const opts = exclude ? PHRASES.filter((p) => p !== exclude) : PHRASES;
-  return opts[Math.floor(Math.random() * opts.length)];
-}
-
 export function ThinkingIndicator() {
-  const [phrase, setPhrase] = useState(() => pick());
+  const [stage, setStage] = useState(0);
 
   useEffect(() => {
-    const id = setInterval(() => setPhrase((prev) => pick(prev)), 2500);
+    const id = setInterval(() => {
+      setStage((s) => Math.min(s + 1, STAGES.length - 1));
+    }, 900);
     return () => clearInterval(id);
   }, []);
+
+  const phrase = STAGES[stage];
 
   return (
     <div className="flex items-center gap-3">

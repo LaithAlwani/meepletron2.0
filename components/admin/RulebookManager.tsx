@@ -77,8 +77,8 @@ function RulebookRow({
           : { text: "Not ingested", cls: "bg-surface-2 text-muted" };
 
   return (
-    <li className="flex items-center gap-3 rounded-lg border border-border bg-surface px-3 py-2 text-sm">
-      <div className="min-w-0 flex-1">
+    <li className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-border bg-surface px-3 py-2 text-sm">
+      <div className="min-w-0 flex-1 basis-full sm:basis-auto">
         {editing ? (
           <div className="flex items-center gap-1.5">
             <input

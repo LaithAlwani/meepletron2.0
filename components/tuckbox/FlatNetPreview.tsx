@@ -7,8 +7,6 @@ import {
   type FaceImageData,
   type FaceImageTransform,
   type FaceKey,
-  type FaceLabels,
-  type TextLabel,
   type TuckboxLayout,
 } from "@/lib/tuckbox/types";
 
@@ -24,22 +22,14 @@ const FACE_KEYS: FaceKey[] = [
   "bottom",
 ];
 
-const FAMILY_CSS = {
-  sans: "ui-sans-serif, system-ui, sans-serif",
-  serif: "ui-serif, Georgia, serif",
-  mono: "ui-monospace, Menlo, monospace",
-};
-
 type Props = {
   layout: TuckboxLayout;
   assets: FaceAssets;
-  labels: FaceLabels;
   wrapAsset?: FaceImageData;
   selectedFace: Selection;
   onSelectFace: (face: Selection) => void;
   onTransformChange: (face: FaceKey, transform: FaceImageTransform) => void;
   onWrapTransform: (transform: FaceImageTransform) => void;
-  onLabelMove: (face: FaceKey, anchorX: number, anchorY: number) => void;
 };
 
 type ImageDragState = {
@@ -52,16 +42,6 @@ type ImageDragState = {
   rangeY: number;
 };
 
-type LabelDragState = {
-  face: FaceKey;
-  startX: number;
-  startY: number;
-  baseAnchorX: number;
-  baseAnchorY: number;
-  panelWidth: number;
-  panelHeight: number;
-};
-
 function clamp01(value: number) {
   return Math.max(0, Math.min(1, value));
 }
@@ -69,13 +49,11 @@ function clamp01(value: number) {
 export function FlatNetPreview({
   layout,
   assets,
-  labels,
   wrapAsset,
   selectedFace,
   onSelectFace,
   onTransformChange,
   onWrapTransform,
-  onLabelMove,
 }: Props) {
   const wrapMode = !!wrapAsset;
   const { pageWidth, pageHeight, panels, foldLines, cutLines } = layout;
@@ -91,7 +69,6 @@ export function FlatNetPreview({
   const foldDashOn = isMm ? 2 : 2 / 25.4;
   const foldDashOff = isMm ? 1.5 : 1.5 / 25.4;
   const imageDragRef = useRef<ImageDragState | null>(null);
-  const labelDragRef = useRef<LabelDragState | null>(null);
 
   const backPanel = panels.find((panel) => panel.key === "back");
   const rightPanel = panels.find((panel) => panel.key === "rightSide");
@@ -416,93 +393,6 @@ export function FlatNetPreview({
             )}
           </g>
         )}
-
-        {FACE_KEYS.map((key) => {
-          const panel = panels.find((p) => p.key === key);
-          const label: TextLabel | undefined = labels[key];
-          if (!panel || !label || !label.text.trim()) return null;
-          const isSpine = key === "leftSide" || key === "rightSide";
-          const labelCenterX = panel.positionX + panel.width * label.anchorX;
-          const labelCenterY = panel.positionY + panel.height * label.anchorY;
-          const sizeInUnits = label.sizePt / unitToPt;
-          return (
-            <text
-              key={`label-${key}`}
-              x={labelCenterX}
-              y={labelCenterY}
-              fontSize={sizeInUnits}
-              fill={label.color || "#000"}
-              textAnchor="middle"
-              dominantBaseline="middle"
-              transform={
-                isSpine
-                  ? `rotate(90 ${labelCenterX} ${labelCenterY})`
-                  : undefined
-              }
-              style={{
-                fontFamily: FAMILY_CSS[label.family],
-                fontWeight:
-                  label.style === "bold" || label.style === "bolditalic"
-                    ? 700
-                    : 400,
-                fontStyle:
-                  label.style === "italic" || label.style === "bolditalic"
-                    ? "italic"
-                    : "normal",
-                cursor: "move",
-                touchAction: "none",
-                userSelect: "none",
-              }}
-              onPointerDown={(event) => {
-                event.stopPropagation();
-                const svg = (event.currentTarget as SVGTextElement)
-                  .ownerSVGElement;
-                if (!svg) return;
-                onSelectFace(key);
-                const point = svgPointFromEvent(event, svg);
-                if (!point) return;
-                (event.currentTarget as Element).setPointerCapture?.(
-                  event.pointerId,
-                );
-                labelDragRef.current = {
-                  face: key,
-                  startX: point.x,
-                  startY: point.y,
-                  baseAnchorX: label.anchorX,
-                  baseAnchorY: label.anchorY,
-                  panelWidth: panel.width,
-                  panelHeight: panel.height,
-                };
-              }}
-              onPointerMove={(event) => {
-                const dragState = labelDragRef.current;
-                if (!dragState || dragState.face !== key) return;
-                const svg = (event.currentTarget as SVGTextElement)
-                  .ownerSVGElement;
-                if (!svg) return;
-                const point = svgPointFromEvent(event, svg);
-                if (!point) return;
-                const deltaX = point.x - dragState.startX;
-                const deltaY = point.y - dragState.startY;
-                const nextAnchorX = clamp01(
-                  dragState.baseAnchorX + deltaX / dragState.panelWidth,
-                );
-                const nextAnchorY = clamp01(
-                  dragState.baseAnchorY + deltaY / dragState.panelHeight,
-                );
-                onLabelMove(key, nextAnchorX, nextAnchorY);
-              }}
-              onPointerUp={() => {
-                labelDragRef.current = null;
-              }}
-              onPointerCancel={() => {
-                labelDragRef.current = null;
-              }}
-            >
-              {label.text}
-            </text>
-          );
-        })}
 
         {foldLines.map((line, index) => (
           <line

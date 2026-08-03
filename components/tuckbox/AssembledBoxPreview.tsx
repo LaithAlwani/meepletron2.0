@@ -6,20 +6,12 @@ import {
   type FaceAssets,
   type FaceImageData,
   type FaceKey,
-  type FaceLabels,
   type TuckboxLayout,
 } from "@/lib/tuckbox/types";
-
-const FAMILY_CSS = {
-  sans: "ui-sans-serif, system-ui, sans-serif",
-  serif: "ui-serif, Georgia, serif",
-  mono: "ui-monospace, Menlo, monospace",
-};
 
 type Props = {
   layout: TuckboxLayout;
   assets: FaceAssets;
-  labels: FaceLabels;
   wrapAsset?: FaceImageData;
 };
 
@@ -52,12 +44,7 @@ function wrapOffsetForFace(
   }
 }
 
-export function AssembledBoxPreview({
-  layout,
-  assets,
-  labels,
-  wrapAsset,
-}: Props) {
+export function AssembledBoxPreview({ layout, assets, wrapAsset }: Props) {
   const { boxWidth, boxHeight, boxDepth } = layout;
   const longest = Math.max(boxWidth, boxHeight, boxDepth) || 1;
   const scale = 240 / longest;
@@ -195,7 +182,6 @@ export function AssembledBoxPreview({
               wrapOffset !== null &&
               wrapPlacement !== null;
             const data = useWrap ? undefined : assets[face.key];
-            const label = labels[face.key];
             const placement = data
               ? computeImagePlacement(
                   face.width,
@@ -269,42 +255,6 @@ export function AssembledBoxPreview({
                   >
                     {face.key}
                   </span>
-                )}
-                {label && label.text.trim() && (
-                  <div
-                    style={{
-                      position: "absolute",
-                      left: `${label.anchorX * 100}%`,
-                      top: `${label.anchorY * 100}%`,
-                      transform: `translate(-50%, -50%)${
-                        face.rotateContent
-                          ? ` rotate(${face.rotateContent}deg)`
-                          : ""
-                      }`,
-                      color: label.color || "#000",
-                      fontFamily: FAMILY_CSS[label.family],
-                      fontSize: label.sizePt * scale * 0.353,
-                      fontWeight:
-                        label.style === "bold" || label.style === "bolditalic"
-                          ? 700
-                          : 400,
-                      fontStyle:
-                        label.style === "italic" ||
-                        label.style === "bolditalic"
-                          ? "italic"
-                          : "normal",
-                      textAlign: "center",
-                      padding: 4,
-                      textShadow:
-                        data || useWrap
-                          ? "0 1px 2px rgba(0,0,0,0.5)"
-                          : undefined,
-                      whiteSpace: "nowrap",
-                      pointerEvents: "none",
-                    }}
-                  >
-                    {label.text}
-                  </div>
                 )}
               </div>
             );

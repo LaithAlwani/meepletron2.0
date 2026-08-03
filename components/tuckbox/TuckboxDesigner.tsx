@@ -10,12 +10,8 @@ import {
   type FaceImageData,
   type FaceImageTransform,
   type FaceKey,
-  type FaceLabels,
-  type FontFamily,
-  type FontStyle,
   type Orientation,
   type PaperSize,
-  type TextLabel,
   type TuckboxConfig,
   type Unit,
 } from "@/lib/tuckbox/types";
@@ -57,18 +53,6 @@ const FACE_LABELS_DISPLAY: Record<FaceKey, string> = {
   top: "Top",
   bottom: "Bottom",
 };
-
-function makeDefaultLabel(): TextLabel {
-  return {
-    text: "",
-    family: "sans",
-    style: "bold",
-    sizePt: 24,
-    color: "#111111",
-    anchorX: 0.5,
-    anchorY: 0.5,
-  };
-}
 
 function readFileAsDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -113,7 +97,6 @@ export function TuckboxDesigner({
   const [cardCount, setCardCount] = useState(60);
   const [cardThickness, setCardThickness] = useState(0.32);
   const [assets, setAssets] = useState<FaceAssets>({});
-  const [labels, setLabels] = useState<FaceLabels>({});
   const [imageMode, setImageMode] = useState<"per-face" | "wrap">("per-face");
   const [wrapAsset, setWrapAsset] = useState<FaceImageData | undefined>(
     undefined,
@@ -269,23 +252,6 @@ export function TuckboxDesigner({
     });
   }
 
-  function updateLabel(face: FaceKey, patch: Partial<TextLabel>) {
-    setLabels((previousLabels) => {
-      const current = previousLabels[face] ?? makeDefaultLabel();
-      return { ...previousLabels, [face]: { ...current, ...patch } };
-    });
-  }
-
-  function moveLabel(face: FaceKey, anchorX: number, anchorY: number) {
-    setLabels((previousLabels) => {
-      const current = previousLabels[face] ?? makeDefaultLabel();
-      return {
-        ...previousLabels,
-        [face]: { ...current, anchorX, anchorY },
-      };
-    });
-  }
-
   async function handleWrapUpload(file: File | undefined) {
     if (!file) {
       setWrapAsset(undefined);
@@ -323,7 +289,6 @@ export function TuckboxDesigner({
       const blob = await renderTuckboxPdf(
         layout,
         assets,
-        labels,
         imageMode === "wrap" ? wrapAsset : undefined,
       );
       triggerDownload(blob, "tuckbox.pdf");
@@ -350,11 +315,11 @@ export function TuckboxDesigner({
     <div className="grid grid-cols-1 lg:grid-cols-[440px_1fr] gap-4 lg:gap-6 max-w-7xl mx-auto p-4 sm:p-6 overflow-x-hidden">
       <div className="space-y-4 lg:space-y-6 order-2 lg:order-1">
         <header className="hidden lg:block">
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground">
-            Tuckbox Generator
+          <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight text-foreground">
+            <span aria-hidden>✂️</span> Tuckbox Generator
           </h1>
           <p className="text-sm text-muted mt-1">
-            Enter your card dimensions, add artwork and text, then download a
+            Set your card size, add cover art to each face, then download a
             print-ready PDF.
           </p>
         </header>
@@ -496,7 +461,7 @@ export function TuckboxDesigner({
           </details>
         </Section>
 
-        <Section title="Faces — images & text">
+        <Section title="Artwork">
           <Row label="Image mode">
             <SegmentedControl
               value={imageMode}
@@ -527,26 +492,16 @@ export function TuckboxDesigner({
             }).map((face) => (
               <FaceEditor
                 key={face}
-                face={face}
                 displayName={FACE_LABELS_DISPLAY[face]}
                 data={assets[face]}
-                label={labels[face]}
                 aspect={getFaceAspect(face)}
                 idealPx={getFaceIdealPx(face)}
                 isSelected={selectedFace === face}
                 onSelect={() => setSelectedFace(face)}
                 onImage={(file) => handleImageUpload(face, file)}
                 onTransform={(transform) => updateTransform(face, transform)}
-                onLabel={(patch) => updateLabel(face, patch)}
               />
             ))}
-            {imageMode === "wrap" && (
-              <div className="text-[11px] text-muted">
-                Text labels for front/back/sides remain editable below in
-                "Per face" mode. To add text in wrap mode, switch back, set
-                your labels, then switch to "Wrap around".
-              </div>
-            )}
           </div>
         </Section>
       </div>
@@ -557,82 +512,78 @@ export function TuckboxDesigner({
             Tuckbox Generator
           </h1>
         </header>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setPreviewTab("assembled")}
-            className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
-              previewTab === "assembled"
-                ? "bg-foreground text-bg"
-                : "bg-surface-muted text-muted"
-            }`}
-          >
-            Assembled box
-          </button>
-          <button
-            type="button"
-            onClick={() => setPreviewTab("flat")}
-            className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
-              previewTab === "flat"
-                ? "bg-foreground text-bg"
-                : "bg-surface-muted text-muted"
-            }`}
-          >
-            Flat net (print)
-          </button>
-        </div>
 
-        <div className="h-[60vh] min-h-[420px]">
-          {previewTab === "assembled" ? (
-            <AssembledBoxPreview
-              layout={layout}
-              assets={assets}
-              labels={labels}
-              wrapAsset={imageMode === "wrap" ? wrapAsset : undefined}
-            />
-          ) : (
-            <FlatNetPreview
-              layout={layout}
-              assets={assets}
-              labels={labels}
-              wrapAsset={imageMode === "wrap" ? wrapAsset : undefined}
-              selectedFace={selectedFace}
-              onSelectFace={setSelectedFace}
-              onTransformChange={updateTransform}
-              onWrapTransform={updateWrapTransform}
-              onLabelMove={moveLabel}
-            />
-          )}
-        </div>
-
-        {layout.error && (
-          <div className="rounded-md border border-amber-500/40 bg-amber-50 text-amber-900 px-4 py-3 text-sm dark:bg-amber-950/30 dark:text-amber-200">
-            {layout.error}
+        <div className="overflow-hidden rounded-2xl border border-border bg-surface shadow-sm">
+          <div className="flex items-center gap-1 border-b border-border p-2">
+            {(
+              [
+                ["assembled", "3D box"],
+                ["flat", "Flat net (print)"],
+              ] as const
+            ).map(([value, tabLabel]) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => setPreviewTab(value)}
+                className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+                  previewTab === value
+                    ? "bg-accent/10 text-accent"
+                    : "text-muted hover:bg-surface-2 hover:text-foreground"
+                }`}
+              >
+                {tabLabel}
+              </button>
+            ))}
           </div>
-        )}
 
-        <div className="text-xs text-muted">
-          Box:{" "}
-          <strong>
-            {layout.boxWidth.toFixed(1)} × {layout.boxHeight.toFixed(1)} ×{" "}
-            {layout.boxDepth.toFixed(1)} {layout.unit}
-          </strong>
-          {" — "}
-          Page:{" "}
-          <strong>
-            {layout.pageWidth.toFixed(1)} × {layout.pageHeight.toFixed(1)}{" "}
-            {layout.unit}
-          </strong>
+          <div className="h-[58vh] min-h-[400px] p-3">
+            {previewTab === "assembled" ? (
+              <AssembledBoxPreview
+                layout={layout}
+                assets={assets}
+                wrapAsset={imageMode === "wrap" ? wrapAsset : undefined}
+              />
+            ) : (
+              <FlatNetPreview
+                layout={layout}
+                assets={assets}
+                wrapAsset={imageMode === "wrap" ? wrapAsset : undefined}
+                selectedFace={selectedFace}
+                onSelectFace={setSelectedFace}
+                onTransformChange={updateTransform}
+                onWrapTransform={updateWrapTransform}
+              />
+            )}
+          </div>
+
+          <div className="space-y-3 border-t border-border p-3">
+            {layout.error && (
+              <div className="rounded-lg border border-amber-500/40 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
+                {layout.error}
+              </div>
+            )}
+            <p className="text-xs text-muted">
+              Box{" "}
+              <strong className="text-foreground">
+                {layout.boxWidth.toFixed(1)} × {layout.boxHeight.toFixed(1)} ×{" "}
+                {layout.boxDepth.toFixed(1)} {layout.unit}
+              </strong>{" "}
+              · Page{" "}
+              <strong className="text-foreground">
+                {layout.pageWidth.toFixed(1)} × {layout.pageHeight.toFixed(1)}{" "}
+                {layout.unit}
+              </strong>
+            </p>
+            <button
+              type="button"
+              onClick={handleDownload}
+              disabled={!!layout.error || busy}
+              className="w-full rounded-xl bg-accent px-4 py-3 font-semibold text-accent-foreground shadow-sm transition-opacity hover:opacity-90 disabled:opacity-40"
+            >
+              {busy ? "Generating…" : "⬇  Download print-ready PDF"}
+            </button>
+          </div>
         </div>
-
-        <button
-          type="button"
-          onClick={handleDownload}
-          disabled={!!layout.error || busy}
-          className="w-full py-3 rounded-full bg-primary text-primary-fg font-semibold hover:bg-primary-hover transition-colors disabled:bg-surface-muted disabled:text-subtle disabled:cursor-not-allowed"
-        >
-          {busy ? "Generating…" : "Download PDF"}
-        </button>
 
         <AssemblyInstructions />
       </div>
@@ -783,6 +734,82 @@ function SegmentedControl({
   );
 }
 
+const UploadIcon = (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5 shrink-0">
+    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+    <path d="m17 8-5-5-5 5" />
+    <path d="M12 3v12" />
+  </svg>
+);
+
+/** Custom drag-and-drop / click image uploader. `compact` is for "replace". */
+function ImageDropzone({
+  onFile,
+  compact = false,
+}: {
+  onFile: (file: File | undefined) => void;
+  compact?: boolean;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [dragging, setDragging] = useState(false);
+
+  function pick(list: FileList | null | undefined) {
+    const file = list?.[0];
+    if (file && file.type.startsWith("image/")) onFile(file);
+  }
+
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={() => inputRef.current?.click()}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          inputRef.current?.click();
+        }
+      }}
+      onDragOver={(event) => {
+        event.preventDefault();
+        setDragging(true);
+      }}
+      onDragLeave={() => setDragging(false)}
+      onDrop={(event) => {
+        event.preventDefault();
+        setDragging(false);
+        pick(event.dataTransfer.files);
+      }}
+      className={`flex cursor-pointer items-center justify-center gap-2 rounded-xl border-2 border-dashed text-center transition-colors ${
+        compact ? "px-3 py-2" : "flex-col px-4 py-6"
+      } ${
+        dragging
+          ? "border-accent bg-accent/10 text-accent"
+          : "border-border text-muted hover:border-accent/50 hover:bg-surface-2 hover:text-foreground"
+      }`}
+    >
+      {UploadIcon}
+      <div>
+        <div className="text-sm font-medium">
+          {compact ? "Replace image" : "Drop image or click to upload"}
+        </div>
+        {!compact && (
+          <div className="mt-0.5 text-xs text-subtle">PNG or JPG</div>
+        )}
+      </div>
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/png,image/jpeg"
+        className="hidden"
+        onChange={(event) => {
+          pick(event.target.files);
+          event.currentTarget.value = "";
+        }}
+      />
+    </div>
+  );
+}
+
 function WrapEditor({
   data,
   aspect,
@@ -862,22 +889,7 @@ function WrapEditor({
       </div>
 
       {!data && (
-        <div className="flex items-center gap-3">
-          <div className="w-14 h-14 rounded border border-dashed border-border flex items-center justify-center text-xs text-subtle">
-            no img
-          </div>
-          <label className="flex-1 text-xs text-muted cursor-pointer">
-            <span className="inline-block px-3 py-1.5 rounded-md bg-surface-muted hover:bg-border">
-              Upload image
-            </span>
-            <input
-              type="file"
-              accept="image/png,image/jpeg"
-              className="hidden"
-              onChange={(event) => onImage(event.target.files?.[0])}
-            />
-          </label>
-        </div>
+        <ImageDropzone onFile={onImage} />
       )}
 
       {data && (
@@ -887,17 +899,7 @@ function WrapEditor({
             frameAspect={aspect}
             onChange={onTransform}
           />
-          <label className="text-xs text-muted cursor-pointer">
-            <span className="underline hover:text-foreground">
-              Replace image
-            </span>
-            <input
-              type="file"
-              accept="image/png,image/jpeg"
-              className="hidden"
-              onChange={(event) => onImage(event.target.files?.[0])}
-            />
-          </label>
+          <ImageDropzone onFile={onImage} compact />
         </div>
       )}
       </div>
@@ -906,33 +908,24 @@ function WrapEditor({
 }
 
 function FaceEditor({
-  face,
   displayName,
   data,
-  label,
   aspect,
   idealPx,
   isSelected,
   onSelect,
   onImage,
   onTransform,
-  onLabel,
 }: {
-  face: FaceKey;
   displayName: string;
   data: FaceImageData | undefined;
-  label: TextLabel | undefined;
   aspect: number;
   idealPx: { width: number; height: number };
   isSelected: boolean;
   onSelect: () => void;
   onImage: (file: File | undefined) => void;
   onTransform: (transform: FaceImageTransform) => void;
-  onLabel: (patch: Partial<TextLabel>) => void;
 }) {
-  void face;
-  const effectiveLabel = label ?? makeDefaultLabel();
-
   const lowResWarning =
     data &&
     (data.naturalWidth < idealPx.width * 0.6 ||
@@ -995,22 +988,7 @@ function FaceEditor({
       </div>
 
       {!data && (
-        <div className="flex items-center gap-3">
-          <div className="w-14 h-14 rounded border border-dashed border-border flex items-center justify-center text-xs text-subtle">
-            no img
-          </div>
-          <label className="flex-1 text-xs text-muted cursor-pointer">
-            <span className="inline-block px-3 py-1.5 rounded-md bg-surface-muted hover:bg-border">
-              Upload image
-            </span>
-            <input
-              type="file"
-              accept="image/png,image/jpeg"
-              className="hidden"
-              onChange={(event) => onImage(event.target.files?.[0])}
-            />
-          </label>
-        </div>
+        <ImageDropzone onFile={onImage} />
       )}
 
       {data && (
@@ -1020,94 +998,9 @@ function FaceEditor({
             frameAspect={aspect}
             onChange={onTransform}
           />
-          <label className="text-xs text-muted cursor-pointer">
-            <span className="underline hover:text-foreground">
-              Replace image
-            </span>
-            <input
-              type="file"
-              accept="image/png,image/jpeg"
-              className="hidden"
-              onChange={(event) => onImage(event.target.files?.[0])}
-            />
-          </label>
+          <ImageDropzone onFile={onImage} compact />
         </div>
       )}
-
-      <div className="space-y-2">
-        <input
-          type="text"
-          placeholder="Text label (optional)"
-          value={effectiveLabel.text}
-          onChange={(event) => onLabel({ text: event.target.value })}
-          className="w-full rounded-md border border-border bg-surface text-foreground px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-        />
-        {effectiveLabel.text.trim() && (
-          <>
-            {(Math.abs(effectiveLabel.anchorX - 0.5) > 0.01 ||
-              Math.abs(effectiveLabel.anchorY - 0.5) > 0.01) && (
-              <div className="text-[11px] text-muted flex items-center gap-2">
-                <span>
-                  Position: {(effectiveLabel.anchorX * 100).toFixed(0)}%,{" "}
-                  {(effectiveLabel.anchorY * 100).toFixed(0)}%
-                </span>
-                <button
-                  type="button"
-                  onClick={() => onLabel({ anchorX: 0.5, anchorY: 0.5 })}
-                  className="underline hover:text-foreground"
-                >
-                  Center
-                </button>
-              </div>
-            )}
-            <div className="grid grid-cols-[1fr_1fr_72px_44px] gap-2 items-center text-xs">
-              <select
-                value={effectiveLabel.family}
-                onChange={(event) =>
-                  onLabel({ family: event.target.value as FontFamily })
-                }
-                className="rounded-md border border-border bg-surface text-foreground px-2 py-1"
-              >
-                <option value="sans">Sans</option>
-                <option value="serif">Serif</option>
-                <option value="mono">Mono</option>
-              </select>
-              <select
-                value={effectiveLabel.style}
-                onChange={(event) =>
-                  onLabel({ style: event.target.value as FontStyle })
-                }
-                className="rounded-md border border-border bg-surface text-foreground px-2 py-1"
-              >
-                <option value="normal">Regular</option>
-                <option value="bold">Bold</option>
-                <option value="italic">Italic</option>
-                <option value="bolditalic">Bold Italic</option>
-              </select>
-              <input
-                type="number"
-                value={effectiveLabel.sizePt}
-                min={6}
-                max={120}
-                step={1}
-                onChange={(event) => {
-                  const parsed = parseFloat(event.target.value);
-                  if (!Number.isNaN(parsed)) onLabel({ sizePt: parsed });
-                }}
-                className="rounded-md border border-border bg-surface text-foreground px-2 py-1"
-                title="Font size (pt)"
-              />
-              <input
-                type="color"
-                value={effectiveLabel.color}
-                onChange={(event) => onLabel({ color: event.target.value })}
-                className="h-7 w-full rounded border border-border cursor-pointer"
-                title="Color"
-              />
-            </div>
-          </>
-        )}
-      </div>
       </div>
     </details>
   );

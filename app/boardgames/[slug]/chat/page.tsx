@@ -22,7 +22,10 @@ import { useAuthToken, useAuthActions } from "@convex-dev/auth/react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { dayLabel } from "@/lib/format";
-import { MessageBubble } from "@/components/chat/MessageBubble";
+import {
+  MessageBubble,
+  stripIconBrackets,
+} from "@/components/chat/MessageBubble";
 import { ChatInput } from "@/components/chat/ChatInput";
 import { ResourcesSideNav, LayersIcon } from "@/components/chat/ResourcesSideNav";
 import { GuestBanner } from "@/components/chat/GuestBanner";
@@ -439,7 +442,9 @@ function ChatView({ gameId, slug }: { gameId: Id<"games">; slug: string }) {
             <div className="flex justify-start">
               <div className="max-w-[90%] rounded-2xl rounded-bl-sm border border-border bg-surface px-4 py-3 text-sm leading-relaxed">
                 {streaming ? (
-                  <span className="whitespace-pre-wrap">{streaming}</span>
+                  <span className="whitespace-pre-wrap">
+                    {stripIconBrackets(streaming)}
+                  </span>
                 ) : (
                   <ThinkingIndicator />
                 )}

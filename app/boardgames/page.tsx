@@ -10,7 +10,7 @@ type View = "grid" | "list";
 type TimeFilter = "quick" | "standard" | "epic";
 type Filters = { players: number | null; time: TimeFilter | null; hasExpansions: boolean };
 
-const PLAYER_OPTIONS = [2, 3, 4, 5, 6];
+const PLAYER_OPTIONS = [1, 2, 3, 4, 5, 6];
 const TIME_OPTIONS: { value: TimeFilter; label: string }[] = [
   { value: "quick", label: "≤30 min" },
   { value: "standard", label: "30–90 min" },

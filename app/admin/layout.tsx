@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 
@@ -19,6 +20,7 @@ export default function AdminLayout({
   children: React.ReactNode;
 }) {
   const me = useQuery(api.users.me);
+  const pathname = usePathname();
 
   if (me === undefined) {
     return (
@@ -50,15 +52,26 @@ export default function AdminLayout({
       <div className="mb-6">
         <h1 className="text-2xl font-bold">Admin</h1>
         <nav className="mt-3 flex gap-1 overflow-x-auto border-b border-border">
-          {adminNav.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className="shrink-0 whitespace-nowrap rounded-t-md px-3 py-2 text-sm font-medium text-muted hover:text-foreground"
-            >
-              {item.label}
-            </Link>
-          ))}
+          {adminNav.map((item) => {
+            const active =
+              item.href === "/admin"
+                ? pathname === "/admin"
+                : pathname.startsWith(item.href);
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                aria-current={active ? "page" : undefined}
+                className={`-mb-px shrink-0 whitespace-nowrap border-b-2 px-3 py-2 text-sm font-medium transition-colors ${
+                  active
+                    ? "border-accent text-foreground"
+                    : "border-transparent text-muted hover:text-foreground"
+                }`}
+              >
+                {item.label}
+              </Link>
+            );
+          })}
         </nav>
       </div>
       {children}

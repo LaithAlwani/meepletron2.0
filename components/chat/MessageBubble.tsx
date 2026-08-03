@@ -235,6 +235,19 @@ function linkifyCitations(content: string, validNs: Set<number>): string {
   );
 }
 
+/**
+ * Iconography tokens are ALL-CAPS stand-ins the ingestion inserts for the
+ * rulebook's symbols, e.g. `[WOOD]`, `[VP]`, `[GAME BOARD]`, `[3 VP]`. Drop the
+ * brackets off ONLY those so they read naturally. Because the pattern requires
+ * an uppercase letter and allows only caps/digits/spaces, it can never match a
+ * numeric citation (`[1]`, `[1](#cite-1)`) or a normal/markdown link.
+ */
+export function stripIconBrackets(content: string): string {
+  return content.replace(/\[([A-Z0-9][A-Z0-9 ]*)\]/g, (whole, inner: string) =>
+    /[A-Z]/.test(inner) ? inner : whole,
+  );
+}
+
 /* ---------- bubble ---------- */
 
 export function MessageBubble({ message }: { message: Doc<"messages"> }) {
@@ -260,10 +273,11 @@ export function MessageBubble({ message }: { message: Doc<"messages"> }) {
     if (validNs.has(n)) citedNs.add(n);
   }
   const citedAnnotations = annotations.filter((a) => citedNs.has(a.n));
-  const markdown =
+  const markdown = stripIconBrackets(
     annotations.length > 0
       ? linkifyCitations(message.content, validNs)
-      : message.content;
+      : message.content,
+  );
 
   return (
     <div className="group flex justify-start">

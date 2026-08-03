@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import Image from "next/image";
 import { useQuery } from "convex/react";
 import { Authenticated, Unauthenticated, AuthLoading } from "convex/react";
@@ -59,11 +60,18 @@ function NavLink({
   icon?: React.ReactNode;
   children: React.ReactNode;
 }) {
+  const pathname = usePathname();
+  const active = pathname === href || pathname.startsWith(`${href}/`);
   return (
     <Link
       href={href}
       onClick={onClick}
-      className="flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
+      aria-current={active ? "page" : undefined}
+      className={`flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+        active
+          ? "bg-accent/10 text-accent"
+          : "text-muted hover:bg-surface-2 hover:text-foreground"
+      }`}
     >
       {icon}
       {children}
@@ -74,7 +82,7 @@ function NavLink({
 function Logo({ onClick }: { onClick?: () => void }) {
   return (
     <Link
-      href="/"
+      href="/boardgames"
       onClick={onClick}
       aria-label="Meepletron home"
       className="flex items-center gap-2"

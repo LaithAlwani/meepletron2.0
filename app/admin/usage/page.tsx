@@ -74,7 +74,7 @@ function IngestionTable({
 }) {
   return (
     <div>
-      <div className="mb-2 flex items-baseline justify-between">
+      <div className="mb-2 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
         <h3 className="text-sm font-semibold uppercase tracking-wide text-muted">
           Ingestion cost per rulebook
         </h3>

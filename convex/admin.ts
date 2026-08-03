@@ -1,3 +1,4 @@
+import { v } from "convex/values";
 import { query } from "./_generated/server";
 import { requireAdmin } from "./lib/auth";
 import { finite } from "./lib/num";
@@ -15,6 +16,73 @@ function rowCost(model: string, promptTokens: number, completionTokens: number) 
   if (!p) return 0;
   return (finite(promptTokens) / 1e6) * p.input + (finite(completionTokens) / 1e6) * p.output;
 }
+
+const SCAN_CAP = 20000;
+
+/**
+ * Admin dashboard totals: users, games/expansions, messages (by role), and AI
+ * token input/output for the current month + all time (+ est. cost). `monthStart`
+ * is passed in (queries can't read wall-clock). Bounded scans — fine at this
+ * scale; move to @convex-dev/aggregate if any table grows past ~16k rows.
+ */
+export const dashboardStats = query({
+  args: { monthStart: v.number() },
+  handler: async (ctx, { monthStart }) => {
+    await requireAdmin(ctx);
+
+    const [baseGames, expansions, users] = await Promise.all([
+      ctx.db
+        .query("games")
+        .withIndex("by_isExpansion", (q) => q.eq("isExpansion", false))
+        .take(SCAN_CAP),
+      ctx.db
+        .query("games")
+        .withIndex("by_isExpansion", (q) => q.eq("isExpansion", true))
+        .take(SCAN_CAP),
+      ctx.db.query("users").take(SCAN_CAP),
+    ]);
+
+    let msgTotal = 0;
+    let msgUser = 0;
+    let msgAi = 0;
+    for (const m of await ctx.db.query("messages").take(SCAN_CAP)) {
+      msgTotal++;
+      if (m.role === "user") msgUser++;
+      else msgAi++;
+    }
+
+    let inTotal = 0;
+    let outTotal = 0;
+    let inMonth = 0;
+    let outMonth = 0;
+    let costTotal = 0;
+    let costMonth = 0;
+    for (const r of await ctx.db.query("usageLog").take(SCAN_CAP)) {
+      const inp = finite(r.promptTokens);
+      const out = finite(r.completionTokens);
+      const c = rowCost(r.model, r.promptTokens, r.completionTokens);
+      inTotal += inp;
+      outTotal += out;
+      costTotal += c;
+      if (r._creationTime >= monthStart) {
+        inMonth += inp;
+        outMonth += out;
+        costMonth += c;
+      }
+    }
+
+    return {
+      users: users.length,
+      baseGames: baseGames.length,
+      expansions: expansions.length,
+      messages: { total: msgTotal, byUser: msgUser, byAi: msgAi },
+      tokensMonth: { input: inMonth, output: outMonth },
+      tokensTotal: { input: inTotal, output: outTotal },
+      costMonth,
+      costTotal,
+    };
+  },
+});
 
 /**
  * Aggregate recent LLM usage by purpose and model, with estimated cost.

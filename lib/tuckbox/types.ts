@@ -10,21 +10,6 @@ export type FaceKey =
   | "top"
   | "bottom";
 
-export type FontFamily = "sans" | "serif" | "mono";
-export type FontStyle = "normal" | "bold" | "italic" | "bolditalic";
-
-export type TextLabel = {
-  text: string;
-  family: FontFamily;
-  style: FontStyle;
-  sizePt: number;
-  color: string;
-  anchorX: number;
-  anchorY: number;
-};
-
-export const DEFAULT_LABEL_POSITION = { anchorX: 0.5, anchorY: 0.5 };
-
 export type TuckboxConfig = {
   unit: Unit;
   cardWidth: number;
@@ -53,7 +38,6 @@ export type FaceImageData = {
 };
 
 export type FaceAssets = Partial<Record<FaceKey, FaceImageData>>;
-export type FaceLabels = Partial<Record<FaceKey, TextLabel>>;
 
 export const DEFAULT_IMAGE_TRANSFORM: FaceImageTransform = {
   zoom: 1,
