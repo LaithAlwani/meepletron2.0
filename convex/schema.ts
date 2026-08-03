@@ -170,6 +170,14 @@ export default defineSchema({
       v.literal("reviewing"),
       v.literal("committed"),
     ),
+    // User control over the background parse loop (absent = running).
+    control: v.optional(
+      v.union(
+        v.literal("running"),
+        v.literal("paused"),
+        v.literal("stopped"),
+      ),
+    ),
     totalPages: v.optional(v.number()),
     batchPlan: v.array(
       v.object({
@@ -224,6 +232,9 @@ export default defineSchema({
     v2ScoreThreshold: v.number(),
     rerankTopN: v.number(),
     historyMessageLimit: v.number(),
+    // How many top-scoring candidates are sent to the reranker (optional so
+    // existing rows stay valid; defaults applied on read).
+    rerankCandidates: v.optional(v.number()),
   }),
 
   usageLog: defineTable({

@@ -22,8 +22,35 @@ function RulebookRow({
   onDelete: (id: Id<"rulebooks">, label: string) => void;
 }) {
   const startIngestion = useAction(api.ingestion.startIngestion);
+  const updateLabel = useMutation(api.rulebooks.updateRulebookLabel);
   const toast = useToast();
   const [pending, setPending] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(rulebook.label);
+  const [savingLabel, setSavingLabel] = useState(false);
+
+  function cancelEdit() {
+    setEditing(false);
+    setDraft(rulebook.label);
+  }
+
+  async function saveLabel() {
+    const next = draft.trim();
+    if (!next || next === rulebook.label) {
+      cancelEdit();
+      return;
+    }
+    setSavingLabel(true);
+    try {
+      await updateLabel({ rulebookId: rulebook._id, label: next });
+      toast("Label updated", "success");
+      setEditing(false);
+    } catch (e) {
+      toast(e instanceof Error ? e.message : "Couldn't update label", "error");
+    } finally {
+      setSavingLabel(false);
+    }
+  }
 
   async function handleIngest() {
     setPending(true);
@@ -51,9 +78,57 @@ function RulebookRow({
 
   return (
     <li className="flex items-center gap-3 rounded-lg border border-border bg-surface px-3 py-2 text-sm">
-      <div className="flex-1">
-        <div className="font-medium">{rulebook.label}</div>
-        <div className="text-xs text-muted">{rulebook.filename}</div>
+      <div className="min-w-0 flex-1">
+        {editing ? (
+          <div className="flex items-center gap-1.5">
+            <input
+              autoFocus
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  void saveLabel();
+                } else if (e.key === "Escape") {
+                  cancelEdit();
+                }
+              }}
+              className="w-full rounded-md border border-border bg-surface px-2 py-1 text-sm outline-none focus:ring-2 focus:ring-ring"
+            />
+            <button
+              onClick={() => void saveLabel()}
+              disabled={savingLabel}
+              className="shrink-0 text-xs font-semibold text-accent disabled:opacity-50"
+            >
+              {savingLabel ? "Saving…" : "Save"}
+            </button>
+            <button
+              onClick={cancelEdit}
+              className="shrink-0 text-xs text-muted hover:text-foreground"
+            >
+              Cancel
+            </button>
+          </div>
+        ) : (
+          <div className="flex items-center gap-1.5">
+            <span className="truncate font-medium">{rulebook.label}</span>
+            <button
+              onClick={() => {
+                setDraft(rulebook.label);
+                setEditing(true);
+              }}
+              aria-label="Edit label"
+              title="Edit label"
+              className="shrink-0 text-muted transition-colors hover:text-foreground"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5">
+                <path d="M12 20h9" />
+                <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
+              </svg>
+            </button>
+          </div>
+        )}
+        <div className="truncate text-xs text-muted">{rulebook.filename}</div>
       </div>
 
       {isDownload ? (

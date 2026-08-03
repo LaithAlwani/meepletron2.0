@@ -9,15 +9,17 @@ const DEFAULTS = {
   v2ScoreThreshold: 0.05,
   rerankTopN: 3,
   historyMessageLimit: 6,
+  // How many of the top-scoring candidates actually reach the reranker.
+  rerankCandidates: 12,
 };
 
-/** The current RAG-tuning knobs (admin). */
+/** The current RAG-tuning knobs (admin). Defaults fill any missing fields. */
 export const get = query({
   args: {},
   handler: async (ctx) => {
     await requireAdmin(ctx);
     const rows = await ctx.db.query("siteConfig").order("desc").take(1);
-    return rows[0] ?? DEFAULTS;
+    return { ...DEFAULTS, ...rows[0] };
   },
 });
 
@@ -28,10 +30,16 @@ export const update = mutation({
     v2ScoreThreshold: v.number(),
     rerankTopN: v.number(),
     historyMessageLimit: v.number(),
+    rerankCandidates: v.number(),
   },
   handler: async (ctx, args) => {
     await requireAdmin(ctx);
-    if (args.v2TopK < 1 || args.rerankTopN < 1 || args.historyMessageLimit < 0) {
+    if (
+      args.v2TopK < 1 ||
+      args.rerankTopN < 1 ||
+      args.historyMessageLimit < 0 ||
+      args.rerankCandidates < 1
+    ) {
       throw new Error("Invalid config values");
     }
     const existing = await ctx.db.query("siteConfig").order("desc").take(1);
@@ -50,6 +58,7 @@ export const internalUpdate = internalMutation({
     v2ScoreThreshold: v.optional(v.number()),
     rerankTopN: v.optional(v.number()),
     historyMessageLimit: v.optional(v.number()),
+    rerankCandidates: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     const existing = await ctx.db.query("siteConfig").order("desc").take(1);

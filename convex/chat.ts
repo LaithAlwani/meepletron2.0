@@ -11,7 +11,14 @@ import type { Doc, Id } from "./_generated/dataModel";
 import { getCurrentUser, requireUser, requireAdmin } from "./lib/auth";
 import { finite } from "./lib/num";
 
+/** Daily token budgets: guests get a smaller allowance to nudge sign-up. */
 export const DAILY_TOKEN_LIMIT = 50_000;
+export const GUEST_TOKEN_LIMIT = 20_000;
+
+/** The daily token limit for a user, based on whether they're an anonymous guest. */
+export function tokenLimitFor(isAnonymous?: boolean): number {
+  return isAnonymous ? GUEST_TOKEN_LIMIT : DAILY_TOKEN_LIMIT;
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -386,14 +393,15 @@ export const getActiveConfig = internalQuery({
   args: {},
   handler: async (ctx) => {
     const rows = await ctx.db.query("siteConfig").order("desc").take(1);
-    return (
-      rows[0] ?? {
-        v2TopK: 10,
-        v2ScoreThreshold: 0.05,
-        rerankTopN: 3,
-        historyMessageLimit: 6,
-      }
-    );
+    // Defaults fill any missing fields (e.g. an older row without newer knobs).
+    const defaults = {
+      v2TopK: 20,
+      v2ScoreThreshold: 0.05,
+      rerankTopN: 3,
+      historyMessageLimit: 6,
+      rerankCandidates: 12,
+    };
+    return { ...defaults, ...rows[0] };
   },
 });
 
@@ -411,7 +419,7 @@ export const reserveBudget = internalMutation({
         tokensResetAt: todayStartMs,
       });
     }
-    if (used >= DAILY_TOKEN_LIMIT) {
+    if (used >= tokenLimitFor(user.isAnonymous)) {
       throw new Error("Daily token limit reached");
     }
   },

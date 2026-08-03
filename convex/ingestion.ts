@@ -1,3 +1,5 @@
+"use node";
+
 import { v } from "convex/values";
 import { action, internalAction } from "./_generated/server";
 import { internal } from "./_generated/api";
@@ -25,6 +27,10 @@ async function extractMarkdown(
 ) {
   const { text, usage } = await generateText({
     model: google("gemini-2.5-flash"),
+    // Extraction is a prescriptive "read pages → emit structured Markdown" task,
+    // not a reasoning one — disable Gemini "thinking" to avoid paying for hidden
+    // reasoning tokens on top of the (already large) Markdown output.
+    providerOptions: { google: { thinkingConfig: { thinkingBudget: 0 } } },
     messages: [
       {
         role: "user",
@@ -101,6 +107,10 @@ export const processBatch = internalAction({
     });
     if (!state) return;
 
+    // Halt the loop if the user paused or stopped it — progress is preserved,
+    // and resuming reschedules from the current batch index.
+    if (state.control === "paused" || state.control === "stopped") return;
+
     if (state.nextBatchIndex >= state.batchPlan.length) {
       await ctx.scheduler.runAfter(0, internal.ingestion.finalizeParse, {
         draftId,
@@ -109,6 +119,14 @@ export const processBatch = internalAction({
     }
 
     const batch = state.batchPlan[state.nextBatchIndex];
+    // Arm a watchdog: if this batch is killed mid-run (OOM/timeout) the catch
+    // below never fires, so schedule a check that surfaces the stall as an error
+    // instead of hanging silently. No-op once the batch advances the index.
+    await ctx.scheduler.runAfter(
+      6 * 60 * 1000,
+      internal.ingestionDb.markStalledIfNoProgress,
+      { draftId, expectedIndex: state.nextBatchIndex },
+    );
     try {
       const blob = await ctx.storage.get(state.storageId);
       if (!blob) throw new Error("Rulebook file is missing");

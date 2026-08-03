@@ -4,8 +4,10 @@ import {
   mutation,
   internalQuery,
   internalMutation,
+  type MutationCtx,
 } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
+import { internal } from "./_generated/api";
 import { requireAdmin } from "./lib/auth";
 
 const batchPlanValidator = v.array(
@@ -109,6 +111,7 @@ export const getDraftForBatch = internalQuery({
       nextBatchIndex: draft.nextBatchIndex,
       iconTokens: draft.iconTokens,
       sectionHeadings: draft.sectionHeadings,
+      control: draft.control ?? "running",
     };
   },
 });
@@ -127,6 +130,16 @@ export const saveBatch = internalMutation({
   handler: async (ctx, args) => {
     const draft = await ctx.db.get("migrationDrafts", args.draftId);
     if (!draft) return;
+
+    // Idempotent: replace any existing batch at this index (a pause/resume race
+    // could otherwise duplicate a page range).
+    const existing = await ctx.db
+      .query("draftBatches")
+      .withIndex("by_draft", (q) => q.eq("draftId", args.draftId))
+      .collect();
+    for (const b of existing) {
+      if (b.index === args.index) await ctx.db.delete("draftBatches", b._id);
+    }
 
     await ctx.db.insert("draftBatches", {
       draftId: args.draftId,
@@ -172,6 +185,30 @@ export const setDraftError = internalMutation({
   args: { draftId: v.id("migrationDrafts"), error: v.string() },
   handler: async (ctx, { draftId, error }) => {
     await ctx.db.patch("migrationDrafts", draftId, { error });
+  },
+});
+
+/**
+ * Watchdog: if a batch worker was killed mid-run (OOM/timeout), its try/catch
+ * never fires, so the draft would hang silently. This runs a while after a batch
+ * starts and marks the draft errored if it made no progress — turning a silent
+ * stall into a visible failure. No-op if the batch advanced or already errored.
+ */
+export const markStalledIfNoProgress = internalMutation({
+  args: { draftId: v.id("migrationDrafts"), expectedIndex: v.number() },
+  handler: async (ctx, { draftId, expectedIndex }) => {
+    const draft = await ctx.db.get("migrationDrafts", draftId);
+    if (!draft) return;
+    if (
+      draft.status === "parsing" &&
+      draft.nextBatchIndex === expectedIndex &&
+      !draft.error
+    ) {
+      await ctx.db.patch("migrationDrafts", draftId, {
+        error:
+          "Parsing stalled on this page range — the PDF may be too large or image-heavy to process. Try uploading a smaller or compressed PDF, then re-ingest.",
+      });
+    }
   },
 });
 
@@ -348,11 +385,61 @@ export const getIngestStatus = query({
     return {
       draftId: draft._id,
       status: draft.status,
+      control: draft.control ?? "running",
       totalPages: draft.totalPages,
       totalBatches: draft.batchPlan.length,
       batchesDone: draft.nextBatchIndex,
       error: draft.error,
     };
+  },
+});
+
+/** Find the newest draft for a rulebook (admin-gated helper). */
+async function requireDraft(ctx: MutationCtx, rulebookId: Id<"rulebooks">) {
+  await requireAdmin(ctx);
+  const draft = await ctx.db
+    .query("migrationDrafts")
+    .withIndex("by_rulebook", (q) => q.eq("rulebookId", rulebookId))
+    .order("desc")
+    .first();
+  return draft;
+}
+
+/** Pause the background parse loop (progress is kept; resume to continue). */
+export const pauseIngestion = mutation({
+  args: { rulebookId: v.id("rulebooks") },
+  handler: async (ctx, { rulebookId }) => {
+    const draft = await requireDraft(ctx, rulebookId);
+    if (draft && draft.status === "parsing") {
+      await ctx.db.patch("migrationDrafts", draft._id, { control: "paused" });
+    }
+  },
+});
+
+/** Stop (cancel) the parse loop. Partial progress is kept; restart to redo. */
+export const stopIngestion = mutation({
+  args: { rulebookId: v.id("rulebooks") },
+  handler: async (ctx, { rulebookId }) => {
+    const draft = await requireDraft(ctx, rulebookId);
+    if (draft && draft.status === "parsing") {
+      await ctx.db.patch("migrationDrafts", draft._id, { control: "stopped" });
+    }
+  },
+});
+
+/** Resume a paused/stopped parse loop from the current batch index. */
+export const resumeIngestion = mutation({
+  args: { rulebookId: v.id("rulebooks") },
+  handler: async (ctx, { rulebookId }) => {
+    const draft = await requireDraft(ctx, rulebookId);
+    if (!draft || draft.status !== "parsing") return;
+    await ctx.db.patch("migrationDrafts", draft._id, {
+      control: "running",
+      error: undefined,
+    });
+    await ctx.scheduler.runAfter(0, internal.ingestion.processBatch, {
+      draftId: draft._id,
+    });
   },
 });
 

@@ -57,6 +57,7 @@ export const list = query({
       const mediaId = game.thumbnailId ?? game.imageId;
       out.push({
         gameId: game._id,
+        slug: game.slug,
         title: game.title,
         thumbnailUrl: mediaId ? await ctx.storage.getUrl(mediaId) : null,
       });

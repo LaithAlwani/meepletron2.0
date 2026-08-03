@@ -79,7 +79,7 @@ function FavoritesList() {
           className="flex items-center gap-3 rounded-xl border border-border bg-surface p-3"
         >
           <Link
-            href={`/boardgames/${f.gameId}`}
+            href={`/boardgames/${f.slug}`}
             className="flex min-w-0 flex-1 items-center gap-3"
           >
             <div className="h-14 w-14 shrink-0 overflow-hidden rounded-md bg-surface-2">
@@ -99,7 +99,7 @@ function FavoritesList() {
             <span className="truncate font-medium">{f.title}</span>
           </Link>
           <Link
-            href={`/boardgames/${f.gameId}/chat`}
+            href={`/boardgames/${f.slug}/chat`}
             className="flex shrink-0 items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-accent transition-colors hover:bg-surface-2"
           >
             {ChatBubbleIcon}

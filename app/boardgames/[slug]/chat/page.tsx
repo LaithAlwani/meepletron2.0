@@ -72,13 +72,28 @@ const SUGGESTED_QUESTIONS = [
 export default function ChatPage({
   params,
 }: {
-  params: Promise<{ id: string }>;
+  params: Promise<{ slug: string }>;
 }) {
-  const { id } = use(params);
-  return <ChatView gameId={id as Id<"games">} />;
+  const { slug: handle } = use(params);
+  const game = useQuery(api.games.getByHandle, { handle });
+  if (game === undefined) {
+    return (
+      <div className="flex h-dvh items-center justify-center text-muted">
+        Loading…
+      </div>
+    );
+  }
+  if (game === null) {
+    return (
+      <div className="flex h-dvh items-center justify-center text-muted">
+        Game not found.
+      </div>
+    );
+  }
+  return <ChatView gameId={game._id} slug={game.slug} />;
 }
 
-function ChatView({ gameId }: { gameId: Id<"games"> }) {
+function ChatView({ gameId, slug }: { gameId: Id<"games">; slug: string }) {
   const { isLoading, isAuthenticated } = useConvexAuth();
   const { signIn } = useAuthActions();
   const getOrCreateChat = useMutation(api.chat.getOrCreateChat);
@@ -211,7 +226,9 @@ function ChatView({ gameId }: { gameId: Id<"games"> }) {
       if (!res.ok || !res.body) {
         setError(
           res.status === 429
-            ? "You've reached today's message limit. Try again tomorrow."
+            ? isGuest
+              ? "You've used today's guest limit (20K tokens). Sign in to get 50K per day."
+              : "You've reached today's message limit. Try again tomorrow."
             : "Something went wrong. Please try again.",
         );
         return;
@@ -260,14 +277,14 @@ function ChatView({ gameId }: { gameId: Id<"games"> }) {
         <header className="shrink-0 border-b border-border bg-background/80 backdrop-blur">
           <div className="mx-auto flex max-w-3xl items-center gap-2 px-4 py-2.5">
             <Link
-              href={`/boardgames/${gameId}`}
+              href={`/boardgames/${slug}`}
               aria-label="Back to game"
               className="rounded-lg p-2 text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
             >
               {BackIcon}
             </Link>
             <Link
-              href={`/boardgames/${gameId}`}
+              href={`/boardgames/${slug}`}
               className="group flex min-w-0 flex-1 items-center gap-2.5"
             >
               <div className="h-9 w-9 shrink-0 overflow-hidden rounded-lg bg-surface-2 shadow-sm">
@@ -402,6 +419,14 @@ function ChatView({ gameId }: { gameId: Id<"games"> }) {
                 }`}
               >
                 {budget.remaining.toLocaleString()} tokens left today
+                {budget.isGuest && (
+                  <>
+                    {" · "}
+                    <Link href="/auth" className="text-accent hover:underline">
+                      Sign in for more
+                    </Link>
+                  </>
+                )}
               </p>
             )}
             <ChatInput onSend={handleSend} disabled={!inputReady} />

@@ -61,3 +61,40 @@ export const usageSummary = query({
     };
   },
 });
+
+/**
+ * Per-rulebook ingestion cost. Each ingestion draft stores the total Gemini
+ * parse usage for that PDF (`geminiUsage`); embedding is negligible and the API
+ * reports 0 tokens for it, so this is effectively the full ingestion cost.
+ */
+export const ingestionCosts = query({
+  args: {},
+  handler: async (ctx) => {
+    await requireAdmin(ctx);
+    const drafts = await ctx.db.query("migrationDrafts").order("desc").take(200);
+
+    let totalTokens = 0;
+    let totalCost = 0;
+    const rows = [];
+    for (const d of drafts) {
+      const u = d.geminiUsage;
+      const promptTokens = finite(u?.promptTokens);
+      const completionTokens = finite(u?.completionTokens);
+      const tokens = finite(u?.totalTokens) || promptTokens + completionTokens;
+      const cost = rowCost("gemini-2.5-flash", promptTokens, completionTokens);
+      const rb = await ctx.db.get("rulebooks", d.rulebookId);
+      rows.push({
+        id: d._id as string,
+        gameTitle: d.gameTitle,
+        rulebook: rb?.label ?? "—",
+        pages: d.totalPages ?? null,
+        status: d.status,
+        tokens,
+        cost,
+      });
+      totalTokens += tokens;
+      totalCost += cost;
+    }
+    return { rows, totalTokens, totalCost };
+  },
+});

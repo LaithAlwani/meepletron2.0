@@ -1,7 +1,7 @@
 import { v } from "convex/values";
 import { query, mutation, internalQuery, internalMutation } from "./_generated/server";
 import { getCurrentUser, requireUser, requireAdmin } from "./lib/auth";
-import { DAILY_TOKEN_LIMIT } from "./chat";
+import { tokenLimitFor } from "./chat";
 import { finite } from "./lib/num";
 
 /** The current user's profile (null when signed out). Reactive. */
@@ -22,11 +22,14 @@ export const myBudget = query({
   handler: async (ctx) => {
     const user = await getCurrentUser(ctx);
     if (!user) return null;
-    const used = Math.min(finite(user.tokensUsedToday), DAILY_TOKEN_LIMIT);
+    const isGuest = user.isAnonymous === true;
+    const limit = tokenLimitFor(user.isAnonymous);
+    const used = Math.min(finite(user.tokensUsedToday), limit);
     return {
       used,
-      limit: DAILY_TOKEN_LIMIT,
-      remaining: Math.max(0, DAILY_TOKEN_LIMIT - used),
+      limit,
+      remaining: Math.max(0, limit - used),
+      isGuest,
     };
   },
 });

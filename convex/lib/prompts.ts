@@ -57,13 +57,17 @@ export function formatContext(
 export function buildSystemPrompt(sourceTitles: string[], context: string): string {
   const sources =
     sourceTitles.length > 0 ? sourceTitles.join(", ") : "the loaded rulebook(s)";
-  return `You are Meepletron, a board game rules assistant. Answer the user's rules question using ONLY the numbered passages in CONTEXT below, which come from: ${sources}.
+  return `You are Meepletron, a board game rules assistant. Answer the user's rules question using the numbered passages in CONTEXT below, which come from: ${sources}.
 
-Rules:
-- Base every factual claim strictly on the CONTEXT. Do NOT use outside knowledge about the game.
-- Cite the passage(s) that support each claim inline with bracketed numbers like [1] or [2][3], matching the passage numbers in CONTEXT.
-- If the CONTEXT does not contain the answer, say you couldn't find it in the loaded rulebook(s) and suggest what the user might load or rephrase. Do NOT guess.
-- If the user asks about a game or expansion whose rulebook is not in the sources, say it isn't loaded.
+How to interpret the question:
+- Players ask in plain, casual language — they usually don't know the rulebook's exact terms. Interpret their intent charitably and map everyday words to the game's terminology. For example: "money/cash" ↔ coins, gold, resources; "guys/pieces/dudes/men" ↔ workers, meeples, tokens, figures; "points" ↔ victory points/score; "my go/my turn" ↔ turn, action, phase; "cards in my hand" ↔ hand limit. If a passage clearly covers the concept the player is asking about, ANSWER IT — even if it uses different words than the player did.
+- Treat a wording difference as a match, not a gap. Only say you couldn't find it when the CONTEXT genuinely doesn't cover the concept at all — never just because the player phrased it casually.
+- If the passages only partly cover the question, answer what they DO say and note what isn't specified, instead of refusing outright.
+
+Grounding rules:
+- Base every factual claim on the CONTEXT — don't invent rules or use outside knowledge about the game.
+- Cite the passage(s) supporting each claim inline with bracketed numbers like [1] or [2][3], matching the passage numbers in CONTEXT.
+- If the concept truly isn't covered, say you couldn't find it in the loaded rulebook(s) and suggest rephrasing or which rulebook to load. If the game/expansion's rulebook isn't among the sources, say it isn't loaded.
 - Expand any bracketed iconography tokens (e.g. [WOOD], [VP]) into their meaning using the LEGEND when present.
 - Be concise and clear. Use short paragraphs or bullet points. Do not restate the question.
 
@@ -80,9 +84,15 @@ export function buildRewritePrompt(
   history: { role: string; content: string }[],
   query: string,
 ): string {
+  // Only needed to resolve pronouns/references in a follow-up — a couple of
+  // recent turns is plenty, and past answers are truncated to keep it cheap.
   const convo = history
-    .slice(-6)
-    .map((m) => `${m.role === "user" ? "Player" : "Assistant"}: ${m.content}`)
+    .slice(-3)
+    .map((m) => {
+      const who = m.role === "user" ? "Player" : "Assistant";
+      const text = m.content.length > 200 ? `${m.content.slice(0, 200)}…` : m.content;
+      return `${who}: ${text}`;
+    })
     .join("\n");
   return `Rewrite the player's latest question into a concise search query for looking it up in a board game rulebook.
 

@@ -1,10 +1,9 @@
 "use client";
 
-import { use } from "react";
+import { use, useEffect, useState } from "react";
 import Link from "next/link";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import type { Id } from "@/convex/_generated/dataModel";
 import { formatPlayTime } from "@/lib/format";
 import { FavoriteButton } from "@/components/boardgames/FavoriteButton";
 import { BackgroundCover } from "@/components/boardgames/BackgroundCover";
@@ -89,17 +88,32 @@ const PenIcon = (
     <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z" />
   </svg>
 );
+const DownloadIcon = (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+    <path d="m7 10 5 5 5-5" />
+    <path d="M12 15V3" />
+  </svg>
+);
 
 export default function GameDetailPage({
   params,
 }: {
-  params: Promise<{ id: string }>;
+  params: Promise<{ slug: string }>;
 }) {
-  const { id } = use(params);
-  const gameId = id as Id<"games">;
-  const game = useQuery(api.games.getById, { gameId });
+  const { slug: handle } = use(params);
+  const game = useQuery(api.games.getByHandle, { handle });
   const me = useQuery(api.users.me);
   const isAdmin = me?.role === "admin";
+  const [zoomed, setZoomed] = useState(false);
+
+  // Close the artwork lightbox on Escape.
+  useEffect(() => {
+    if (!zoomed) return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setZoomed(false);
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [zoomed]);
 
   if (game === undefined) {
     return (
@@ -116,6 +130,7 @@ export default function GameDetailPage({
     );
   }
 
+  const gameId = game._id;
   const cover = game.imageUrl ?? game.thumbnailUrl ?? null;
   const playTime = formatPlayTime(game.minPlayTime, game.maxPlayTime);
   const players =
@@ -138,6 +153,17 @@ export default function GameDetailPage({
           Board Games
         </Link>
         <span>/</span>
+        {game.parent && (
+          <>
+            <Link
+              href={`/boardgames/${game.parent.slug}`}
+              className="max-w-[160px] truncate transition-colors hover:text-foreground"
+            >
+              {game.parent.title}
+            </Link>
+            <span>/</span>
+          </>
+        )}
         <span className="max-w-[220px] truncate font-medium text-foreground">
           {game.title}
         </span>
@@ -146,10 +172,29 @@ export default function GameDetailPage({
       {/* Hero */}
       <div className="mb-10 flex flex-col gap-8 sm:flex-row">
         <div className="mx-auto w-44 shrink-0 sm:mx-0">
-          <div className="aspect-3/4 w-full overflow-hidden rounded-2xl bg-surface-2 shadow-lg">
+          <div className="relative aspect-3/4 w-full overflow-hidden rounded-2xl bg-surface-2 shadow-lg">
             {cover ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={cover} alt={game.title} className="h-full w-full object-cover" />
+              <button
+                type="button"
+                onClick={() => setZoomed(true)}
+                aria-label="View full artwork"
+                className="group block h-full w-full cursor-zoom-in"
+              >
+                {/* Blurred fill so the full (uncropped) art can show contained. */}
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={cover}
+                  alt=""
+                  aria-hidden
+                  className="absolute inset-0 h-full w-full scale-110 object-cover opacity-50 blur-md"
+                />
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={cover}
+                  alt={game.title}
+                  className="relative h-full w-full object-contain transition-transform group-hover:scale-[1.03]"
+                />
+              </button>
             ) : (
               <div className="flex h-full w-full items-center justify-center text-5xl opacity-40">
                 🎲
@@ -159,6 +204,17 @@ export default function GameDetailPage({
         </div>
 
         <div className="min-w-0 flex-1">
+          {game.parent && (
+            <Link
+              href={`/boardgames/${game.parent.slug}`}
+              className="mb-1.5 inline-flex items-center gap-1.5 text-sm text-muted transition-colors hover:text-accent"
+            >
+              <span>🧩 Expansion of</span>
+              <span className="font-semibold text-foreground">
+                {game.parent.title}
+              </span>
+            </Link>
+          )}
           <div className="mb-1 flex flex-wrap items-center gap-2">
             <h1 className="text-3xl font-bold leading-tight">{game.title}</h1>
             {game.year && (
@@ -192,7 +248,7 @@ export default function GameDetailPage({
           <div className="flex flex-wrap gap-3">
             {ingestedCount > 0 ? (
               <Link
-                href={`/boardgames/${gameId}/chat`}
+                href={`/boardgames/${game.slug}/chat`}
                 className="inline-flex items-center gap-2 rounded-xl bg-accent px-4 py-2.5 text-sm font-semibold text-accent-foreground shadow-sm transition-opacity hover:opacity-90"
               >
                 💬 Chat about rules
@@ -248,25 +304,26 @@ export default function GameDetailPage({
         </div>
       )}
 
-      {/* Rulebooks (chat sources) */}
+      {/* Rulebook files — downloadable, with a note when searchable in chat. */}
       {rulebooks.length > 0 && (
-        <InfoSection title="Rulebooks">
+        <InfoSection title="Rules & Guides">
           <ul className="space-y-1.5">
             {rulebooks.map((rb) => (
-              <li
-                key={rb._id}
-                className="flex items-center justify-between rounded-lg border border-border bg-surface px-3 py-2 text-sm"
-              >
-                <span className="inline-flex items-center gap-2">📖 {rb.label}</span>
-                <span
-                  className={
-                    rb.isIngested
-                      ? "text-xs text-green-600 dark:text-green-400"
-                      : "text-xs text-muted"
-                  }
+              <li key={rb._id}>
+                <a
+                  href={rb.downloadUrl ?? "#"}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-between gap-3 rounded-lg border border-border bg-surface px-3 py-2 text-sm transition-colors hover:bg-surface-2"
                 >
-                  {rb.isIngested ? "Ready" : "Not ingested"}
-                </span>
+                  <span className="inline-flex min-w-0 items-center gap-2">
+                    <span>📖</span>
+                    <span className="truncate">{rb.label}</span>
+                  </span>
+                  <span className="shrink-0 text-accent" aria-label="Download">
+                    {DownloadIcon}
+                  </span>
+                </a>
               </li>
             ))}
           </ul>
@@ -285,8 +342,13 @@ export default function GameDetailPage({
                   rel="noopener noreferrer"
                   className="flex items-center justify-between rounded-lg border border-border bg-surface px-3 py-2 text-sm transition-colors hover:bg-surface-2"
                 >
-                  <span className="inline-flex items-center gap-2">📎 {dl.label}</span>
-                  <span className="text-xs font-medium text-accent">Download ↓</span>
+                  <span className="inline-flex min-w-0 items-center gap-2">
+                    <span>📎</span>
+                    <span className="truncate">{dl.label}</span>
+                  </span>
+                  <span className="shrink-0 text-accent" aria-label="Download">
+                    {DownloadIcon}
+                  </span>
                 </a>
               </li>
             ))}
@@ -299,7 +361,7 @@ export default function GameDetailPage({
         <InfoSection title={`Expansions (${game.expansions.length})`}>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
             {game.expansions.map((exp) => (
-              <Link key={exp._id} href={`/boardgames/${exp._id}`} className="group flex flex-col">
+              <Link key={exp._id} href={`/boardgames/${exp.slug}`} className="group flex flex-col">
                 <div className="aspect-3/4 overflow-hidden rounded-xl bg-surface-2 shadow-sm">
                   {exp.thumbnailUrl || exp.imageUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
@@ -321,6 +383,33 @@ export default function GameDetailPage({
             ))}
           </div>
         </InfoSection>
+      )}
+
+      {/* Full-artwork lightbox */}
+      {zoomed && cover && (
+        <div
+          onClick={() => setZoomed(false)}
+          className="animate-in fixed inset-0 z-50 flex cursor-zoom-out items-center justify-center bg-black/85 p-4 backdrop-blur-sm"
+          role="dialog"
+          aria-label="Game artwork"
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={cover}
+            alt={game.title}
+            className="max-h-[90vh] max-w-full rounded-lg object-contain shadow-2xl"
+          />
+          <button
+            onClick={() => setZoomed(false)}
+            aria-label="Close"
+            className="absolute right-4 top-4 rounded-full bg-white/10 p-2 text-white transition-colors hover:bg-white/20"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
+              <path d="M18 6 6 18" />
+              <path d="m6 6 12 12" />
+            </svg>
+          </button>
+        </div>
       )}
     </div>
   );

@@ -48,8 +48,14 @@ export default function BoardgamesPage() {
   const [view, setView] = useState<View>("grid");
   const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS);
   const [term, setTerm] = useState("");
-  const trimmed = term.trim();
-  const searching = trimmed.length >= 2;
+  const [debounced, setDebounced] = useState("");
+  const searching = debounced.length >= 2;
+
+  // Debounce the search so the query only fires 1s after typing stops.
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(term.trim()), 1000);
+    return () => clearTimeout(t);
+  }, [term]);
 
   useEffect(() => {
     if (localStorage.getItem("boardgames-view") === "list") setView("list");
@@ -76,16 +82,15 @@ export default function BoardgamesPage() {
   );
   const search = usePaginatedQuery(
     api.games.searchPaginated,
-    searching ? { term: trimmed } : "skip",
+    searching ? { term: debounced } : "skip",
     { initialNumItems: 24 },
   );
 
   const logSearch = useMutation(api.search.logSearch);
   useEffect(() => {
-    if (!searching) return;
-    const t = setTimeout(() => void logSearch({ term: trimmed }), 900);
-    return () => clearTimeout(t);
-  }, [trimmed, searching, logSearch]);
+    // `debounced` is already delayed, so log the settled term directly.
+    if (searching) void logSearch({ term: debounced });
+  }, [debounced, searching, logSearch]);
 
   const active = searching ? search : browse;
   const loadingFirst = active.status === "LoadingFirstPage";
@@ -212,7 +217,7 @@ export default function BoardgamesPage() {
         <div className="flex flex-col items-center gap-2 py-20 text-center">
           <p className="font-semibold">
             {searching
-              ? `No results for “${trimmed}”`
+              ? `No results for “${debounced}”`
               : "No games match these filters"}
           </p>
           {searching ? (

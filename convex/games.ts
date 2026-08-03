@@ -131,29 +131,57 @@ export const browsePaginated = query({
   },
 });
 
-/** A game detail: the game, its expansions, and all its rulebooks. */
+/** Assemble a game detail: the game (with media), parent, expansions, rulebooks. */
+async function gameDetail(ctx: QueryCtx, game: Doc<"games">) {
+  const [expansions, rulebookDocs, parentDoc] = await Promise.all([
+    ctx.db
+      .query("games")
+      .withIndex("by_parent", (q) => q.eq("parentId", game._id))
+      .take(100),
+    ctx.db
+      .query("rulebooks")
+      .withIndex("by_game", (q) => q.eq("gameId", game._id))
+      .take(50),
+    game.parentId
+      ? ctx.db.get("games", game.parentId)
+      : Promise.resolve(null),
+  ]);
+  return {
+    ...(await withMedia(ctx, game)),
+    // For expansions, the base game they belong to (null for base games).
+    parent: parentDoc ? await withMedia(ctx, parentDoc) : null,
+    expansions: await Promise.all(expansions.map((e) => withMedia(ctx, e))),
+    rulebooks: await Promise.all(
+      rulebookDocs.map((rb) => rulebookWithMeta(ctx, rb)),
+    ),
+  };
+}
+
+/** A game detail by id. */
 export const getById = query({
   args: { gameId: v.id("games") },
   handler: async (ctx, { gameId }) => {
     const game = await ctx.db.get("games", gameId);
-    if (!game) return null;
-    const [expansions, rulebookDocs] = await Promise.all([
-      ctx.db
-        .query("games")
-        .withIndex("by_parent", (q) => q.eq("parentId", gameId))
-        .take(100),
-      ctx.db
-        .query("rulebooks")
-        .withIndex("by_game", (q) => q.eq("gameId", gameId))
-        .take(50),
-    ]);
-    return {
-      ...(await withMedia(ctx, game)),
-      expansions: await Promise.all(expansions.map((e) => withMedia(ctx, e))),
-      rulebooks: await Promise.all(
-        rulebookDocs.map((rb) => rulebookWithMeta(ctx, rb)),
-      ),
-    };
+    return game ? await gameDetail(ctx, game) : null;
+  },
+});
+
+/**
+ * A game detail by slug (SEO-friendly URLs), falling back to id so old
+ * `/boardgames/<id>` links keep resolving.
+ */
+export const getByHandle = query({
+  args: { handle: v.string() },
+  handler: async (ctx, { handle }) => {
+    let game = await ctx.db
+      .query("games")
+      .withIndex("by_slug", (q) => q.eq("slug", handle))
+      .first();
+    if (!game) {
+      const asId = ctx.db.normalizeId("games", handle);
+      if (asId) game = await ctx.db.get("games", asId);
+    }
+    return game ? await gameDetail(ctx, game) : null;
   },
 });
 

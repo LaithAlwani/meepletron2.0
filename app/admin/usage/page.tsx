@@ -9,6 +9,7 @@ const num = (n: number) => n.toLocaleString();
 
 export default function AdminUsagePage() {
   const summary = useQuery(api.admin.usageSummary);
+  const ingestion = useQuery(api.admin.ingestionCosts);
 
   if (summary === undefined) return <p className="text-muted">Loading…</p>;
 
@@ -46,6 +47,89 @@ export default function AdminUsagePage() {
           cost: m.cost,
         }))}
       />
+
+      <IngestionTable data={ingestion} />
+    </div>
+  );
+}
+
+function IngestionTable({
+  data,
+}: {
+  data:
+    | {
+        rows: {
+          id: string;
+          gameTitle: string;
+          rulebook: string;
+          pages: number | null;
+          status: string;
+          tokens: number;
+          cost: number;
+        }[];
+        totalTokens: number;
+        totalCost: number;
+      }
+    | undefined;
+}) {
+  return (
+    <div>
+      <div className="mb-2 flex items-baseline justify-between">
+        <h3 className="text-sm font-semibold uppercase tracking-wide text-muted">
+          Ingestion cost per rulebook
+        </h3>
+        {data && (
+          <span className="text-xs text-muted">
+            {num(data.totalTokens)} tokens · {usd(data.totalCost)} total
+          </span>
+        )}
+      </div>
+      <div className="overflow-x-auto rounded-xl border border-border">
+        <table className="w-full text-sm">
+          <thead className="bg-surface-2 text-left text-muted">
+            <tr>
+              <th className="px-3 py-2 font-medium">Game / rulebook</th>
+              <th className="px-3 py-2 text-right font-medium">Pages</th>
+              <th className="px-3 py-2 text-right font-medium">Tokens</th>
+              <th className="px-3 py-2 text-right font-medium">Est. cost</th>
+            </tr>
+          </thead>
+          <tbody>
+            {!data ? (
+              <tr>
+                <td colSpan={4} className="px-3 py-4 text-center text-muted">
+                  Loading…
+                </td>
+              </tr>
+            ) : data.rows.length === 0 ? (
+              <tr>
+                <td colSpan={4} className="px-3 py-4 text-center text-muted">
+                  No rulebooks ingested yet.
+                </td>
+              </tr>
+            ) : (
+              data.rows.map((r) => (
+                <tr key={r.id} className="border-t border-border">
+                  <td className="px-3 py-2">
+                    <span className="font-medium">{r.gameTitle}</span>
+                    <span className="text-muted"> · {r.rulebook}</span>
+                    {r.status !== "committed" && (
+                      <span className="ml-1 text-xs text-muted">({r.status})</span>
+                    )}
+                  </td>
+                  <td className="px-3 py-2 text-right">{r.pages ?? "—"}</td>
+                  <td className="px-3 py-2 text-right">{num(r.tokens)}</td>
+                  <td className="px-3 py-2 text-right">{usd(r.cost)}</td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+      <p className="mt-1 text-xs text-muted">
+        Parse (Gemini vision) cost per PDF. Embedding is negligible and not
+        billed by token, so it&apos;s excluded.
+      </p>
     </div>
   );
 }

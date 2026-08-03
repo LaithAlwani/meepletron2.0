@@ -18,6 +18,12 @@ const knobs = [
     step: 0.01,
   },
   {
+    key: "rerankCandidates" as const,
+    label: "Rerank candidates",
+    help: "How many top-scoring chunks are sent to the reranker (of the top-K retrieved). Higher = better recall but more tokens.",
+    step: 1,
+  },
+  {
     key: "rerankTopN" as const,
     label: "Rerank top-N",
     help: "How many chunks the reranker keeps as the final context.",
@@ -45,6 +51,7 @@ export default function SiteConfigPage() {
       setForm({
         v2TopK: config.v2TopK,
         v2ScoreThreshold: config.v2ScoreThreshold,
+        rerankCandidates: config.rerankCandidates,
         rerankTopN: config.rerankTopN,
         historyMessageLimit: config.historyMessageLimit,
       });

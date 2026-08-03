@@ -168,8 +168,16 @@ const chat = httpAction(async (ctx, request) => {
     .filter((c) => c.chunkType !== "legend")
     .filter((c) => (scoreById.get(c.chunkId) ?? 0) >= config.v2ScoreThreshold);
 
-  // 4. Rerank down to N (Gemini) or fall back to top-by-score.
-  const ranked = await rerankChunks(query, candidates, config.rerankTopN, usage);
+  // 4. Rerank down to N (Gemini) or fall back to top-by-score. Use the expanded
+  //    query so the reranker matches on the player's intent + synonyms too.
+  //    Rerank only the top candidates by score to keep the rerank prompt cheap —
+  //    broad recall stays (we retrieved v2TopK), but the tail rarely wins.
+  const ranked = await rerankChunks(
+    searchQuery,
+    candidates.slice(0, config.rerankCandidates),
+    config.rerankTopN,
+    usage,
+  );
 
   // No relevant rulebook content → tell the user, and NEVER let the model
   // answer from its own knowledge.
@@ -273,6 +281,9 @@ async function rewriteQuery(
       model: CHAT_MODEL,
       prompt: buildRewritePrompt(history, query),
       temperature: 0,
+      // Mechanical keyword rewrite — no reasoning needed. Disabling Gemini's
+      // "thinking" here saves ~1–3k wasted output tokens per question.
+      providerOptions: { google: { thinkingConfig: { thinkingBudget: 0 } } },
     });
     const rewritten = text.trim();
     const it = finite(u.inputTokens);
@@ -306,6 +317,9 @@ async function rerankChunks(
       schema: z.object({ indices: z.array(z.number()) }),
       prompt: buildRerankPrompt(query, chunks, n),
       temperature: 0,
+      // Picking passage numbers needs no reasoning — turn off Gemini "thinking"
+      // to avoid burning ~1–2k output tokens on a tiny JSON result.
+      providerOptions: { google: { thinkingConfig: { thinkingBudget: 0 } } },
     });
     const rInTok = finite(rerankUsage.inputTokens);
     const rOutTok = finite(rerankUsage.outputTokens);

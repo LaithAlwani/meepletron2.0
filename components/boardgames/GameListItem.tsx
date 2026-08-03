@@ -18,7 +18,7 @@ export function GameListItem({ game }: { game: GameWithMedia }) {
   return (
     <div className="group flex items-center gap-3 py-3">
       <Link
-        href={`/boardgames/${game._id}`}
+        href={`/boardgames/${game.slug}`}
         className="flex min-w-0 flex-1 items-center gap-3"
       >
         <div className="h-12 w-12 shrink-0 overflow-hidden rounded-xl bg-surface-2 shadow-sm">
