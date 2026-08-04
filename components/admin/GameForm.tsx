@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
+import { friendlyError } from "@/lib/friendlyError";
 
 export type GameFormValues = {
   title: string;
@@ -119,7 +120,7 @@ export function GameForm({
         gameMechanics: parseCsv(gameMechanics),
       });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong");
+      setError(friendlyError(err, "Something went wrong. Please try again."));
     } finally {
       setSaving(false);
     }

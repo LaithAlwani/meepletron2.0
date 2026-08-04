@@ -1,64 +1,126 @@
 import type { Metadata } from "next";
+import type { CSSProperties } from "react";
 import Link from "next/link";
 import Image from "next/image";
 
 export const metadata: Metadata = {
-  title: "Be right back",
-  description: "Meepletron is leveling up. Back soon — smarter and tidier.",
+  title: "Coming soon — Meepletron",
+  description:
+    "Meepletron is almost here — your AI rules referee for every board game. Official launch coming soon.",
 };
 
-export default function MaintenancePage() {
+// Floating game pieces drifting behind the hero (desktop only, subtle).
+const PIECES: { emoji: string; className: string; style: CSSProperties }[] = [
+  { emoji: "🎲", className: "left-[8%] top-[18%] text-5xl", style: { ["--r"]: "-12deg", ["--float-dur"]: "6s", animationDelay: "0s" } as CSSProperties },
+  { emoji: "🧩", className: "right-[10%] top-[22%] text-4xl", style: { ["--r"]: "10deg", ["--float-dur"]: "7s", animationDelay: "0.6s" } as CSSProperties },
+  { emoji: "♟️", className: "left-[14%] bottom-[20%] text-4xl", style: { ["--r"]: "6deg", ["--float-dur"]: "5.5s", animationDelay: "1.1s" } as CSSProperties },
+  { emoji: "🃏", className: "right-[13%] bottom-[24%] text-5xl", style: { ["--r"]: "-8deg", ["--float-dur"]: "6.5s", animationDelay: "0.3s" } as CSSProperties },
+  { emoji: "🎯", className: "left-[46%] top-[10%] text-3xl", style: { ["--r"]: "0deg", ["--float-dur"]: "8s", animationDelay: "1.4s" } as CSSProperties },
+];
+
+const CHIPS = [
+  "🔎 Instant rule lookups",
+  "📚 Every expansion",
+  "💬 Chat your rulebook",
+];
+
+export default function ComingSoonPage() {
   return (
-    <main className="flex min-h-dvh flex-col items-center justify-center px-6 py-16 text-center">
+    <main className="relative flex min-h-dvh flex-col items-center justify-center overflow-hidden px-6 py-16 text-center">
+      {/* Aurora background */}
+      <div aria-hidden className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
+        <div
+          className="aurora absolute -left-24 top-[-10%] h-80 w-80 rounded-full bg-accent/25 blur-3xl"
+          style={{ ["--aurora-dur"]: "20s" } as CSSProperties}
+        />
+        <div
+          className="aurora absolute -right-24 top-1/3 h-96 w-96 rounded-full bg-primary/20 blur-3xl"
+          style={{ ["--aurora-dur"]: "26s", animationDelay: "3s" } as CSSProperties}
+        />
+        <div
+          className="aurora absolute bottom-[-15%] left-1/4 h-72 w-72 rounded-full bg-accent/15 blur-3xl"
+          style={{ ["--aurora-dur"]: "23s", animationDelay: "1.5s" } as CSSProperties}
+        />
+      </div>
+
+      {/* Floating game pieces */}
+      {PIECES.map((p, i) => (
+        <span
+          key={i}
+          aria-hidden
+          className={`float pointer-events-none absolute hidden select-none opacity-20 blur-[1px] sm:block ${p.className}`}
+          style={p.style}
+        >
+          {p.emoji}
+        </span>
+      ))}
+
+      {/* Coming-soon badge */}
+      <div className="animate-in mb-8 inline-flex items-center gap-2 rounded-full border border-border bg-surface/70 px-4 py-1.5 text-xs font-semibold uppercase tracking-widest text-muted backdrop-blur">
+        <span className="relative flex h-2 w-2">
+          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-accent opacity-70" />
+          <span className="relative inline-flex h-2 w-2 rounded-full bg-accent" />
+        </span>
+        Launching soon
+      </div>
+
       <Image
         src="/logo.webp"
         alt="Meepletron"
         width={128}
         height={160}
         priority
-        className="mb-8 h-28 w-auto drop-shadow-lg"
+        className="float mb-6 h-28 w-auto drop-shadow-xl"
+        style={{ ["--float-dur"]: "6s" } as CSSProperties}
       />
 
-      <h1 className="animate-in max-w-2xl text-balance text-3xl font-extrabold tracking-tight sm:text-4xl">
-        Meepletron is re-rolling{" "}
-        {/* The die is the secret door — no visible tell; those who know click it. */}
-        <Link
-          href="/boardgames"
-          aria-label="Enter Meepletron"
-          className="cursor-text"
-        >
-          🎲
-        </Link>
+      {/* Wordmark */}
+      <h1
+        className="animate-in text-shimmer text-balance text-5xl font-extrabold tracking-tight sm:text-7xl"
+        style={{ animationDelay: "80ms" }}
+      >
+        Meepletron
       </h1>
 
       <p
-        className="animate-in mt-4 max-w-xl text-balance text-lg text-muted"
-        style={{ animationDelay: "100ms" }}
+        className="animate-in mt-4 text-balance text-xl font-bold text-foreground sm:text-2xl"
+        style={{ animationDelay: "160ms" }}
       >
-        We hit pause to shuffle in some upgrades — a sharper brain, a tidier
-        rulebook library, and fewer bugs (the software kind, not the ones you
-        find under the couch cushions with the missing meeple).
+        The official launch is coming soon.
       </p>
 
       <p
-        className="animate-in mt-3 max-w-md text-balance text-sm text-subtle"
-        style={{ animationDelay: "200ms" }}
+        className="animate-in mt-4 max-w-xl text-balance text-base text-muted sm:text-lg"
+        style={{ animationDelay: "240ms" }}
       >
-        Refill the dice tower and grab a snack — we&apos;ll be back before your
-        turn. And no, we didn&apos;t lose the rulebook. We&apos;re just{" "}
-        <em>actually reading it</em> this time.
+        Your AI rules referee for every board game. Ask any question and get a
+        straight answer — with the exact rulebook passage to back it up. No more
+        flipping through the manual mid-game.
       </p>
 
-      <div
-        className="animate-in mt-9 inline-flex items-center gap-2 rounded-full border border-border bg-surface px-4 py-2 text-xs font-medium text-muted"
-        style={{ animationDelay: "320ms" }}
-      >
-        <span className="relative flex h-2 w-2">
-          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-accent opacity-60" />
-          <span className="relative inline-flex h-2 w-2 rounded-full bg-accent" />
-        </span>
-        Reshuffling the deck…
+      {/* Feature chips */}
+      <div className="mt-8 flex flex-wrap items-center justify-center gap-2">
+        {CHIPS.map((c, i) => (
+          <span
+            key={c}
+            className="animate-in rounded-full border border-border bg-surface/70 px-3.5 py-1.5 text-sm font-medium text-muted backdrop-blur"
+            style={{ animationDelay: `${320 + i * 80}ms` }}
+          >
+            {c}
+          </span>
+        ))}
       </div>
+
+      <p
+        className="animate-in mt-12 text-xs text-subtle"
+        style={{ animationDelay: "600ms" }}
+      >
+        Meepletron · shuffle up &amp; deal, 2026{" "}
+        {/* The die is the secret door — no visible tell; those who know click it. */}
+        <Link href="/boardgames" aria-label="Enter Meepletron" className="cursor-text">
+          🎲
+        </Link>
+      </p>
     </main>
   );
 }

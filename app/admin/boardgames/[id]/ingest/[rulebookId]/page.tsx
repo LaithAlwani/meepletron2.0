@@ -6,6 +6,7 @@ import { useQuery, useAction, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { ChunkCard } from "@/components/admin/ChunkCard";
+import { friendlyError } from "@/lib/friendlyError";
 
 export default function IngestReviewPage({
   params,
@@ -36,7 +37,7 @@ export default function IngestReviewPage({
       const r = await commit({ rulebookId: rbId });
       setMessage(`Committed ${r.committed} chunks — the chat can now use them.`);
     } catch (e) {
-      setMessage(e instanceof Error ? e.message : "Commit failed");
+      setMessage(friendlyError(e, "Commit failed"));
     } finally {
       setWorking(false);
     }
@@ -48,7 +49,7 @@ export default function IngestReviewPage({
     try {
       await restart({ rulebookId: rbId });
     } catch (e) {
-      setMessage(e instanceof Error ? e.message : "Re-ingest failed");
+      setMessage(friendlyError(e, "Re-ingest failed"));
     } finally {
       setWorking(false);
     }

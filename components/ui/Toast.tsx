@@ -38,12 +38,12 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   return (
     <ToastContext.Provider value={{ toast }}>
       {children}
-      <div className="pointer-events-none fixed inset-x-0 top-4 z-[60] flex flex-col items-center gap-2 px-4">
+      <div className="pointer-events-none fixed inset-x-0 top-3 z-[60] flex flex-col items-center gap-2 px-3">
         {toasts.map((t) => (
           <div
             key={t.id}
             role="status"
-            className={`animate-in pointer-events-auto w-full max-w-sm rounded-lg border px-4 py-2.5 text-sm font-medium shadow-xl ${kindStyles[t.kind]}`}
+            className={`animate-in pointer-events-auto w-fit max-w-[calc(100vw-1.5rem)] wrap-break-word rounded-lg border px-3.5 py-2 text-[13px] font-medium shadow-xl sm:max-w-sm sm:text-sm ${kindStyles[t.kind]}`}
           >
             {t.message}
           </div>

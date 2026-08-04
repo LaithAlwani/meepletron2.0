@@ -9,6 +9,7 @@ import type { RulebookWithMeta } from "@/convex/games";
 import { useUploadFile } from "./useUploadFile";
 import { useConfirm } from "@/components/ui/Confirm";
 import { useToast } from "@/components/ui/Toast";
+import { friendlyError } from "@/lib/friendlyError";
 
 type FileKind = "rulebook" | "download";
 
@@ -46,7 +47,7 @@ function RulebookRow({
       toast("Label updated", "success");
       setEditing(false);
     } catch (e) {
-      toast(e instanceof Error ? e.message : "Couldn't update label", "error");
+      toast(friendlyError(e, "Couldn't update label"), "error");
     } finally {
       setSavingLabel(false);
     }
@@ -58,7 +59,7 @@ function RulebookRow({
       await startIngestion({ rulebookId: rulebook._id });
       toast("Ingestion started — parsing in the background", "info");
     } catch (e) {
-      toast(e instanceof Error ? e.message : "Ingestion failed to start", "error");
+      toast(friendlyError(e, "Ingestion failed to start"), "error");
     } finally {
       setPending(false);
     }
@@ -212,7 +213,7 @@ export function RulebookManager({
       await deleteRulebook({ rulebookId: id });
       toast("File deleted", "success");
     } catch (e) {
-      toast(e instanceof Error ? e.message : "Couldn't delete", "error");
+      toast(friendlyError(e, "Couldn't delete"), "error");
     }
   }
 
@@ -232,11 +233,7 @@ export function RulebookManager({
       setLabel("");
       if (fileRef.current) fileRef.current.value = "";
     } catch (e) {
-      setError(
-        e instanceof Error
-          ? e.message
-          : "Upload failed. Rulebooks must be PDFs.",
-      );
+      setError(friendlyError(e, "Upload failed. Rulebooks must be PDFs."));
     } finally {
       setBusy(false);
     }

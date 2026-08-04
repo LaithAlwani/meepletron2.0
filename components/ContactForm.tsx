@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useToast } from "@/components/ui/Toast";
+import { friendlyError } from "@/lib/friendlyError";
 
 const fieldClass =
   "peer w-full border-0 border-b-2 border-border bg-transparent pb-1.5 pt-5 text-sm text-foreground placeholder-transparent transition-colors focus:border-accent focus:outline-none";
@@ -31,7 +32,7 @@ export default function ContactForm() {
       await submit(form);
       setSent(true);
     } catch (err) {
-      toast(err instanceof Error ? err.message : "Couldn't send message", "error");
+      toast(friendlyError(err, "Couldn't send message"), "error");
     } finally {
       setLoading(false);
     }

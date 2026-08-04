@@ -7,6 +7,7 @@ import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { useConfirm } from "@/components/ui/Confirm";
 import { useToast } from "@/components/ui/Toast";
+import { friendlyError } from "@/lib/friendlyError";
 
 type IngestStatus = "done" | "pending" | "none";
 type TypeFilter = "all" | "base" | "expansion";
@@ -53,7 +54,7 @@ export default function AdminGamesPage() {
       await deleteGame({ gameId: id });
       toast(`Deleted “${title}”`, "success");
     } catch (e) {
-      toast(e instanceof Error ? e.message : "Couldn't delete the game", "error");
+      toast(friendlyError(e, "Couldn't delete the game"), "error");
     }
   }
 
@@ -119,16 +120,16 @@ export default function AdminGamesPage() {
 
   const shown = filtered.slice(0, visible);
 
-  const typePills: { key: TypeFilter; label: string }[] = [
-    { key: "all", label: "All" },
-    { key: "base", label: "Base games" },
-    { key: "expansion", label: "Expansions" },
+  const typeOptions: { key: TypeFilter; label: string; count: number }[] = [
+    { key: "all", label: "All types", count: typeCounts.all },
+    { key: "base", label: "Base games", count: typeCounts.base },
+    { key: "expansion", label: "Expansions", count: typeCounts.expansion },
   ];
-  const statusPills: { key: StatusFilter; label: string }[] = [
-    { key: "all", label: "All" },
-    { key: "pending", label: "Not ingested" },
-    { key: "done", label: "Ingested" },
-    { key: "none", label: "Missing file" },
+  const statusOptions: { key: StatusFilter; label: string; count: number }[] = [
+    { key: "all", label: "Any status", count: statusCounts.all },
+    { key: "pending", label: "Not ingested", count: statusCounts.pending },
+    { key: "done", label: "Ingested", count: statusCounts.done },
+    { key: "none", label: "Missing file", count: statusCounts.none },
   ];
 
   return (
@@ -165,29 +166,19 @@ export default function AdminGamesPage() {
       </div>
 
       {games && (
-        <div className="mb-4 space-y-2">
-          <PillRow>
-            {typePills.map((p) => (
-              <Pill
-                key={p.key}
-                active={typeFilter === p.key}
-                onClick={() => setTypeFilter(p.key)}
-                label={p.label}
-                count={typeCounts[p.key]}
-              />
-            ))}
-          </PillRow>
-          <PillRow>
-            {statusPills.map((p) => (
-              <Pill
-                key={p.key}
-                active={statusFilter === p.key}
-                onClick={() => setStatusFilter(p.key)}
-                label={p.label}
-                count={statusCounts[p.key]}
-              />
-            ))}
-          </PillRow>
+        <div className="mb-4 flex gap-2">
+          <FilterSelect
+            ariaLabel="Filter by type"
+            value={typeFilter}
+            onChange={(v) => setTypeFilter(v as TypeFilter)}
+            options={typeOptions}
+          />
+          <FilterSelect
+            ariaLabel="Filter by ingestion status"
+            value={statusFilter}
+            onChange={(v) => setStatusFilter(v as StatusFilter)}
+            options={statusOptions}
+          />
         </div>
       )}
 
@@ -198,65 +189,20 @@ export default function AdminGamesPage() {
       ) : (
         <>
           <ul className="space-y-2">
-            {shown.map((g) => {
-              const status = ingestStatus(g);
-              return (
-                <li
-                  key={g._id}
-                  className="flex items-center gap-3 rounded-lg border border-border bg-surface p-3"
-                >
-                  <div className="h-12 w-12 shrink-0 overflow-hidden rounded-md bg-surface-2">
-                    {g.thumbnailUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={g.thumbnailUrl}
-                        alt=""
-                        loading="lazy"
-                        className="h-full w-full object-cover"
-                      />
-                    ) : (
-                      <div className="flex h-full w-full items-center justify-center opacity-40">
-                        🎲
-                      </div>
-                    )}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2 font-medium">
-                      <span className="truncate">{g.title}</span>
-                      {g.isExpansion && (
-                        <span className="shrink-0 rounded-full bg-surface-2 px-2 py-0.5 text-xs text-muted">
-                          Expansion
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2 text-xs text-muted">
-                      <span className="truncate">{g.slug}</span>
-                      <IngestBadge
-                        status={status}
-                        ingested={g.ingestedCount}
-                        total={g.fileCount}
-                      />
-                    </div>
-                  </div>
-                  <Link
-                    href={`/admin/boardgames/${g._id}`}
-                    className="shrink-0 rounded-md border border-border px-3 py-1.5 text-sm hover:bg-surface-2"
-                  >
-                    Edit
-                  </Link>
-                  <button
-                    onClick={() => handleDelete(g._id, g.title)}
-                    className="shrink-0 text-sm text-red-600 hover:underline dark:text-red-400"
-                  >
-                    Delete
-                  </button>
-                </li>
-              );
-            })}
+            {shown.map((g) => (
+              <GameRow
+                key={g._id}
+                game={g}
+                onDelete={() => handleDelete(g._id, g.title)}
+              />
+            ))}
           </ul>
           <div ref={sentinelRef} aria-hidden className="h-px" />
           <p className="mt-3 text-center text-xs text-subtle">
             Showing {shown.length} of {filtered.length}
+          </p>
+          <p className="mt-1 text-center text-[11px] text-subtle sm:hidden">
+            Tap a game to edit · swipe left to delete.
           </p>
         </>
       )}
@@ -264,39 +210,45 @@ export default function AdminGamesPage() {
   );
 }
 
-function PillRow({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-      {children}
-    </div>
-  );
-}
-
-function Pill({
-  active,
-  onClick,
-  label,
-  count,
+/** Compact native-select filter — uses the OS picker on mobile. */
+function FilterSelect<T extends string>({
+  ariaLabel,
+  value,
+  onChange,
+  options,
 }: {
-  active: boolean;
-  onClick: () => void;
-  label: string;
-  count: number;
+  ariaLabel: string;
+  value: T;
+  onChange: (v: T) => void;
+  options: { key: T; label: string; count: number }[];
 }) {
   return (
-    <button
-      onClick={onClick}
-      className={`shrink-0 whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
-        active
-          ? "bg-accent text-accent-foreground"
-          : "border border-border bg-surface text-muted hover:bg-surface-2"
-      }`}
-    >
-      {label}
-      <span className={`ml-1.5 ${active ? "opacity-80" : "text-subtle"}`}>
-        {count}
-      </span>
-    </button>
+    <div className="relative min-w-0 flex-1 sm:flex-none sm:w-52">
+      <select
+        aria-label={ariaLabel}
+        value={value}
+        onChange={(e) => onChange(e.target.value as T)}
+        className="w-full appearance-none truncate rounded-lg border border-border bg-surface py-2 pl-3 pr-9 text-sm font-medium outline-none focus:ring-2 focus:ring-accent/40"
+      >
+        {options.map((o) => (
+          <option key={o.key} value={o.key}>
+            {o.label} ({o.count})
+          </option>
+        ))}
+      </select>
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden
+        className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-subtle"
+      >
+        <path d="m6 9 6 6 6-6" />
+      </svg>
+    </div>
   );
 }
 
@@ -327,6 +279,145 @@ function IngestBadge({
     <span className="shrink-0 rounded-full bg-amber-500/10 px-2 py-0.5 text-[11px] font-medium text-amber-600 dark:text-amber-400">
       {ingested}/{total} ingested
     </span>
+  );
+}
+
+const TrashIcon = (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+    <path d="M3 6h18" />
+    <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
+    <path d="M10 11v6M14 11v6" />
+  </svg>
+);
+
+/**
+ * A game row. Tapping/clicking the card opens the edit page. Touch devices
+ * delete by swiping the card left; mouse users get a trash button (they can't
+ * swipe). Axis-locked so vertical scrolling is unaffected, and delete always
+ * routes through the confirm dialog.
+ */
+function GameRow({ game, onDelete }: { game: AdminGame; onDelete: () => void }) {
+  const editHref = `/admin/boardgames/${game._id}`;
+  const status = ingestStatus(game);
+
+  const MAX = 96;
+  const THRESHOLD = 60;
+  const [dx, setDx] = useState(0);
+  const [dragging, setDragging] = useState(false);
+  const startX = useRef(0);
+  const startY = useRef(0);
+  const active = useRef(false);
+  const axis = useRef<null | "x" | "y">(null);
+  const swiped = useRef(false);
+  const dxRef = useRef(0);
+
+  function onDown(e: React.PointerEvent) {
+    if (e.pointerType !== "touch") return; // mouse deletes via the trash button
+    active.current = true;
+    axis.current = null;
+    swiped.current = false;
+    startX.current = e.clientX;
+    startY.current = e.clientY;
+  }
+  function onMove(e: React.PointerEvent) {
+    if (!active.current) return;
+    const mx = e.clientX - startX.current;
+    const my = e.clientY - startY.current;
+    if (axis.current === null) {
+      if (Math.abs(mx) < 6 && Math.abs(my) < 6) return;
+      axis.current = Math.abs(mx) > Math.abs(my) ? "x" : "y";
+      if (axis.current === "x") {
+        setDragging(true);
+        e.currentTarget.setPointerCapture(e.pointerId);
+      }
+    }
+    if (axis.current !== "x") return;
+    swiped.current = true;
+    const d = Math.max(-MAX, Math.min(0, mx)); // left-swipe only
+    dxRef.current = d;
+    setDx(d);
+  }
+  function onUp() {
+    if (!active.current) return;
+    active.current = false;
+    const d = dxRef.current;
+    axis.current = null;
+    setDragging(false);
+    dxRef.current = 0;
+    setDx(0);
+    if (d <= -THRESHOLD) onDelete();
+  }
+
+  const armed = dx <= -THRESHOLD;
+
+  return (
+    <li className="relative select-none overflow-hidden rounded-lg">
+      {/* Delete reveal behind the card (touch swipe-left) */}
+      <div
+        aria-hidden
+        className={`absolute inset-y-0 right-0 flex w-24 items-center justify-end gap-1.5 bg-red-600 px-4 text-sm font-medium text-white transition-opacity sm:hidden ${dx < -4 ? "opacity-100" : "opacity-0"}`}
+      >
+        {armed ? "Release" : "Delete"}
+        {TrashIcon}
+      </div>
+
+      {/* Foreground card — the whole thing links to Edit. */}
+      <Link
+        href={editHref}
+        onPointerDown={onDown}
+        onPointerMove={onMove}
+        onPointerUp={onUp}
+        onPointerCancel={onUp}
+        onClick={(e) => {
+          if (swiped.current) e.preventDefault(); // don't navigate after a swipe
+        }}
+        style={{ transform: `translateX(${dx}px)`, touchAction: "pan-y" }}
+        className={`relative flex items-center gap-3 rounded-lg border border-border bg-surface p-3 transition-colors hover:bg-surface-2 sm:pr-14 ${dragging ? "" : "transition-transform duration-200"}`}
+      >
+        <div className="h-12 w-12 shrink-0 overflow-hidden rounded-md bg-surface-2">
+          {game.thumbnailUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={game.thumbnailUrl}
+              alt=""
+              loading="lazy"
+              className="h-full w-full object-cover"
+            />
+          ) : (
+            <div className="flex h-full w-full items-center justify-center opacity-40">
+              🎲
+            </div>
+          )}
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="truncate font-medium">{game.title}</p>
+          <p className="truncate text-xs text-muted">{game.slug}</p>
+          <div className="mt-1 flex flex-wrap items-center gap-1.5">
+            {game.isExpansion && (
+              <span className="rounded-full bg-surface-2 px-2 py-0.5 text-[11px] text-muted">
+                Expansion
+              </span>
+            )}
+            <IngestBadge
+              status={status}
+              ingested={game.ingestedCount}
+              total={game.fileCount}
+            />
+          </div>
+        </div>
+      </Link>
+
+      {/* Desktop delete (mouse users can't swipe). Overlaid, outside the link. */}
+      <button
+        onClick={onDelete}
+        aria-label={`Delete ${game.title}`}
+        title="Delete"
+        className="absolute right-3 top-1/2 z-10 hidden h-8 w-8 -translate-y-1/2 items-center justify-center rounded-md border border-border bg-surface text-red-600 transition-colors hover:bg-red-500/10 sm:flex dark:text-red-400"
+      >
+        {TrashIcon}
+      </button>
+    </li>
   );
 }
 

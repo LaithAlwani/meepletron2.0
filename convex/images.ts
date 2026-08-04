@@ -1,6 +1,6 @@
 "use node";
 
-import { v } from "convex/values";
+import { v, ConvexError } from "convex/values";
 import { action } from "./_generated/server";
 import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
@@ -47,19 +47,19 @@ export const setGameCoverFromUrl = action({
     await ctx.runQuery(internal.users.ensureAdmin, {});
 
     if (!/^https?:\/\//i.test(url.trim())) {
-      throw new Error("Enter a valid http(s) image URL");
+      throw new ConvexError("Enter a valid http(s) image URL");
     }
 
     const res = await fetch(url.trim());
-    if (!res.ok) throw new Error("Couldn't fetch that URL");
+    if (!res.ok) throw new ConvexError("Couldn't fetch that URL");
     const contentType = res.headers.get("content-type") ?? "";
     if (!contentType.startsWith("image/")) {
-      throw new Error("That URL doesn't point to an image");
+      throw new ConvexError("That URL doesn't point to an image");
     }
     const original = new Uint8Array(await res.arrayBuffer());
-    if (original.byteLength === 0) throw new Error("The image was empty");
+    if (original.byteLength === 0) throw new ConvexError("The image was empty");
     if (original.byteLength > MAX_FETCH_BYTES) {
-      throw new Error("That image is too large (max 15 MB)");
+      throw new ConvexError("That image is too large (max 15 MB)");
     }
 
     // Cover: compress (best-effort — store original if it can't be decoded or

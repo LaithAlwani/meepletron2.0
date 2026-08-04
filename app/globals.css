@@ -224,6 +224,59 @@ body {
   animation: msg-in 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
+/* --- Coming-soon splash --- */
+/* Gentle bob for the logo and floating game pieces. */
+@keyframes float {
+  0%,
+  100% {
+    transform: translateY(0) rotate(var(--r, 0deg));
+  }
+  50% {
+    transform: translateY(-16px) rotate(var(--r, 0deg));
+  }
+}
+.float {
+  animation: float var(--float-dur, 5s) ease-in-out infinite;
+}
+
+/* Slow drifting aurora blobs behind the hero. */
+@keyframes aurora-drift {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  33% {
+    transform: translate(6%, -8%) scale(1.15);
+  }
+  66% {
+    transform: translate(-6%, 6%) scale(0.95);
+  }
+}
+.aurora {
+  animation: aurora-drift var(--aurora-dur, 18s) ease-in-out infinite;
+}
+
+/* Sweeping sheen across the wordmark. */
+@keyframes shimmer {
+  to {
+    background-position: 200% center;
+  }
+}
+.text-shimmer {
+  background: linear-gradient(
+    110deg,
+    var(--foreground) 35%,
+    var(--accent) 50%,
+    var(--foreground) 65%
+  );
+  background-size: 200% auto;
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+  animation: shimmer 4.5s linear infinite;
+}
+
 /* Lightweight markdown styling for assistant messages. */
 .prose-chat > :first-child {
   margin-top: 0;

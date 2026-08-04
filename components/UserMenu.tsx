@@ -61,8 +61,8 @@ export function UserMenu({
     { href: "/chats", label: "Chats", icon: ChatsIcon },
     { href: "/favorites", label: "Favourites", icon: HeartIcon },
     { href: "/profile", label: "Profile", icon: ProfileIcon },
-    ...(isAdmin ? [{ href: "/admin", label: "Admin", icon: AdminIcon }] : []),
     { href: "/settings", label: "Settings", icon: SettingsIcon },
+    ...(isAdmin ? [{ href: "/admin", label: "Admin", icon: AdminIcon }] : []),
   ];
 
   return (

@@ -150,8 +150,8 @@ export function Header() {
         <NavLink href="/favorites" onClick={close} icon={HeartIcon}>
           Favourites
         </NavLink>
-        <NavLink href="/profile" onClick={close} icon={ProfileIcon}>
-          Profile
+        <NavLink href="/settings" onClick={close} icon={SettingsIcon}>
+          Settings
         </NavLink>
       </Authenticated>
       {isAdmin && (
@@ -159,11 +159,6 @@ export function Header() {
           Admin
         </NavLink>
       )}
-      <Authenticated>
-        <NavLink href="/settings" onClick={close} icon={SettingsIcon}>
-          Settings
-        </NavLink>
-      </Authenticated>
     </>
   );
 

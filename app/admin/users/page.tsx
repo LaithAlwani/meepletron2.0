@@ -6,6 +6,7 @@ import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { useConfirm } from "@/components/ui/Confirm";
 import { useToast } from "@/components/ui/Toast";
+import { friendlyError } from "@/lib/friendlyError";
 
 export default function AdminUsersPage() {
   const users = useQuery(api.users.adminListUsers);
@@ -28,7 +29,7 @@ export default function AdminUsersPage() {
       await setRole({ userId, role: makeAdmin ? "admin" : "user" });
       toast("Role updated", "success");
     } catch (e) {
-      toast(e instanceof Error ? e.message : "Couldn't update role", "error");
+      toast(friendlyError(e, "Couldn't update role"), "error");
     }
   }
 
