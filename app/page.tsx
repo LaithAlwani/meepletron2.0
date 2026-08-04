@@ -18,10 +18,11 @@ const PIECES: { emoji: string; className: string; style: CSSProperties }[] = [
   { emoji: "🎯", className: "left-[46%] top-[10%] text-3xl", style: { ["--r"]: "0deg", ["--float-dur"]: "8s", animationDelay: "1.4s" } as CSSProperties },
 ];
 
-const CHIPS = [
-  "🔎 Instant rule lookups",
-  "📚 Every expansion",
-  "💬 Chat your rulebook",
+const CHIPS = ["⚡ Faster", "🧠 Smarter", "🎯 More accurate"];
+
+const STATS = [
+  { value: "5,000+", label: "AI answers in beta" },
+  { value: "90%", label: "rated accurate" },
 ];
 
 export default function ComingSoonPage() {
@@ -86,25 +87,49 @@ export default function ComingSoonPage() {
         className="animate-in mt-4 text-balance text-xl font-bold text-foreground sm:text-2xl"
         style={{ animationDelay: "160ms" }}
       >
-        The official launch is coming soon.
+        Meepletron is re-rolling.
       </p>
 
       <p
         className="animate-in mt-4 max-w-xl text-balance text-base text-muted sm:text-lg"
         style={{ animationDelay: "240ms" }}
       >
-        Your AI rules referee for every board game. Ask any question and get a
-        straight answer — with the exact rulebook passage to back it up. No more
-        flipping through the manual mid-game.
+        The official launch is coming soon — and it&apos;s coming back{" "}
+        <span className="font-semibold text-foreground">faster, smarter,</span>{" "}
+        and <span className="font-semibold text-foreground">more accurate</span>.
+        Your AI rules referee for every board game, with the exact rulebook
+        passage to back up every answer.
       </p>
 
-      {/* Feature chips */}
-      <div className="mt-8 flex flex-wrap items-center justify-center gap-2">
+      {/* Beta success stats */}
+      <p
+        className="animate-in mt-10 text-xs font-semibold uppercase tracking-widest text-subtle"
+        style={{ animationDelay: "320ms" }}
+      >
+        The beta was a success
+      </p>
+      <div className="mt-3 flex flex-wrap items-stretch justify-center gap-3">
+        {STATS.map((s, i) => (
+          <div
+            key={s.label}
+            className="animate-in min-w-[8.5rem] rounded-2xl border border-border bg-surface/70 px-5 py-4 backdrop-blur"
+            style={{ animationDelay: `${400 + i * 90}ms` }}
+          >
+            <div className="text-shimmer text-3xl font-extrabold sm:text-4xl">
+              {s.value}
+            </div>
+            <div className="mt-1 text-xs font-medium text-muted">{s.label}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* What's leveling up */}
+      <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
         {CHIPS.map((c, i) => (
           <span
             key={c}
             className="animate-in rounded-full border border-border bg-surface/70 px-3.5 py-1.5 text-sm font-medium text-muted backdrop-blur"
-            style={{ animationDelay: `${320 + i * 80}ms` }}
+            style={{ animationDelay: `${560 + i * 80}ms` }}
           >
             {c}
           </span>
@@ -113,7 +138,7 @@ export default function ComingSoonPage() {
 
       <p
         className="animate-in mt-12 text-xs text-subtle"
-        style={{ animationDelay: "600ms" }}
+        style={{ animationDelay: "820ms" }}
       >
         Meepletron · shuffle up &amp; deal, 2026{" "}
         {/* The die is the secret door — no visible tell; those who know click it. */}

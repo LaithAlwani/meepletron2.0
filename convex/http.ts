@@ -108,7 +108,7 @@ const chat = httpAction(async (ctx, request) => {
   if (selectedRulebookIds.length === 0) {
     const text = hasIngested
       ? "You haven't selected a resource to chat with. Open Resources and choose at least one rulebook, then ask your question again."
-      : "There's no ingested rulebook selected for this game yet, so I can't answer from a source. An admin needs to upload and ingest a rulebook first.";
+      : "I don't have the proper information to answer that yet — this game's rulebook hasn't been added to Meepletron. Please reach out to customer support so we can get the manual added.";
     return staticAnswer(ctx, origin, text, () =>
       ctx.runMutation(internal.chat.saveAssistantMessage, {
         chatId,
@@ -183,7 +183,7 @@ const chat = httpAction(async (ctx, request) => {
   // answer from its own knowledge.
   if (ranked.length === 0) {
     const text =
-      "I couldn't find anything about that in the loaded rulebook(s). I only answer from the rulebook, so try rephrasing your question — or it may not be covered here.";
+      "I couldn't find anything about that in the loaded rulebook(s). I only answer from what's in the rulebook, so try rephrasing using the game's own terms — for example the phase, action, or component involved — or it may not be covered here.";
     return staticAnswer(ctx, origin, text, () =>
       ctx.runMutation(internal.chat.saveAssistantMessage, {
         chatId,
