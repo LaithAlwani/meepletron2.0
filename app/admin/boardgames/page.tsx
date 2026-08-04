@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
@@ -30,15 +30,52 @@ function ingestStatus(g: { fileCount: number; ingestedCount: number }): IngestSt
 
 const PAGE = 20;
 
+/**
+ * Like useState, but persists the value to sessionStorage under `key` so the
+ * filters/search survive navigating away from the page and back (handy when
+ * working through a few games in a row). Session-scoped: cleared when the tab
+ * closes. First render uses `initial` (matching SSR) and the stored value is
+ * applied on mount to avoid a hydration mismatch.
+ */
+function usePersistentState<T>(key: string, initial: T): [T, (v: T) => void] {
+  const [value, setValue] = useState<T>(initial);
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem(key);
+      if (raw !== null) setValue(JSON.parse(raw) as T);
+    } catch {
+      // ignore malformed/unavailable storage
+    }
+  }, [key]);
+  const set = useCallback(
+    (v: T) => {
+      setValue(v);
+      try {
+        sessionStorage.setItem(key, JSON.stringify(v));
+      } catch {
+        // ignore write failures (private mode, quota)
+      }
+    },
+    [key],
+  );
+  return [value, set];
+}
+
 export default function AdminGamesPage() {
   const games = useQuery(api.games.adminList) as AdminGame[] | undefined;
   const deleteGame = useMutation(api.games.deleteGame);
   const confirm = useConfirm();
   const toast = useToast();
 
-  const [search, setSearch] = useState("");
-  const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [search, setSearch] = usePersistentState("admin-games:search", "");
+  const [typeFilter, setTypeFilter] = usePersistentState<TypeFilter>(
+    "admin-games:type",
+    "all",
+  );
+  const [statusFilter, setStatusFilter] = usePersistentState<StatusFilter>(
+    "admin-games:status",
+    "all",
+  );
   const [visible, setVisible] = useState(PAGE);
 
   async function handleDelete(id: Id<"games">, title: string) {
