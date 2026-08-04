@@ -30,6 +30,25 @@ export default defineSchema({
     // redeemed after signing up to migrate the guest's data to the new account.
     upgradeToken: v.optional(v.string()),
     upgradeTokenExpiresAt: v.optional(v.number()),
+    // Per-user display / behavior preferences (all optional; defaults applied
+    // on read in lib/usePreferences).
+    preferences: v.optional(
+      v.object({
+        fontSize: v.optional(
+          v.union(
+            v.literal("sm"),
+            v.literal("base"),
+            v.literal("lg"),
+            v.literal("xl"),
+          ),
+        ),
+        reduceMotion: v.optional(v.boolean()),
+        compact: v.optional(v.boolean()),
+        enterToSend: v.optional(v.boolean()),
+        showSources: v.optional(v.boolean()),
+        emailUpdates: v.optional(v.boolean()),
+      }),
+    ),
   })
     .index("email", ["email"])
     .index("phone", ["phone"])

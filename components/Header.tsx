@@ -48,6 +48,17 @@ const ProfileIcon = (
     <path d="M4 21a8 8 0 0 1 16 0" />
   </svg>
 );
+const ChatsIcon = (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={ni}>
+    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+  </svg>
+);
+const SettingsIcon = (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={ni}>
+    <circle cx="12" cy="12" r="3" />
+    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+  </svg>
+);
 
 function NavLink({
   href,
@@ -133,8 +144,14 @@ export function Header() {
   const accountLinks = (
     <>
       <Authenticated>
+        <NavLink href="/chats" onClick={close} icon={ChatsIcon}>
+          Chats
+        </NavLink>
         <NavLink href="/favorites" onClick={close} icon={HeartIcon}>
           Favourites
+        </NavLink>
+        <NavLink href="/profile" onClick={close} icon={ProfileIcon}>
+          Profile
         </NavLink>
       </Authenticated>
       {isAdmin && (
@@ -142,6 +159,11 @@ export function Header() {
           Admin
         </NavLink>
       )}
+      <Authenticated>
+        <NavLink href="/settings" onClick={close} icon={SettingsIcon}>
+          Settings
+        </NavLink>
+      </Authenticated>
     </>
   );
 

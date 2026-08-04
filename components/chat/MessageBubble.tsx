@@ -5,6 +5,7 @@ import ReactMarkdown from "react-markdown";
 import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Doc } from "@/convex/_generated/dataModel";
+import { usePreferences } from "@/lib/usePreferences";
 
 type Annotation = NonNullable<Doc<"messages">["annotations"]>[number];
 
@@ -252,6 +253,7 @@ export function stripIconBrackets(content: string): string {
 
 export function MessageBubble({ message }: { message: Doc<"messages"> }) {
   const [openN, setOpenN] = useState<number | null>(null);
+  const { showSources } = usePreferences();
 
   if (message.role === "user") {
     return (
@@ -273,8 +275,10 @@ export function MessageBubble({ message }: { message: Doc<"messages"> }) {
     if (validNs.has(n)) citedNs.add(n);
   }
   const citedAnnotations = annotations.filter((a) => citedNs.has(a.n));
+  // When "Show source citations" is off, render plain text (no clickable [n]
+  // buttons) and hide the passages block below.
   const markdown = stripIconBrackets(
-    annotations.length > 0
+    showSources && annotations.length > 0
       ? linkifyCitations(message.content, validNs)
       : message.content,
   );
@@ -316,7 +320,7 @@ export function MessageBubble({ message }: { message: Doc<"messages"> }) {
           </ReactMarkdown>
         </div>
 
-        {citedAnnotations.length > 0 && (
+        {showSources && citedAnnotations.length > 0 && (
           <Sources
             annotations={citedAnnotations}
             answer={message.content}

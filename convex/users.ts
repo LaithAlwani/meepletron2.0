@@ -81,6 +81,33 @@ export const updateProfile = mutation({
   },
 });
 
+/** Save the current user's preferences (the Settings page sends the full set). */
+export const updateSettings = mutation({
+  args: {
+    preferences: v.object({
+      fontSize: v.optional(
+        v.union(
+          v.literal("sm"),
+          v.literal("base"),
+          v.literal("lg"),
+          v.literal("xl"),
+        ),
+      ),
+      reduceMotion: v.optional(v.boolean()),
+      compact: v.optional(v.boolean()),
+      enterToSend: v.optional(v.boolean()),
+      showSources: v.optional(v.boolean()),
+      emailUpdates: v.optional(v.boolean()),
+    }),
+  },
+  handler: async (ctx, { preferences }) => {
+    const user = await requireUser(ctx);
+    await ctx.db.patch("users", user._id, {
+      preferences: { ...(user.preferences ?? {}), ...preferences },
+    });
+  },
+});
+
 /** List users for the admin console. */
 export const adminListUsers = query({
   args: {},

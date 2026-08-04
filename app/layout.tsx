@@ -4,6 +4,7 @@ import "./globals.css";
 import { Providers } from "./providers";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
+import { PreferencesEffects } from "@/components/PreferencesEffects";
 
 const poppins = Poppins({
   variable: "--font-poppins",
@@ -67,6 +68,7 @@ export default function RootLayout({
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
         <script dangerouslySetInnerHTML={{ __html: installCaptureScript }} />
         <Providers>
+          <PreferencesEffects />
           <SiteHeader />
           <main className="flex-1">{children}</main>
           <SiteFooter />

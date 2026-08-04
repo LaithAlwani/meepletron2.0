@@ -235,7 +235,7 @@ export const listMyChats = query({
       .withIndex("by_user", (q) => q.eq("userId", user._id))
       .order("desc")
       .take(100);
-    return await Promise.all(
+    const resolved = await Promise.all(
       chats.map(async (chat) => {
         const game = await ctx.db.get("games", chat.gameId);
         const thumbnailUrl =
@@ -245,10 +245,13 @@ export const listMyChats = query({
         return {
           ...chat,
           gameTitle: game?.title ?? "Unknown game",
+          gameSlug: game?.slug ?? null,
           thumbnailUrl,
         };
       }),
     );
+    // Most recently active chats first.
+    return resolved.sort((a, b) => b.lastMessageAt - a.lastMessageAt);
   },
 });
 

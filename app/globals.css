@@ -265,7 +265,8 @@ body {
   margin: 0.6em 0 0.3em;
 }
 
-/* Respect users who prefer reduced motion. */
+/* Respect users who prefer reduced motion — via the OS setting or the
+   per-user "Reduce motion" preference (html.reduce-motion). */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -273,4 +274,24 @@ body {
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
   }
+}
+html.reduce-motion *,
+html.reduce-motion *::before,
+html.reduce-motion *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+}
+
+/* Compact density — tightens vertical rhythm for the "Compact mode" preference. */
+html.compact body {
+  line-height: 1.35;
+}
+html.compact .prose-chat p,
+html.compact .prose-chat ul,
+html.compact .prose-chat ol {
+  margin: 0.35em 0;
+}
+html.compact .prose-chat li {
+  margin: 0.1em 0;
 }

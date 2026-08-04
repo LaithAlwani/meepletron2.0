@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { usePreferences } from "@/lib/usePreferences";
 
 const SendIcon = (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4.5 w-4.5">
@@ -18,6 +19,7 @@ export function ChatInput({
 }) {
   const [text, setText] = useState("");
   const taRef = useRef<HTMLTextAreaElement>(null);
+  const { enterToSend } = usePreferences();
 
   function submit() {
     const trimmed = text.trim();
@@ -46,13 +48,21 @@ export function ChatInput({
           el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
         }}
         onKeyDown={(e) => {
-          if (e.key === "Enter" && !e.shiftKey) {
+          if (e.key !== "Enter") return;
+          // "Enter to send": Enter submits, Shift+Enter = newline.
+          // Otherwise Enter = newline, Cmd/Ctrl+Enter submits.
+          const shouldSend = enterToSend
+            ? !e.shiftKey
+            : e.metaKey || e.ctrlKey;
+          if (shouldSend) {
             e.preventDefault();
             submit();
           }
         }}
         rows={1}
-        placeholder="Ask a rules question…"
+        placeholder={
+          enterToSend ? "Ask a rules question…" : "Ask a rules question… (⌘↵ to send)"
+        }
         className="max-h-40 flex-1 resize-none bg-transparent px-2 py-1.5 text-sm outline-none placeholder:text-subtle"
       />
       <button
