@@ -285,11 +285,16 @@ export const chatSources = query({
 // ---------------------------------------------------------------------------
 
 /** All games (base + expansions), for the admin list. */
+/**
+ * Lightweight list of every game for the admin index — just the fields the
+ * list row + search + ingest filters need (no heavy metadata/searchText). The
+ * page renders/searches/filters/pages this client-side.
+ */
 export const adminList = query({
   args: {},
   handler: async (ctx) => {
     await requireAdmin(ctx);
-    const games = await ctx.db.query("games").order("desc").take(500);
+    const games = await ctx.db.query("games").order("desc").take(1000);
     return await Promise.all(
       games.map(async (g) => {
         const rulebooks = await ctx.db
@@ -300,7 +305,13 @@ export const adminList = query({
         const files = rulebooks.filter((r) => (r.kind ?? "rulebook") !== "download");
         const ingested = files.filter((r) => r.isIngested).length;
         return {
-          ...(await withMedia(ctx, g)),
+          _id: g._id,
+          title: g.title,
+          slug: g.slug,
+          isExpansion: g.isExpansion,
+          thumbnailUrl: g.thumbnailId
+            ? await ctx.storage.getUrl(g.thumbnailId)
+            : null,
           fileCount: files.length,
           ingestedCount: ingested,
         };

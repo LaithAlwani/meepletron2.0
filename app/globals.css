@@ -194,6 +194,36 @@ body {
   animation: phrase-in 0.3s ease-out;
 }
 
+/* Soft scale-up — used for the detail-page cover. */
+@keyframes zoom-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.zoom-in {
+  animation: zoom-in 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Chat message entrance. */
+@keyframes msg-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.msg-in {
+  animation: msg-in 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
 /* Lightweight markdown styling for assistant messages. */
 .prose-chat > :first-child {
   margin-top: 0;

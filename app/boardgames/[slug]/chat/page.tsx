@@ -384,7 +384,7 @@ function ChatView({ gameId, slug }: { gameId: Id<"games">; slug: string }) {
           )}
           {loadingMessages && <MessagesSkeleton />}
           {isEmpty && (
-            <div className="flex flex-col items-center gap-4 rounded-xl border border-dashed border-border p-6 text-center">
+            <div className="animate-in flex flex-col items-center gap-4 rounded-xl border border-dashed border-border p-6 text-center">
               <div className="h-24 w-24 overflow-hidden rounded-xl border border-border bg-surface-2">
                 {coverUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
@@ -439,7 +439,7 @@ function ChatView({ gameId, slug }: { gameId: Id<"games">; slug: string }) {
             );
           })}
           {streaming !== null && (
-            <div className="flex justify-start">
+            <div className="msg-in flex justify-start">
               <div className="max-w-[90%] rounded-2xl rounded-bl-sm border border-border bg-surface px-4 py-3 text-sm leading-relaxed">
                 {streaming ? (
                   <span className="whitespace-pre-wrap">

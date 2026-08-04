@@ -32,12 +32,17 @@ function StatBadge({
 function InfoSection({
   title,
   children,
+  delay = 0,
 }: {
   title: string;
   children: React.ReactNode;
+  delay?: number;
 }) {
   return (
-    <section className="mb-8">
+    <section
+      className="animate-in mb-8"
+      style={delay ? { animationDelay: `${delay}s` } : undefined}
+    >
       <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-muted">
         {title}
       </h2>
@@ -174,7 +179,7 @@ export default function GameDetailPage({
       {cover && <BackgroundCover url={cover} />}
 
       {/* Breadcrumb */}
-      <nav className="mb-8 flex items-center gap-1.5 text-sm text-muted" aria-label="Breadcrumb">
+      <nav className="fade-in mb-8 flex items-center gap-1.5 text-sm text-muted" aria-label="Breadcrumb">
         <Link href="/boardgames" className="transition-colors hover:text-foreground">
           Board Games
         </Link>
@@ -196,14 +201,14 @@ export default function GameDetailPage({
       </nav>
 
       {/* Hero */}
-      <div className="mb-10 flex flex-col gap-8 sm:flex-row">
+      <div className="animate-in mb-10 flex flex-col gap-8 sm:flex-row">
         <div className="mx-auto w-fit shrink-0 sm:mx-0">
           {cover ? (
             <button
               type="button"
               onClick={() => setZoomed(true)}
               aria-label="View full artwork"
-              className="group block cursor-zoom-in overflow-hidden rounded-2xl bg-surface-2 shadow-lg"
+              className="zoom-in group block cursor-zoom-in overflow-hidden rounded-2xl bg-surface-2 shadow-lg"
             >
               {/* Capped to 160px tall; width follows the natural aspect ratio,
                   so the whole cover shows whether it's square or wide. */}
@@ -292,7 +297,7 @@ export default function GameDetailPage({
 
       {/* About */}
       {game.description && (
-        <InfoSection title="About">
+        <InfoSection title="About" delay={0.05}>
           <ExpandableText text={game.description} className="text-muted" />
         </InfoSection>
       )}
@@ -328,7 +333,7 @@ export default function GameDetailPage({
 
       {/* Rulebook files — downloadable, with a note when searchable in chat. */}
       {rulebooks.length > 0 && (
-        <InfoSection title="Rules & Guides">
+        <InfoSection title="Rules & Guides" delay={0.1}>
           <ul className="space-y-1.5">
             {rulebooks.map((rb) => (
               <li key={rb._id}>
@@ -380,7 +385,7 @@ export default function GameDetailPage({
 
       {/* Expansions */}
       {game.expansions.length > 0 && (
-        <InfoSection title={`Expansions (${game.expansions.length})`}>
+        <InfoSection title={`Expansions (${game.expansions.length})`} delay={0.15}>
           {/* Mobile: a compact list. */}
           <ul className="space-y-2 sm:hidden">
             {game.expansions.map((exp) => (
