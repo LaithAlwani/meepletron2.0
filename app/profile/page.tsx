@@ -14,6 +14,7 @@ import { useAuthActions } from "@convex-dev/auth/react";
 import { api } from "@/convex/_generated/api";
 import type { Doc } from "@/convex/_generated/dataModel";
 import { useToast } from "@/components/ui/Toast";
+import { useConfirm } from "@/components/ui/Confirm";
 import { InstallPrompt } from "@/components/InstallPrompt";
 
 const icon = "h-4 w-4";
@@ -173,6 +174,57 @@ function ProfileBody() {
           icon={StatThumbIcon}
         />
       </div>
+
+      {/* Danger zone — permanent account deletion (real accounts only) */}
+      {!isGuest && <DangerZone />}
+    </div>
+  );
+}
+
+function DangerZone() {
+  const deleteAccount = useMutation(api.users.deleteAccount);
+  const confirm = useConfirm();
+  const toast = useToast();
+  const { signOut } = useAuthActions();
+  const router = useRouter();
+  const [deleting, setDeleting] = useState(false);
+
+  async function handleDelete() {
+    const ok = await confirm({
+      title: "Delete your account?",
+      message:
+        "This permanently deletes your account, all your chats, and your favorites. This can't be undone.",
+      confirmText: "Delete account",
+      danger: true,
+    });
+    if (!ok) return;
+    setDeleting(true);
+    try {
+      await deleteAccount({});
+      await signOut();
+      router.push("/");
+    } catch {
+      toast("Couldn't delete your account", "error");
+      setDeleting(false);
+    }
+  }
+
+  return (
+    <div className="mt-6 rounded-2xl border border-red-200 bg-surface p-6 shadow-sm dark:border-red-500/30">
+      <p className="text-xs font-semibold uppercase tracking-widest text-red-600 dark:text-red-400">
+        Danger Zone
+      </p>
+      <p className="mt-2 text-sm text-muted">
+        Permanently delete your account and all associated data. This can&apos;t
+        be undone.
+      </p>
+      <button
+        onClick={handleDelete}
+        disabled={deleting}
+        className="mt-4 rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+      >
+        {deleting ? "Deleting…" : "Delete account"}
+      </button>
     </div>
   );
 }

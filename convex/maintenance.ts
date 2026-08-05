@@ -8,6 +8,8 @@ import { deleteUserAndAuth, deleteUserAppData } from "./lib/purge";
 const STALE_DRAFT_MS = 7 * 24 * 60 * 60 * 1000;
 /** Anonymous guests idle this long (and this old) are purged. */
 const ABANDONED_GUEST_MS = 30 * 24 * 60 * 60 * 1000;
+/** Anonymous guests that never sent a message are purged once this old. */
+const EMPTY_GUEST_MS = 48 * 60 * 60 * 1000;
 /** How many rows a single cascade step deletes before rescheduling itself. */
 const DELETE_PAGE = 500;
 
@@ -158,6 +160,43 @@ export const cleanupAbandonedGuests = internalMutation({
         internal.maintenance.cleanupAbandonedGuests,
         { cursor: page.continueCursor },
       );
+    }
+  },
+});
+
+/**
+ * Nightly: purge "empty" anonymous guests — created over EMPTY_GUEST_MS ago
+ * that never sent a single message. These are almost entirely bots/crawlers
+ * and link unfurlers that trip the anonymous sign-in without ever chatting.
+ * Guests who *did* chat are left to the 30-day `cleanupAbandonedGuests` sweep.
+ * Uses `chat.lastMessageAt` as the activity signal (same as that sweep). Each
+ * purge is scheduled separately to bound its transaction.
+ */
+export const cleanupEmptyGuests = internalMutation({
+  args: { cursor: v.optional(v.union(v.string(), v.null())) },
+  handler: async (ctx, { cursor }) => {
+    const cutoff = Date.now() - EMPTY_GUEST_MS;
+    const page = await ctx.db
+      .query("users")
+      .paginate({ cursor: cursor ?? null, numItems: 100 });
+
+    for (const u of page.page) {
+      if (u.isAnonymous !== true || u._creationTime >= cutoff) continue;
+      const chats = await ctx.db
+        .query("chats")
+        .withIndex("by_user", (q) => q.eq("userId", u._id))
+        .take(50);
+      const everActive = chats.some((c) => (c.lastMessageAt ?? 0) > 0);
+      if (everActive) continue; // has real activity — leave it to the 30-day sweep
+      await ctx.scheduler.runAfter(0, internal.maintenance.purgeGuest, {
+        userId: u._id,
+      });
+    }
+
+    if (!page.isDone) {
+      await ctx.scheduler.runAfter(0, internal.maintenance.cleanupEmptyGuests, {
+        cursor: page.continueCursor,
+      });
     }
   },
 });

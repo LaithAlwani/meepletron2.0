@@ -19,6 +19,15 @@ crons.daily(
   {},
 );
 
+// Purge empty (never-messaged) anonymous guests — bots/crawlers (off-peak,
+// just before the abandoned-guest sweep).
+crons.daily(
+  "clean up empty guests",
+  { hourUTC: 3, minuteUTC: 15 },
+  internal.maintenance.cleanupEmptyGuests,
+  {},
+);
+
 // Purge long-abandoned anonymous guests (off-peak).
 crons.daily(
   "clean up abandoned guests",

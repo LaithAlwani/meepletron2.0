@@ -13,9 +13,11 @@ const SendIcon = (
 export function ChatInput({
   onSend,
   disabled,
+  onFocus,
 }: {
   onSend: (text: string) => void;
   disabled: boolean;
+  onFocus?: () => void;
 }) {
   const [text, setText] = useState("");
   const taRef = useRef<HTMLTextAreaElement>(null);
@@ -41,6 +43,7 @@ export function ChatInput({
       <textarea
         ref={taRef}
         value={text}
+        onFocus={onFocus}
         onChange={(e) => setText(e.target.value)}
         onInput={(e) => {
           const el = e.currentTarget;

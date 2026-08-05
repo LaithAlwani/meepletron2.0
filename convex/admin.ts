@@ -71,8 +71,12 @@ export const dashboardStats = query({
       }
     }
 
+    const guestUsers = users.filter((u) => u.isAnonymous === true).length;
+
     return {
       users: users.length,
+      registeredUsers: users.length - guestUsers,
+      guestUsers,
       baseGames: baseGames.length,
       expansions: expansions.length,
       messages: { total: msgTotal, byUser: msgUser, byAi: msgAi },
@@ -81,6 +85,34 @@ export const dashboardStats = query({
       costMonth,
       costTotal,
     };
+  },
+});
+
+/**
+ * Split anonymous guests into "active" (sent at least one message) vs "empty"
+ * (never messaged — almost all bots/crawlers/link-unfurlers). Kept out of the
+ * hot `dashboardStats` query because it joins users→chats. Bounded scan — fine
+ * at this scale, and the 48h empty-guest purge keeps `empty` small; move to
+ * @convex-dev/aggregate if guests ever pass ~16k rows.
+ */
+export const adminGuestStats = query({
+  args: {},
+  handler: async (ctx) => {
+    await requireAdmin(ctx);
+    const guests = (await ctx.db.query("users").take(SCAN_CAP)).filter(
+      (u) => u.isAnonymous === true,
+    );
+    let active = 0;
+    let empty = 0;
+    for (const g of guests) {
+      const chats = await ctx.db
+        .query("chats")
+        .withIndex("by_user", (q) => q.eq("userId", g._id))
+        .take(50);
+      if (chats.some((c) => (c.lastMessageAt ?? 0) > 0)) active++;
+      else empty++;
+    }
+    return { active, empty };
   },
 });
 

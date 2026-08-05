@@ -3,6 +3,7 @@ import { query, mutation, internalQuery, internalMutation } from "./_generated/s
 import { getCurrentUser, requireUser, requireAdmin } from "./lib/auth";
 import { tokenLimitFor } from "./chat";
 import { finite } from "./lib/num";
+import { deleteUserAppData, deleteUserAndAuth } from "./lib/purge";
 
 /** The current user's profile (null when signed out). Reactive. */
 export const me = query({
@@ -105,6 +106,24 @@ export const updateSettings = mutation({
     await ctx.db.patch("users", user._id, {
       preferences: { ...(user.preferences ?? {}), ...preferences },
     });
+  },
+});
+
+/**
+ * Permanently delete the caller's own account: their app data (chats,
+ * messages, favorites) and their auth rows + user row. Reuses the same purge
+ * helpers the guest-cleanup cron uses. Admins are blocked here to avoid
+ * accidental lockout — demote first (or use the CLI) to delete an admin.
+ */
+export const deleteAccount = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const user = await requireUser(ctx);
+    if (user.role === "admin") {
+      throw new Error("Admins can't delete their own account here.");
+    }
+    await deleteUserAppData(ctx, user._id);
+    await deleteUserAndAuth(ctx, user._id);
   },
 });
 

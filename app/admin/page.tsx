@@ -51,6 +51,7 @@ export default function AdminOverviewPage() {
     return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1);
   }, []);
   const stats = useQuery(api.admin.dashboardStats, { monthStart });
+  const guestStats = useQuery(api.admin.adminGuestStats);
 
   const dash = (value: string) => (stats === undefined ? "—" : value);
 
@@ -67,6 +68,11 @@ export default function AdminOverviewPage() {
             tint="bg-blue-500/15 text-blue-600 dark:text-blue-400"
             value={dash(num(stats?.users ?? 0))}
             label="Users"
+            hint={
+              stats
+                ? `${num(stats.registeredUsers)} registered · ${num(stats.guestUsers)} guests`
+                : undefined
+            }
             href="/admin/users"
           />
           <StatCard
@@ -82,6 +88,18 @@ export default function AdminOverviewPage() {
             value={dash(num(stats?.expansions ?? 0))}
             label="Expansions"
             href="/admin/boardgames"
+          />
+          <StatCard
+            icon="🕵️"
+            tint="bg-slate-500/15 text-slate-600 dark:text-slate-400"
+            value={guestStats === undefined ? "—" : num(guestStats.active)}
+            label="Active guests"
+            hint={
+              guestStats
+                ? `${num(guestStats.empty)} empty (bots) · auto-pruned after 48h`
+                : undefined
+            }
+            href="/admin/users"
           />
         </div>
       </section>

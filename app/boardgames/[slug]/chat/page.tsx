@@ -4,6 +4,7 @@ import {
   Fragment,
   Suspense,
   use,
+  useCallback,
   useEffect,
   useLayoutEffect,
   useRef,
@@ -168,10 +169,17 @@ function ChatView({ gameId, slug }: { gameId: Id<"games">; slug: string }) {
   const nearBottomRef = useRef(true);
   const signingIn = useRef(false);
   const moduleApplied = useRef(false);
+  // A suggested question asked before deferred sign-in finished; sent once the
+  // guest chat is ready. A ref (not state) so setting it doesn't re-render.
+  const pendingQuestionRef = useRef<string | null>(null);
 
-  // Brand-new visitors get an anonymous identity automatically so they can
-  // chat right away (and their daily budget is enforced server-side).
-  useEffect(() => {
+  // Deferred anonymous sign-in: we do NOT mint a guest identity on page load —
+  // that let every crawler, link-unfurler, and bot create a throwaway user row.
+  // Instead we sign in on the visitor's first real interaction with the
+  // composer (focus or asking a suggested question). Doing it at focus (rather
+  // than inside `handleSend`) means by send time the sign-in has completed, the
+  // chat exists, and `useAuthToken()` has refreshed the bearer token used below.
+  const ensureGuest = useCallback(() => {
     if (!isLoading && !isAuthenticated && !signingIn.current) {
       signingIn.current = true;
       void signIn("anonymous").finally(() => {
@@ -307,10 +315,39 @@ function ChatView({ gameId, slug }: { gameId: Id<"games">; slug: string }) {
   const groups = useMemo(() => sources ?? [], [sources]);
   const resourceCount = groups.reduce((n, g) => n + g.rulebooks.length, 0);
   const coverUrl = game?.imageUrl ?? game?.thumbnailUrl ?? null;
-  const loadingMessages = msgStatus === "LoadingFirstPage";
+  // Only "loading" once a chat exists and its query is actually running. Before
+  // deferred sign-in there's no chatId (query skipped), so fall through to the
+  // welcome/empty state — with the composer and suggested questions — rather
+  // than a perpetual skeleton.
+  const loadingMessages = !!chatId && msgStatus === "LoadingFirstPage";
   const isEmpty =
     !loadingMessages && messages.length === 0 && streaming === null;
   const inputReady = !!chatId && !busy;
+
+  // If the visitor asked a suggested question before deferred sign-in finished,
+  // send it once the guest chat is ready. `inputReady` only flips true after the
+  // sign-in round-trip creates the chat, by which point `useAuthToken()` has
+  // refreshed, so the streaming fetch in handleSend authenticates correctly.
+  useEffect(() => {
+    if (inputReady && pendingQuestionRef.current) {
+      const q = pendingQuestionRef.current;
+      pendingQuestionRef.current = null;
+      void handleSend(q);
+    }
+    // handleSend is recreated each render; we only want to fire on readiness.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inputReady]);
+
+  // Suggested-question click: send immediately if ready, otherwise kick off
+  // sign-in and queue it (a signed-out first-time visitor hasn't a chat yet).
+  function askQuestion(text: string) {
+    if (inputReady) {
+      void handleSend(text);
+    } else {
+      ensureGuest();
+      pendingQuestionRef.current = text;
+    }
+  }
 
   let lastDay: string | null = null;
 
@@ -411,8 +448,8 @@ function ChatView({ gameId, slug }: { gameId: Id<"games">; slug: string }) {
                 {SUGGESTED_QUESTIONS.map((q) => (
                   <button
                     key={q}
-                    onClick={() => handleSend(q)}
-                    disabled={!inputReady}
+                    onClick={() => askQuestion(q)}
+                    disabled={busy}
                     className="rounded-full border border-border bg-surface px-3 py-1.5 text-sm transition-colors hover:bg-surface-2 disabled:opacity-50"
                   >
                     {q}
@@ -477,7 +514,11 @@ function ChatView({ gameId, slug }: { gameId: Id<"games">; slug: string }) {
                 )}
               </p>
             )}
-            <ChatInput onSend={handleSend} disabled={!inputReady} />
+            <ChatInput
+              onSend={handleSend}
+              disabled={!inputReady}
+              onFocus={ensureGuest}
+            />
           </div>
         </div>
       </div>
