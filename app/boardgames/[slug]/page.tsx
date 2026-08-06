@@ -202,7 +202,7 @@ export default function GameDetailPage({
 
       {/* Hero */}
       <div className="animate-in mb-10 flex flex-col gap-8 sm:flex-row">
-        <div className="mx-auto w-fit shrink-0 sm:mx-0">
+        <div className="relative mx-auto w-fit shrink-0 sm:mx-0">
           {cover ? (
             <button
               type="button"
@@ -210,19 +210,38 @@ export default function GameDetailPage({
               aria-label="View full artwork"
               className="zoom-in group block cursor-zoom-in overflow-hidden rounded-2xl bg-surface-2 shadow-lg"
             >
-              {/* Capped to 160px tall; width follows the natural aspect ratio,
-                  so the whole cover shows whether it's square or wide. */}
+              {/* Fixed height with auto width so the box hugs the scaled
+                  image (a `w-fit` box + `max-h` would size to the image's
+                  intrinsic width, leaving empty space). The whole cover still
+                  shows, square or wide. */}
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={cover}
                 alt={game.title}
-                className="block max-h-40 w-auto transition-transform group-hover:scale-[1.03]"
+                className="block h-52 w-auto transition-transform group-hover:scale-[1.03]"
               />
             </button>
           ) : (
-            <div className="flex aspect-3/4 h-40 items-center justify-center rounded-2xl bg-surface-2 text-5xl opacity-40 shadow-lg">
+            <div className="flex aspect-3/4 h-52 items-center justify-center rounded-2xl bg-surface-2 text-5xl opacity-40 shadow-lg">
               🎲
             </div>
+          )}
+          {/* Favourite heart pinned to the cover's top-right corner
+              (opposite the breadcrumb), out of the title row. */}
+          <FavoriteButton
+            gameId={gameId}
+            className="absolute right-2 top-2 z-10 rounded-full bg-background/75 p-2 text-muted shadow-md backdrop-blur transition-colors hover:bg-background hover:text-foreground"
+          />
+          {/* Admin edit pen in the cover's bottom-right corner. */}
+          {isAdmin && (
+            <Link
+              href={`/admin/boardgames/${gameId}`}
+              aria-label="Edit game"
+              title="Edit game"
+              className="absolute bottom-2 right-2 z-10 rounded-full bg-background/75 p-2 text-muted shadow-md backdrop-blur transition-colors hover:bg-background hover:text-foreground"
+            >
+              {PenIcon}
+            </Link>
           )}
         </div>
 
@@ -244,17 +263,6 @@ export default function GameDetailPage({
               <span className="shrink-0 rounded-full border border-border bg-surface px-3 py-1 text-sm font-medium text-muted">
                 {game.year}
               </span>
-            )}
-            <FavoriteButton gameId={gameId} />
-            {isAdmin && (
-              <Link
-                href={`/admin/boardgames/${gameId}`}
-                aria-label="Edit game"
-                title="Edit game"
-                className="rounded-md p-1.5 text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
-              >
-                {PenIcon}
-              </Link>
             )}
           </div>
 

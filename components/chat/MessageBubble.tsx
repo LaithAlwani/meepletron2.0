@@ -65,20 +65,20 @@ function MessageActions({ message }: { message: Doc<"messages"> }) {
         {copied ? <span className="text-green-600 dark:text-green-400">{CheckIcon}</span> : CopyIcon}
       </button>
       <button
-        onClick={() => rate({ messageId: message._id, rating: "up" })}
-        aria-label="Helpful"
-        aria-pressed={rating === "up"}
-        className={`${base} ${rating === "up" ? "text-green-600 dark:text-green-400" : idle}`}
-      >
-        <ThumbUpIcon filled={rating === "up"} />
-      </button>
-      <button
         onClick={() => rate({ messageId: message._id, rating: "down" })}
         aria-label="Not helpful"
         aria-pressed={rating === "down"}
         className={`${base} ${rating === "down" ? "text-red-600 dark:text-red-400" : idle}`}
       >
         <ThumbDownIcon filled={rating === "down"} />
+      </button>
+      <button
+        onClick={() => rate({ messageId: message._id, rating: "up" })}
+        aria-label="Helpful"
+        aria-pressed={rating === "up"}
+        className={`${base} ${rating === "up" ? "text-green-600 dark:text-green-400" : idle}`}
+      >
+        <ThumbUpIcon filled={rating === "up"} />
       </button>
     </div>
   );
@@ -197,7 +197,13 @@ function Sources({
                   : "border-border bg-surface-2 text-muted hover:border-accent/40 hover:text-foreground"
               }`}
             >
-              <span className="font-semibold text-accent">[{ann.n}]</span>
+              <span
+                className={`inline-flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-bold leading-none ${
+                  active ? "bg-accent text-accent-foreground" : "bg-accent/15 text-accent"
+                }`}
+              >
+                {ann.n}
+              </span>
               <span className="truncate">{sourceLabel(ann)}</span>
             </button>
           );
@@ -209,8 +215,10 @@ function Sources({
           ref={cardRef}
           className="animate-in mt-2 rounded-lg border border-accent/30 bg-surface-2 p-3 text-sm"
         >
-          <div className="mb-1.5 flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-xs text-muted">
-            <span className="font-semibold text-accent">[{open.n}]</span>
+          <div className="mb-1.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted">
+            <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-accent/15 px-1 text-[10px] font-bold leading-none text-accent">
+              {open.n}
+            </span>
             {open.breadcrumb && <span className="font-medium text-foreground">{open.breadcrumb}</span>}
             {open.page && <span>p.{open.page}</span>}
             {open.variantName && <span className="italic">· {open.variantName}</span>}

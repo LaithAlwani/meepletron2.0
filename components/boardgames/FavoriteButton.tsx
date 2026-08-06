@@ -5,7 +5,13 @@ import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { useToast } from "@/components/ui/Toast";
 
-export function FavoriteButton({ gameId }: { gameId: Id<"games"> }) {
+export function FavoriteButton({
+  gameId,
+  className,
+}: {
+  gameId: Id<"games">;
+  className?: string;
+}) {
   const { isAuthenticated } = useConvexAuth();
   const isFav = useQuery(
     api.favorites.isFavorited,
@@ -31,7 +37,10 @@ export function FavoriteButton({ gameId }: { gameId: Id<"games"> }) {
       onClick={onClick}
       aria-label={isFav ? "Remove from favourites" : "Add to favourites"}
       title={isFav ? "Remove from favourites" : "Add to favourites"}
-      className="rounded-md p-1.5 text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
+      className={
+        className ??
+        "rounded-md p-1.5 text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
+      }
     >
       <svg
         xmlns="http://www.w3.org/2000/svg"

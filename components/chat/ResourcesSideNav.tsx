@@ -45,6 +45,30 @@ export function ResourcesSideNav({
   const selected = new Set(selectedIds);
   // Only groups that actually have ingested rulebooks to offer.
   const shown = groups.filter((g) => g.rulebooks.length > 0);
+  const baseGroups = shown.filter((g) => g.isBase);
+  const expansionGroups = shown.filter((g) => !g.isBase);
+
+  const renderRulebooks = (rulebooks: SourceRulebook[]) =>
+    rulebooks.map((rb) => {
+      const checked = selected.has(rb._id);
+      return (
+        <label
+          key={rb._id}
+          className={`mx-1 mb-0.5 flex cursor-pointer items-start gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all hover:bg-surface-2 ${
+            checked ? "bg-accent/10" : ""
+          }`}
+        >
+          <input
+            type="checkbox"
+            checked={checked}
+            onChange={(e) => onToggle(rb._id, e.target.checked)}
+            className="mt-0.5 h-4 w-4 shrink-0 accent-[var(--accent)]"
+          />
+          {/* No truncation — show the whole rulebook label. */}
+          <span className="flex-1 wrap-break-word">{rb.label}</span>
+        </label>
+      );
+    });
 
   return (
     <div className={`fixed inset-0 z-40 ${open ? "" : "pointer-events-none"}`}>
@@ -88,39 +112,34 @@ export function ResourcesSideNav({
               </p>
             </div>
           ) : (
-            shown.map((group) => (
-              <section key={group.gameId} className="mb-3">
-                <div className="flex items-center gap-2 px-3 pb-1 pt-1">
-                  <span className="truncate text-xs font-semibold uppercase tracking-wide text-muted">
+            <>
+              {/* Base game rulebooks */}
+              {baseGroups.map((group) => (
+                <section key={group.gameId} className="mb-3">
+                  <div className="px-3 pb-1 pt-1 text-xs font-semibold uppercase tracking-wide text-muted">
                     {group.gameTitle}
-                  </span>
-                  {!group.isBase && (
-                    <span className="shrink-0 rounded-full bg-surface-2 px-1.5 py-0.5 text-[10px] font-medium text-subtle">
-                      Expansion
-                    </span>
-                  )}
-                </div>
-                {group.rulebooks.map((rb) => {
-                  const checked = selected.has(rb._id);
-                  return (
-                    <label
-                      key={rb._id}
-                      className={`mx-1 mb-0.5 flex cursor-pointer items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all hover:bg-surface-2 ${
-                        checked ? "bg-accent/10" : ""
-                      }`}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        onChange={(e) => onToggle(rb._id, e.target.checked)}
-                        className="h-4 w-4 shrink-0 accent-[var(--accent)]"
-                      />
-                      <span className="flex-1 truncate">{rb.label}</span>
-                    </label>
-                  );
-                })}
-              </section>
-            ))
+                  </div>
+                  {renderRulebooks(group.rulebooks)}
+                </section>
+              ))}
+
+              {/* Expansions grouped under one subtitle */}
+              {expansionGroups.length > 0 && (
+                <section className="mb-3">
+                  <div className="px-3 pb-1 pt-1 text-xs font-semibold uppercase tracking-wide text-subtle">
+                    Expansions
+                  </div>
+                  {expansionGroups.map((group) => (
+                    <div key={group.gameId} className="mb-2">
+                      <div className="px-3 pb-0.5 pt-1.5 text-[13px] font-semibold text-foreground">
+                        {group.gameTitle}
+                      </div>
+                      {renderRulebooks(group.rulebooks)}
+                    </div>
+                  ))}
+                </section>
+              )}
+            </>
           )}
         </div>
       </aside>
