@@ -1,20 +1,26 @@
 import type { Metadata, Viewport } from "next";
-import { Poppins, Geist, Geist_Mono } from "next/font/google";
+import { Bricolage_Grotesque, Hanken_Grotesk, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Providers } from "./providers";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
+import { BottomNav } from "@/components/BottomNav";
 import { PreferencesEffects } from "@/components/PreferencesEffects";
 
-const poppins = Poppins({
-  variable: "--font-poppins",
+// Display face — characterful, warm-modern (headings, wordmark).
+const bricolage = Bricolage_Grotesque({
+  variable: "--font-bricolage",
   subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
+  weight: ["500", "600", "700", "800"],
+  display: "swap",
 });
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+// Body/UI face — clean humanist grotesk.
+const hanken = Hanken_Grotesk({
+  variable: "--font-hanken",
   subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  display: "swap",
 });
 
 const geistMono = Geist_Mono({
@@ -44,12 +50,12 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   // A single default; the script + ThemeToggle keep it in sync with the actual
   // (class-based) theme so the mobile status bar always matches the app.
-  themeColor: "#0f172a",
+  themeColor: "#191512",
 };
 
 // Runs before paint to set the theme class + status-bar colour, avoiding a flash
 // of the wrong theme. Matches the app's chosen theme, not the OS preference.
-const themeScript = `(function(){try{var t=localStorage.getItem('theme');var d=t==='dark'||((!t||t==='system')&&window.matchMedia('(prefers-color-scheme: dark)').matches);document.documentElement.classList.toggle('dark',d);var m=document.querySelector('meta[name=theme-color]');if(m)m.setAttribute('content',d?'#0f172a':'#f7f7f7');}catch(e){}})();`;
+const themeScript = `(function(){try{var t=localStorage.getItem('theme');var d=t==='dark'||((!t||t==='system')&&window.matchMedia('(prefers-color-scheme: dark)').matches);document.documentElement.classList.toggle('dark',d);var m=document.querySelector('meta[name=theme-color]');if(m)m.setAttribute('content',d?'#191512':'#faf6ee');}catch(e){}})();`;
 
 // Capture the PWA install prompt as early as possible — it can fire before any
 // React component mounts. Stashed on window for the InstallPrompt card to use.
@@ -62,7 +68,7 @@ export default function RootLayout({
     <html
       lang="en"
       suppressHydrationWarning
-      className={`${poppins.variable} ${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${bricolage.variable} ${hanken.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="flex min-h-full flex-col font-sans">
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
@@ -70,8 +76,9 @@ export default function RootLayout({
         <Providers>
           <PreferencesEffects />
           <SiteHeader />
-          <main className="flex-1">{children}</main>
+          <main className="relative z-10 flex-1">{children}</main>
           <SiteFooter />
+          <BottomNav />
         </Providers>
       </body>
     </html>

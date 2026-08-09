@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { usePaginatedQuery, useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
+import { Search, List, LayoutGrid } from "lucide-react";
 import { GameCard } from "@/components/boardgames/GameCard";
 import { GameListItem } from "@/components/boardgames/GameListItem";
 
@@ -30,10 +31,10 @@ function FilterChip({
   return (
     <button
       onClick={onClick}
-      className={`shrink-0 rounded-full border px-3 py-1 text-xs font-medium transition-all ${
+      className={`shrink-0 rounded-full border px-3 py-1.5 text-xs font-semibold transition-all ${
         active
-          ? "border-accent bg-accent text-accent-foreground"
-          : "border-border bg-surface text-muted hover:text-foreground"
+          ? "border-accent bg-accent text-accent-foreground shadow-sm"
+          : "border-border bg-surface text-muted hover:bg-surface-2 hover:text-foreground"
       }`}
     >
       {children}
@@ -130,61 +131,53 @@ export default function BoardgamesPage() {
   return (
     <div className="mx-auto max-w-6xl px-4 py-8">
       {/* Header */}
-      <div className="mb-4 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
+      <div className="mb-5 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
         <div>
-          <p className="mb-1 text-xs font-medium uppercase tracking-widest text-subtle">
-            Library
+          <p className="mb-1 text-[11px] font-bold uppercase tracking-[0.18em] text-accent">
+            The library
           </p>
-          <h1 className="text-3xl font-bold">
+          <h1 className="font-display text-3xl font-extrabold tracking-tight sm:text-4xl">
             Board games
-            {/* When browsing, show the exact base-game total; when searching,
-                show how many results matched so far. */}
-            {searching
-              ? results.length > 0 && (
-                  <span className="ml-2 text-base font-normal text-subtle">
-                    ({results.length}
-                    {active.status === "CanLoadMore" ||
-                    active.status === "LoadingMore"
-                      ? "+"
-                      : ""}
-                    )
-                  </span>
-                )
-              : browseTotal !== undefined && (
-                  <span className="ml-2 text-base font-normal text-subtle">
-                    ({browseTotal})
-                  </span>
-                )}
+            {(searching
+              ? results.length > 0
+              : browseTotal !== undefined) && (
+              <span className="ml-2.5 align-middle text-base font-bold text-subtle">
+                {searching
+                  ? `${results.length}${
+                      active.status === "CanLoadMore" ||
+                      active.status === "LoadingMore"
+                        ? "+"
+                        : ""
+                    }`
+                  : browseTotal}
+              </span>
+            )}
           </h1>
         </div>
 
         <div className="flex items-center gap-2">
-          <button
-            onClick={toggleView}
-            aria-label={view === "grid" ? "Switch to list view" : "Switch to grid view"}
-            title={view === "grid" ? "List view" : "Grid view"}
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-border bg-surface text-muted transition-colors hover:text-foreground"
-          >
-            {view === "grid" ? (
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-[18px] w-[18px]">
-                <line x1="8" y1="6" x2="21" y2="6" /><line x1="8" y1="12" x2="21" y2="12" /><line x1="8" y1="18" x2="21" y2="18" /><line x1="3" y1="6" x2="3.01" y2="6" /><line x1="3" y1="12" x2="3.01" y2="12" /><line x1="3" y1="18" x2="3.01" y2="18" />
-              </svg>
-            ) : (
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-[18px] w-[18px]">
-                <rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" /><rect x="14" y="14" width="7" height="7" /><rect x="3" y="14" width="7" height="7" />
-              </svg>
-            )}
-          </button>
-
-          <div className="relative flex-1 sm:w-64">
+          <div className="relative flex-1 sm:w-72">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-subtle" />
             <input
               type="search"
               value={term}
               onChange={(e) => setTerm(e.target.value)}
               placeholder="Search title, designer, publisher…"
-              className="w-full rounded-xl border border-border bg-surface py-2 pl-4 pr-4 text-sm outline-none focus:ring-2 focus:ring-ring"
+              className="w-full rounded-xl border border-border bg-surface py-2.5 pl-10 pr-3 text-sm outline-none transition-shadow focus:border-accent/50 focus:ring-2 focus:ring-ring/40"
             />
           </div>
+          <button
+            onClick={toggleView}
+            aria-label={view === "grid" ? "Switch to list view" : "Switch to grid view"}
+            title={view === "grid" ? "List view" : "Grid view"}
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-border bg-surface text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
+          >
+            {view === "grid" ? (
+              <List className="h-[18px] w-[18px]" />
+            ) : (
+              <LayoutGrid className="h-[18px] w-[18px]" />
+            )}
+          </button>
         </div>
       </div>
 
@@ -250,7 +243,7 @@ export default function BoardgamesPage() {
         ) : (
           <div className={gridClass}>
             {Array.from({ length: 8 }).map((_, i) => (
-              <div key={i} className="aspect-4/3 animate-pulse rounded-xl bg-surface-2" />
+              <div key={i} className="aspect-4/3 animate-pulse rounded-2xl bg-surface-2" />
             ))}
           </div>
         )

@@ -133,6 +133,7 @@ function ChatView({ gameId, slug }: { gameId: Id<"games">; slug: string }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const moduleParam = searchParams.get("module");
+  const qParam = searchParams.get("q");
 
   const me = useQuery(api.users.me);
   const isGuest = me?.isAnonymous === true;
@@ -169,6 +170,7 @@ function ChatView({ gameId, slug }: { gameId: Id<"games">; slug: string }) {
   const nearBottomRef = useRef(true);
   const signingIn = useRef(false);
   const moduleApplied = useRef(false);
+  const qApplied = useRef(false);
   // A suggested question asked before deferred sign-in finished; sent once the
   // guest chat is ready. A ref (not state) so setting it doesn't re-render.
   const pendingQuestionRef = useRef<string | null>(null);
@@ -211,6 +213,20 @@ function ChatView({ gameId, slug }: { gameId: Id<"games">; slug: string }) {
       moduleGameId: moduleParam as Id<"games">,
     }).finally(() => router.replace(`/boardgames/${slug}/chat`));
   }, [chatId, moduleParam, addModule, router, slug]);
+
+  // Auto-send a question passed via `?q=` (from the detail page's inline ask).
+  // Reuses `askQuestion` so a signed-out visitor is signed in as a guest and the
+  // question is queued until the chat is ready.
+  useEffect(() => {
+    if (qApplied.current || !qParam) return;
+    qApplied.current = true;
+    askQuestion(qParam);
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("q");
+    const qs = params.toString();
+    router.replace(`/boardgames/${slug}/chat${qs ? `?${qs}` : ""}`);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [qParam]);
 
   // Reset scroll bookkeeping when switching chats.
   useEffect(() => {

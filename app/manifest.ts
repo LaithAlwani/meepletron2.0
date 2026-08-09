@@ -19,8 +19,8 @@ export default function manifest(): MetadataRoute.Manifest {
     scope: "/",
     display: "standalone",
     orientation: "portrait",
-    background_color: "#0f172a",
-    theme_color: "#0f172a",
+    background_color: "#191512",
+    theme_color: "#191512",
     categories: ["games", "reference", "utilities"],
     // No "maskable" variant: the current icons fill the whole square (no safe
     // zone), so declaring them maskable makes the OS crop the logo. Using "any"

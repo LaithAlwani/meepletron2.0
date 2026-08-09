@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { GameWithMedia } from "@/convex/games";
 import { formatPlayTime } from "@/lib/format";
 import { FavoriteHeart } from "./FavoriteHeart";
+import { Die } from "@/components/ui/icons";
 
 export function GameListItem({ game }: { game: GameWithMedia }) {
   const players =
@@ -26,13 +27,13 @@ export function GameListItem({ game }: { game: GameWithMedia }) {
             // eslint-disable-next-line @next/next/no-img-element
             <img src={cover} alt="" className="h-full w-full object-cover object-top" />
           ) : (
-            <div className="flex h-full w-full items-center justify-center opacity-40">
-              🎲
+            <div className="flex h-full w-full items-center justify-center text-subtle">
+              <Die className="h-6 w-6" />
             </div>
           )}
         </div>
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-medium transition-colors group-hover:text-accent">
+          <p className="font-display truncate font-bold transition-colors group-hover:text-accent">
             {game.title}
           </p>
           {stats && <p className="mt-0.5 text-xs text-muted">{stats}</p>}

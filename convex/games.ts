@@ -182,6 +182,50 @@ export const browseCount = query({
   },
 });
 
+/**
+ * Games similar to `gameId`, ranked by shared mechanics/categories (+ a small
+ * bonus for shared designers). Base games only; excludes the game itself. Cheap
+ * full scan over base games (~a few hundred).
+ */
+export const similarGames = query({
+  args: { gameId: v.id("games"), limit: v.optional(v.number()) },
+  handler: async (ctx, { gameId, limit }) => {
+    const game = await ctx.db.get("games", gameId);
+    if (!game) return [];
+    // Score against the base game of the family.
+    const base =
+      game.isExpansion && game.parentId
+        ? ((await ctx.db.get("games", game.parentId)) ?? game)
+        : game;
+
+    const norm = (s: string) => s.trim().toLowerCase();
+    const cats = new Set(base.categories.map(norm));
+    const mechs = new Set(base.gameMechanics.map(norm));
+    const designers = new Set(base.designers.map(norm));
+    if (cats.size === 0 && mechs.size === 0) return [];
+
+    const candidates = await ctx.db
+      .query("games")
+      .withIndex("by_isExpansion", (q) => q.eq("isExpansion", false))
+      .take(1000);
+
+    const scored = candidates
+      .filter((c) => c._id !== base._id)
+      .map((c) => {
+        let score = 0;
+        for (const x of c.gameMechanics) if (mechs.has(norm(x))) score += 2;
+        for (const x of c.categories) if (cats.has(norm(x))) score += 1.5;
+        for (const x of c.designers) if (designers.has(norm(x))) score += 1;
+        return { c, score };
+      })
+      .filter((s) => s.score > 0)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, Math.max(1, Math.min(limit ?? 6, 12)));
+
+    return await Promise.all(scored.map((s) => withMedia(ctx, s.c)));
+  },
+});
+
 /** Assemble a game detail: the game (with media), parent, expansions, rulebooks. */
 async function gameDetail(ctx: QueryCtx, game: Doc<"games">) {
   const [expansions, rulebookDocs, parentDoc] = await Promise.all([

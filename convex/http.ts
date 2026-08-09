@@ -3,35 +3,15 @@ import { httpAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { getAuthUserId } from "@convex-dev/auth/server";
-import { google } from "@ai-sdk/google";
-import { streamText, generateObject, generateText } from "ai";
-import { z } from "zod";
+import { streamText } from "ai";
 import { auth } from "./auth";
-import { embedQuery, EMBEDDING_MODEL_ID } from "./lib/embedding";
 import { finite } from "./lib/num";
-import {
-  buildRerankPrompt,
-  buildRewritePrompt,
-  buildSystemPrompt,
-  formatContext,
-  needsIconLegend,
-  type RetrievedChunk,
-} from "./lib/prompts";
+import { CHAT_MODEL, buildAnswer } from "./rag";
 
 const http = httpRouter();
 
 // Convex Auth routes (/api/auth/*).
 auth.addHttpRoutes(http);
-
-const CHAT_MODEL = google("gemini-2.5-flash");
-
-type UsageRow = {
-  purpose: "chat-answer" | "chat-rerank" | "chat-rewrite" | "chat-embed";
-  model: string;
-  promptTokens: number;
-  completionTokens: number;
-  totalTokens: number;
-};
 
 function corsHeaders(origin: string | null): Record<string, string> {
   return {
@@ -134,54 +114,19 @@ const chat = httpAction(async (ctx, request) => {
     );
   }
 
-  const usage: UsageRow[] = [];
-  const config = await ctx.runQuery(internal.chat.getActiveConfig, {});
+  const messages = history as { role: "user" | "assistant"; content: string }[];
 
-  // 1. Expand the question into rulebook vocabulary so retrieval matches even
-  //    when the player uses casual/general words, then embed the expansion.
-  const searchQuery = await rewriteQuery(query, history, usage);
-  const { embedding, tokens: embedTokens } = await embedQuery(searchQuery);
-  usage.push({
-    purpose: "chat-embed",
-    model: EMBEDDING_MODEL_ID,
-    promptTokens: finite(embedTokens),
-    completionTokens: 0,
-    totalTokens: finite(embedTokens),
+  // Retrieve + rerank + assemble the grounded prompt (shared with the FAQ generator).
+  const { system, annotations, usage, empty } = await buildAnswer(ctx, {
+    rulebookIds: selectedRulebookIds,
+    query,
+    history: messages,
+    sourceTitles,
   });
-
-  // 2. Vector search, scoped to the selected rulebooks.
-  const hits = await ctx.vectorSearch("chunks", "by_embedding", {
-    vector: embedding,
-    limit: config.v2TopK,
-    filter: (q) => {
-      const exprs = selectedRulebookIds.map((id) => q.eq("rulebookId", id));
-      return exprs.length === 1 ? exprs[0] : q.or(...exprs);
-    },
-  });
-  const scoreById = new Map(hits.map((h) => [h._id, h._score]));
-
-  // 3. Hydrate, drop legend hits, apply score threshold.
-  const hydrated = await ctx.runQuery(internal.chat.hydrateChunks, {
-    chunkIds: hits.map((h) => h._id),
-  });
-  const candidates = hydrated
-    .filter((c) => c.chunkType !== "legend")
-    .filter((c) => (scoreById.get(c.chunkId) ?? 0) >= config.v2ScoreThreshold);
-
-  // 4. Rerank down to N (Gemini) or fall back to top-by-score. Use the expanded
-  //    query so the reranker matches on the player's intent + synonyms too.
-  //    Rerank only the top candidates by score to keep the rerank prompt cheap —
-  //    broad recall stays (we retrieved v2TopK), but the tail rarely wins.
-  const ranked = await rerankChunks(
-    searchQuery,
-    candidates.slice(0, config.rerankCandidates),
-    config.rerankTopN,
-    usage,
-  );
 
   // No relevant rulebook content → tell the user, and NEVER let the model
   // answer from its own knowledge.
-  if (ranked.length === 0) {
+  if (empty || !system) {
     const text =
       "I couldn't find anything about that in the loaded rulebook(s). I only answer from what's in the rulebook, so try rephrasing using the game's own terms — for example the phase, action, or component involved — or it may not be covered here.";
     return staticAnswer(ctx, origin, text, () =>
@@ -195,32 +140,8 @@ const chat = httpAction(async (ctx, request) => {
     );
   }
 
-  // 5. Always include the iconography legend when tokens are in play.
-  const legend = needsIconLegend(query, ranked)
-    ? await ctx.runQuery(internal.chat.getLegendChunks, { rulebookIds: selectedRulebookIds })
-    : [];
-
-  const annotations = ranked.map((c, i) => ({
-    n: i + 1,
-    gameId: c.gameId as Id<"games">,
-    rulebookId: c.rulebookId as Id<"rulebooks">,
-    bgTitle: c.bgTitle,
-    breadcrumb: c.breadcrumb || undefined,
-    page: c.page,
-    chunkType: c.chunkType,
-    scope: c.scope,
-    variantName: c.variantName,
-    text: c.text,
-  }));
-
-  const system = buildSystemPrompt(sourceTitles, formatContext(ranked, legend));
-
-  // 6. Stream the grounded answer; persist on completion.
-  const result = streamText({
-    model: CHAT_MODEL,
-    system,
-    messages: history as { role: "user" | "assistant"; content: string }[],
-  });
+  // Stream the grounded answer; persist on completion.
+  const result = streamText({ model: CHAT_MODEL, system, messages });
 
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
@@ -265,84 +186,6 @@ const chat = httpAction(async (ctx, request) => {
     headers: { "Content-Type": "text/plain; charset=utf-8", ...corsHeaders(origin) },
   });
 });
-
-/**
- * Rewrite a casual question into a keyword-rich rulebook-vocabulary query to
- * improve vector recall. Falls back to the original question on any failure so
- * retrieval always proceeds.
- */
-async function rewriteQuery(
-  query: string,
-  history: { role: string; content: string }[],
-  usage: UsageRow[],
-): Promise<string> {
-  try {
-    const { text, usage: u } = await generateText({
-      model: CHAT_MODEL,
-      prompt: buildRewritePrompt(history, query),
-      temperature: 0,
-      // Mechanical keyword rewrite — no reasoning needed. Disabling Gemini's
-      // "thinking" here saves ~1–3k wasted output tokens per question.
-      providerOptions: { google: { thinkingConfig: { thinkingBudget: 0 } } },
-    });
-    const rewritten = text.trim();
-    const it = finite(u.inputTokens);
-    const ot = finite(u.outputTokens);
-    usage.push({
-      purpose: "chat-rewrite",
-      model: "gemini-2.5-flash",
-      promptTokens: it,
-      completionTokens: ot,
-      totalTokens: finite(u.totalTokens) || it + ot,
-    });
-    // Blend in the original wording so exact-term questions still match well.
-    return rewritten ? `${query} ${rewritten}` : query;
-  } catch {
-    return query;
-  }
-}
-
-async function rerankChunks(
-  query: string,
-  chunks: (RetrievedChunk & { chunkId: Id<"chunks"> })[],
-  n: number,
-  usage: UsageRow[],
-): Promise<(RetrievedChunk & { chunkId: Id<"chunks"> })[]> {
-  if (chunks.length === 0) return [];
-  if (chunks.length <= n) return chunks.slice(0, n);
-
-  try {
-    const { object, usage: rerankUsage } = await generateObject({
-      model: CHAT_MODEL,
-      schema: z.object({ indices: z.array(z.number()) }),
-      prompt: buildRerankPrompt(query, chunks, n),
-      temperature: 0,
-      // Picking passage numbers needs no reasoning — turn off Gemini "thinking"
-      // to avoid burning ~1–2k output tokens on a tiny JSON result.
-      providerOptions: { google: { thinkingConfig: { thinkingBudget: 0 } } },
-    });
-    const rInTok = finite(rerankUsage.inputTokens);
-    const rOutTok = finite(rerankUsage.outputTokens);
-    usage.push({
-      purpose: "chat-rerank",
-      model: "gemini-2.5-flash",
-      promptTokens: rInTok,
-      completionTokens: rOutTok,
-      totalTokens: finite(rerankUsage.totalTokens) || rInTok + rOutTok,
-    });
-    const seen = new Set<number>();
-    const selected: (RetrievedChunk & { chunkId: Id<"chunks"> })[] = [];
-    for (const i of object.indices) {
-      if (!Number.isInteger(i) || i < 1 || i > chunks.length || seen.has(i)) continue;
-      seen.add(i);
-      selected.push(chunks[i - 1]);
-      if (selected.length >= n) break;
-    }
-    return selected.length > 0 ? selected : chunks.slice(0, n);
-  } catch {
-    return chunks.slice(0, n);
-  }
-}
 
 http.route({ path: "/chat", method: "POST", handler: chat });
 http.route({

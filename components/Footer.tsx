@@ -25,7 +25,7 @@ const socials = [
 
 export function Footer() {
   return (
-    <footer className="border-t border-border px-4 py-12">
+    <footer className="relative z-10 border-t border-border bg-background px-4 py-12">
       <div className="mx-auto max-w-xl text-center">
         <div className="mb-4 flex justify-center gap-5">
           {socials.map((s) => (

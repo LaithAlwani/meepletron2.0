@@ -353,6 +353,7 @@ export const finalizeCommit = internalMutation({
     embedTokens: v.number(),
   },
   handler: async (ctx, { rulebookId, draftId, embedTokens }) => {
+    const rb = await ctx.db.get("rulebooks", rulebookId);
     await ctx.db.patch("rulebooks", rulebookId, {
       isIngested: true,
       ingestState: "committed",
@@ -365,6 +366,16 @@ export const finalizeCommit = internalMutation({
       completionTokens: 0,
       totalTokens: embedTokens,
     });
+    // Refresh the derived detail-page content (FAQ, glossary, components) from
+    // the freshly-ingested rulebook. Both resolve to the base game's family.
+    if (rb) {
+      await ctx.scheduler.runAfter(0, internal.faqs.generateForGame, {
+        gameId: rb.gameId,
+      });
+      await ctx.scheduler.runAfter(0, internal.glossary.generateForGame, {
+        gameId: rb.gameId,
+      });
+    }
   },
 });
 

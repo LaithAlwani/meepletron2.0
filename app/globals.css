@@ -4,37 +4,54 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 /*
- * Meepletron palette — matches the original: a blue accent in light mode that
- * flips to a warm yellow in dark mode, over cool slate surfaces.
+ * Meepletron palette — "playful + refined": warm cream/ink neutrals with a
+ * tangerine primary accent (consistent across light/dark) and a teal secondary.
  */
 :root {
-  --background: #f7f7f7;
+  --background: #faf6ee; /* warm cream */
   --surface: #ffffff;
-  --surface-2: #eef1f4;
-  --foreground: #111827;
-  --muted: #4d515b;
-  --subtle: #8d939d;
-  --border: #e5e7eb;
-  --border-muted: #f1f3f5;
-  --accent: #2563eb; /* blue-600 */
-  --accent-hover: #1d4ed8;
+  --surface-2: #f3ece0; /* warm sand */
+  --foreground: #221d18; /* warm ink */
+  --muted: #6a6155;
+  --subtle: #9c9284;
+  --border: #e8dfd0;
+  --border-muted: #f1eae0;
+  --accent: #dc4e26; /* tangerine */
+  --accent-hover: #c6431f;
   --accent-foreground: #ffffff;
-  --ring: #2563eb;
+  --accent-2: #0d8f80; /* teal */
+  --accent-2-hover: #0a7a6d;
+  --accent-2-foreground: #ffffff;
+  --ring: #dc4e26;
+  /* Muted category tag colors (tints picked to sit on cream + charcoal). */
+  --cat-1: #c2571f; /* amber */
+  --cat-2: #2f8f6f; /* green */
+  --cat-3: #4166b8; /* indigo */
+  --cat-4: #a3487e; /* plum */
+  --cat-5: #8a7a2f; /* olive */
 }
 
 .dark {
-  --background: #0f172a; /* slate-900 */
-  --surface: #1e293b; /* slate-800 */
-  --surface-2: #273449;
-  --foreground: #f8fafc;
-  --muted: #adb9c9;
-  --subtle: #64748b;
-  --border: #334155; /* slate-700 */
-  --border-muted: #1e293b;
-  --accent: #eab308; /* yellow-500 */
-  --accent-hover: #facc15;
-  --accent-foreground: #0f172a;
-  --ring: #eab308;
+  --background: #191512; /* warm near-black */
+  --surface: #221d18;
+  --surface-2: #2c261f;
+  --foreground: #f6f0e8;
+  --muted: #b3a998;
+  --subtle: #7d7365;
+  --border: #382f26;
+  --border-muted: #241f1a;
+  --accent: #ff7a4d; /* brighter tangerine on dark */
+  --accent-hover: #ff9169;
+  --accent-foreground: #1a0f09;
+  --accent-2: #2dd4bf; /* brighter teal on dark */
+  --accent-2-hover: #5ee0ce;
+  --accent-2-foreground: #10201d;
+  --ring: #ff7a4d;
+  --cat-1: #e6864a;
+  --cat-2: #5cc79f;
+  --cat-3: #7d9be6;
+  --cat-4: #d67fb0;
+  --cat-5: #cbb85e;
 }
 
 @theme inline {
@@ -47,15 +64,25 @@
   --color-border: var(--border);
   --color-ring: var(--ring);
   --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
   --color-accent-foreground: var(--accent-foreground);
-  /* Aliases used across the app + ported components. */
+  --color-accent-2: var(--accent-2);
+  --color-accent-2-hover: var(--accent-2-hover);
+  --color-accent-2-foreground: var(--accent-2-foreground);
+  --color-cat-1: var(--cat-1);
+  --color-cat-2: var(--cat-2);
+  --color-cat-3: var(--cat-3);
+  --color-cat-4: var(--cat-4);
+  --color-cat-5: var(--cat-5);
+  /* Aliases used across the app + ported components (→ canonical tokens). */
   --color-bg: var(--background);
   --color-surface-muted: var(--surface-2);
   --color-border-muted: var(--border-muted);
   --color-primary: var(--accent);
   --color-primary-hover: var(--accent-hover);
   --color-primary-fg: var(--accent-foreground);
-  --font-sans: var(--font-poppins), var(--font-geist-sans), system-ui, sans-serif;
+  --font-display: var(--font-bricolage), var(--font-hanken), system-ui, sans-serif;
+  --font-sans: var(--font-hanken), var(--font-geist-sans), system-ui, sans-serif;
   --font-mono: var(--font-geist-mono), monospace;
   /* Rounder corners to match the original design language (Tailwind v4's
      defaults are much tighter, which made cards/buttons look blocky). */
@@ -78,6 +105,26 @@ body {
   color: var(--foreground);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
+}
+
+/* Display face for headings/wordmark. */
+.font-display {
+  font-family: var(--font-display);
+  letter-spacing: -0.01em;
+}
+
+/* Subtle warm grain overlay for tactile depth (playful-but-restrained). */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.035;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+.dark body::before {
+  opacity: 0.05;
 }
 
 /* Custom scrollbars — desktop (mouse) only; mobile keeps native overlay bars. */

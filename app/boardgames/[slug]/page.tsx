@@ -3,31 +3,35 @@
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
 import { useQuery } from "convex/react";
+import {
+  Users,
+  Clock,
+  Baby,
+  MessageCircle,
+  Scissors,
+  Puzzle,
+  Pencil,
+  ChevronRight,
+  Download,
+  FileText,
+  Paperclip,
+  X,
+} from "lucide-react";
 import { api } from "@/convex/_generated/api";
 import { formatPlayTime } from "@/lib/format";
 import { FavoriteButton } from "@/components/boardgames/FavoriteButton";
 import { BackgroundCover } from "@/components/boardgames/BackgroundCover";
+import { SimilarGames } from "@/components/boardgames/SimilarGames";
+import { InlineAsk } from "@/components/boardgames/InlineAsk";
+import { FaqAccordion } from "@/components/boardgames/FaqAccordion";
+import { BggStats } from "@/components/boardgames/BggStats";
+import {
+  ComponentsList,
+  GlossaryList,
+} from "@/components/boardgames/GameReference";
 import { ExpandableText } from "@/components/ui/ExpandableText";
-
-function StatBadge({
-  icon,
-  value,
-  label,
-}: {
-  icon: React.ReactNode;
-  value: string;
-  label: string;
-}) {
-  return (
-    <div className="flex items-center gap-2 rounded-xl border border-border bg-surface px-3 py-2">
-      <span className="text-muted">{icon}</span>
-      <div className="leading-tight">
-        <div className="text-sm font-semibold">{value}</div>
-        <div className="text-[11px] text-muted">{label}</div>
-      </div>
-    </div>
-  );
-}
+import { buttonClasses } from "@/components/ui/Button";
+import { Die } from "@/components/ui/icons";
 
 function InfoSection({
   title,
@@ -43,7 +47,7 @@ function InfoSection({
       className="animate-in mb-8"
       style={delay ? { animationDelay: `${delay}s` } : undefined}
     >
-      <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-muted">
+      <h2 className="mb-3 text-[11px] font-bold uppercase tracking-[0.16em] text-subtle">
         {title}
       </h2>
       {children}
@@ -51,17 +55,32 @@ function InfoSection({
   );
 }
 
-function ChipList({ items }: { items: string[] }) {
+/** A label → value row in the Credits block. Multi-value fields collapse to
+ * `max` items with a "+N more" toggle. */
+function CreditRow({
+  label,
+  items,
+  text,
+  max = 4,
+}: {
+  label: string;
+  items?: string[];
+  text?: string;
+  max?: number;
+}) {
+  if (!text && (!items || items.length === 0)) return null;
   return (
-    <div className="flex flex-wrap gap-1.5">
-      {items.map((i) => (
-        <span
-          key={i}
-          className="rounded-full border border-border bg-surface-2 px-2.5 py-0.5 text-xs"
-        >
-          {i}
-        </span>
-      ))}
+    <div className="flex gap-4 px-4 py-3">
+      <span className="w-24 shrink-0 pt-0.5 text-[11px] font-bold uppercase tracking-wide text-subtle sm:w-28">
+        {label}
+      </span>
+      <div className="min-w-0 flex-1">
+        {text ? (
+          <span className="text-sm text-foreground">{text}</span>
+        ) : (
+          <ExpandableInline items={items!} max={max} />
+        )}
+      </div>
     </div>
   );
 }
@@ -78,7 +97,7 @@ function ExpandableInline({ items, max = 2 }: { items: string[]; max?: number })
       {shown.join(", ")}{" "}
       <button
         onClick={() => setExpanded((v) => !v)}
-        className="font-medium text-accent hover:underline"
+        className="font-semibold text-accent hover:underline"
       >
         {expanded ? "show less" : `+${items.length - max} more`}
       </button>
@@ -86,40 +105,99 @@ function ExpandableInline({ items, max = 2 }: { items: string[]; max?: number })
   );
 }
 
-const iconClass = "h-[18px] w-[18px]";
-const PeopleIcon = (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={iconClass}>
-    <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-    <circle cx="9" cy="7" r="4" />
-    <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
-    <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-  </svg>
-);
-const ClockIcon = (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={iconClass}>
-    <circle cx="12" cy="12" r="10" />
-    <path d="M12 6v6l4 2" />
-  </svg>
-);
-const AgeIcon = (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={iconClass}>
-    <circle cx="12" cy="5" r="2.5" />
-    <path d="M12 8v6m0 0-3 6m3-6 3 6M7 11h10" />
-  </svg>
-);
-const PenIcon = (
-  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
-    <path d="M12 20h9" />
-    <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z" />
-  </svg>
-);
-const DownloadIcon = (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
-    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-    <path d="m7 10 5 5 5-5" />
-    <path d="M12 15V3" />
-  </svg>
-);
+function FactChip({
+  icon,
+  children,
+}: {
+  icon: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <span className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-surface px-3 py-1.5 text-sm font-semibold text-foreground shadow-sm">
+      <span className="text-accent">{icon}</span>
+      {children}
+    </span>
+  );
+}
+
+function FileRow({
+  href,
+  label,
+  icon,
+}: {
+  href: string;
+  label: string;
+  icon: React.ReactNode;
+}) {
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="flex items-center justify-between gap-3 rounded-xl border border-border bg-surface px-3.5 py-2.5 text-sm transition-colors hover:border-accent/40 hover:bg-surface-2"
+    >
+      <span className="inline-flex min-w-0 items-center gap-2.5">
+        <span className="text-accent">{icon}</span>
+        <span className="truncate font-medium">{label}</span>
+      </span>
+      <Download className="h-4 w-4 shrink-0 text-subtle" aria-label="Download" />
+    </a>
+  );
+}
+
+function ExpansionsSection({
+  expansions,
+}: {
+  expansions: {
+    _id: string;
+    slug: string;
+    title: string;
+    thumbnailUrl: string | null;
+    imageUrl: string | null;
+  }[];
+}) {
+  const [showAll, setShowAll] = useState(false);
+  const LIMIT = 6;
+  const shown = showAll ? expansions : expansions.slice(0, LIMIT);
+  return (
+    <InfoSection title={`Expansions (${expansions.length})`} delay={0.15}>
+      <ul className="space-y-2">
+        {shown.map((exp) => {
+          const cover = exp.thumbnailUrl ?? exp.imageUrl ?? null;
+          return (
+            <li key={exp._id}>
+              <Link
+                href={`/boardgames/${exp.slug}`}
+                className="group flex items-center gap-3 rounded-xl border border-border bg-surface p-2 pr-3 transition-colors hover:border-accent/40 hover:bg-surface-2"
+              >
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-surface-2 text-subtle">
+                  {cover ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={cover} alt="" className="h-full w-full object-cover" />
+                  ) : (
+                    <Die className="h-5 w-5" />
+                  )}
+                </div>
+                <span className="font-display min-w-0 flex-1 truncate font-bold transition-colors group-hover:text-accent">
+                  {exp.title}
+                </span>
+                <ChevronRight className="h-4 w-4 shrink-0 text-subtle transition-colors group-hover:text-accent" />
+              </Link>
+            </li>
+          );
+        })}
+      </ul>
+      {expansions.length > LIMIT && (
+        <button
+          onClick={() => setShowAll((v) => !v)}
+          className="mt-3 text-sm font-semibold text-accent hover:underline"
+        >
+          {showAll ? "Show less" : `Show all ${expansions.length}`}
+        </button>
+      )}
+    </InfoSection>
+  );
+}
 
 export default function GameDetailPage({
   params,
@@ -131,14 +209,11 @@ export default function GameDetailPage({
   const me = useQuery(api.users.me);
   const isAdmin = me?.role === "admin";
 
-  // Jump straight to the top when switching games (e.g. base → expansion),
-  // which reuse this same route and would otherwise keep the scroll position.
   useEffect(() => {
     window.scrollTo(0, 0);
   }, [handle]);
   const [zoomed, setZoomed] = useState(false);
 
-  // Close the artwork lightbox on Escape.
   useEffect(() => {
     if (!zoomed) return;
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && setZoomed(false);
@@ -148,8 +223,15 @@ export default function GameDetailPage({
 
   if (game === undefined) {
     return (
-      <div className="mx-auto max-w-5xl px-4 py-10">
-        <div className="h-64 animate-pulse rounded-2xl bg-surface-2" />
+      <div className="mx-auto max-w-5xl px-4 py-8">
+        <div className="flex flex-col gap-6 sm:flex-row">
+          <div className="mx-auto h-64 w-48 shrink-0 animate-pulse rounded-2xl bg-surface-2 sm:mx-0" />
+          <div className="flex-1 space-y-3">
+            <div className="h-9 w-2/3 animate-pulse rounded-lg bg-surface-2" />
+            <div className="h-4 w-1/3 animate-pulse rounded bg-surface-2" />
+            <div className="h-20 animate-pulse rounded-xl bg-surface-2" />
+          </div>
+        </div>
       </div>
     );
   }
@@ -173,283 +255,244 @@ export default function GameDetailPage({
   const ingestedCount = game.rulebooks.filter((r) => r.isIngested).length;
   const rulebooks = game.rulebooks.filter((r) => r.kind !== "download");
   const downloads = game.rulebooks.filter((r) => r.kind === "download");
+  const chatHref = game.parent
+    ? `/boardgames/${game.parent.slug}/chat?module=${game._id}`
+    : `/boardgames/${game.slug}/chat`;
 
   return (
-    <div className="mx-auto max-w-5xl px-4 py-8">
+    <>
       {cover && <BackgroundCover url={cover} />}
 
-      {/* Breadcrumb */}
-      <nav className="fade-in mb-8 flex items-center gap-1.5 text-sm text-muted" aria-label="Breadcrumb">
-        <Link href="/boardgames" className="transition-colors hover:text-foreground">
-          Board Games
-        </Link>
-        <span>/</span>
-        {game.parent && (
-          <>
-            <Link
-              href={`/boardgames/${game.parent.slug}`}
-              className="max-w-[160px] truncate transition-colors hover:text-foreground"
-            >
-              {game.parent.title}
+      {/* Hero — light + warm */}
+      <section className="border-b border-border-muted">
+        <div className="mx-auto max-w-5xl px-4 pb-6 pt-5">
+          <nav
+            className="mb-5 flex items-center gap-1.5 text-sm text-muted"
+            aria-label="Breadcrumb"
+          >
+            <Link href="/boardgames" className="transition-colors hover:text-foreground">
+              Library
             </Link>
-            <span>/</span>
-          </>
-        )}
-        <span className="max-w-[220px] truncate font-medium text-foreground">
-          {game.title}
-        </span>
-      </nav>
+            <ChevronRight className="h-3.5 w-3.5 text-subtle" />
+            {game.parent && (
+              <>
+                <Link
+                  href={`/boardgames/${game.parent.slug}`}
+                  className="max-w-[160px] truncate transition-colors hover:text-foreground"
+                >
+                  {game.parent.title}
+                </Link>
+                <ChevronRight className="h-3.5 w-3.5 text-subtle" />
+              </>
+            )}
+            <span className="max-w-[220px] truncate font-semibold text-foreground">
+              {game.title}
+            </span>
+          </nav>
 
-      {/* Hero */}
-      <div className="animate-in mb-10 flex flex-col gap-8 sm:flex-row">
-        <div className="relative mx-auto w-fit shrink-0 sm:mx-0">
-          {cover ? (
-            <button
-              type="button"
-              onClick={() => setZoomed(true)}
-              aria-label="View full artwork"
-              className="zoom-in group block cursor-zoom-in overflow-hidden rounded-2xl bg-surface-2 shadow-lg"
-            >
-              {/* Fixed height with auto width so the box hugs the scaled
-                  image (a `w-fit` box + `max-h` would size to the image's
-                  intrinsic width, leaving empty space). The whole cover still
-                  shows, square or wide. */}
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={cover}
-                alt={game.title}
-                className="block h-52 w-auto transition-transform group-hover:scale-[1.03]"
-              />
-            </button>
-          ) : (
-            <div className="flex aspect-3/4 h-52 items-center justify-center rounded-2xl bg-surface-2 text-5xl opacity-40 shadow-lg">
-              🎲
+          <div className="flex flex-col gap-6 sm:flex-row sm:items-start sm:gap-8">
+            {/* Cover */}
+            <div className="animate-in mx-auto w-fit sm:mx-0 sm:shrink-0">
+              <div className="relative w-fit">
+                {cover ? (
+                  <button
+                    type="button"
+                    onClick={() => setZoomed(true)}
+                    aria-label="View full artwork"
+                    className="zoom-in group block cursor-zoom-in overflow-hidden rounded-2xl bg-surface-2 shadow-xl ring-1 ring-black/5"
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={cover}
+                      alt={game.title}
+                      className="block h-56 w-auto transition-transform duration-300 group-hover:scale-[1.03] sm:h-64"
+                    />
+                  </button>
+                ) : (
+                  <div className="flex aspect-3/4 h-56 items-center justify-center rounded-2xl bg-surface-2 text-subtle shadow-xl sm:h-64">
+                    <Die className="h-14 w-14" />
+                  </div>
+                )}
+                <FavoriteButton
+                  gameId={gameId}
+                  className="absolute right-2 top-2 z-10 rounded-full bg-background/80 p-2 text-muted shadow-md backdrop-blur transition-colors hover:bg-background hover:text-foreground"
+                />
+                {isAdmin && (
+                  <Link
+                    href={`/admin/boardgames/${gameId}`}
+                    aria-label="Edit game"
+                    title="Edit game"
+                    className="absolute bottom-2 right-2 z-10 rounded-full bg-background/80 p-2 text-muted shadow-md backdrop-blur transition-colors hover:bg-background hover:text-foreground"
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </Link>
+                )}
+              </div>
             </div>
-          )}
-          {/* Favourite heart pinned to the cover's top-right corner
-              (opposite the breadcrumb), out of the title row. */}
-          <FavoriteButton
-            gameId={gameId}
-            className="absolute right-2 top-2 z-10 rounded-full bg-background/75 p-2 text-muted shadow-md backdrop-blur transition-colors hover:bg-background hover:text-foreground"
-          />
-          {/* Admin edit pen in the cover's bottom-right corner. */}
-          {isAdmin && (
-            <Link
-              href={`/admin/boardgames/${gameId}`}
-              aria-label="Edit game"
-              title="Edit game"
-              className="absolute bottom-2 right-2 z-10 rounded-full bg-background/75 p-2 text-muted shadow-md backdrop-blur transition-colors hover:bg-background hover:text-foreground"
+
+            {/* Info */}
+            <div
+              className="animate-in min-w-0 flex-1"
+              style={{ animationDelay: "60ms" }}
             >
-              {PenIcon}
-            </Link>
-          )}
+              {game.parent && (
+                <Link
+                  href={`/boardgames/${game.parent.slug}`}
+                  className="mb-2 inline-flex items-center gap-1.5 rounded-full bg-accent-2/10 px-2.5 py-1 text-xs font-bold text-accent-2 transition-colors hover:bg-accent-2/20"
+                >
+                  <Puzzle className="h-3.5 w-3.5" />
+                  Expansion of {game.parent.title}
+                </Link>
+              )}
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                <h1 className="font-display text-3xl font-extrabold leading-tight tracking-tight sm:text-4xl">
+                  {game.title}
+                </h1>
+                {game.year && (
+                  <span className="rounded-full border border-border bg-surface-2 px-2.5 py-0.5 text-sm font-semibold text-muted">
+                    {game.year}
+                  </span>
+                )}
+              </div>
+              {game.designers.length > 0 && (
+                <p className="mt-1.5 text-sm text-muted">
+                  by {game.designers.join(", ")}
+                </p>
+              )}
+
+              <div className="mt-4 flex flex-wrap gap-2">
+                {players && (
+                  <FactChip icon={<Users className="h-4 w-4" />}>
+                    {players} players
+                  </FactChip>
+                )}
+                {playTime && (
+                  <FactChip icon={<Clock className="h-4 w-4" />}>{playTime}</FactChip>
+                )}
+                {game.minAge && (
+                  <FactChip icon={<Baby className="h-4 w-4" />}>
+                    Age {game.minAge}+
+                  </FactChip>
+                )}
+              </div>
+
+              {game.description && (
+                <div className="mt-4 max-w-2xl">
+                  <ExpandableText text={game.description} className="text-muted" />
+                </div>
+              )}
+
+              <div className="mt-5 flex flex-wrap gap-2.5">
+                {ingestedCount > 0 ? (
+                  <Link href={chatHref} className={buttonClasses("primary", "md")}>
+                    <MessageCircle className="h-4 w-4" />
+                    Chat about rules
+                  </Link>
+                ) : (
+                  <span className="inline-flex items-center rounded-xl border border-border bg-surface-2 px-4 py-2.5 text-sm text-muted">
+                    No rulebook ingested yet
+                  </span>
+                )}
+                <Link
+                  href={`/tuckbox?gameId=${gameId}`}
+                  className={buttonClasses("ghost", "md")}
+                >
+                  <Scissors className="h-4 w-4" />
+                  Make a tuckbox
+                </Link>
+              </div>
+            </div>
+          </div>
         </div>
+      </section>
 
-        <div className="min-w-0 flex-1">
-          {game.parent && (
-            <Link
-              href={`/boardgames/${game.parent.slug}`}
-              className="mb-1.5 inline-flex items-center gap-1.5 text-sm text-muted transition-colors hover:text-accent"
-            >
-              <span>🧩 Expansion of</span>
-              <span className="font-semibold text-foreground">
-                {game.parent.title}
-              </span>
-            </Link>
-          )}
-          <div className="mb-1 flex flex-wrap items-center gap-2">
-            <h1 className="text-3xl font-bold leading-tight">{game.title}</h1>
-            {game.year && (
-              <span className="shrink-0 rounded-full border border-border bg-surface px-3 py-1 text-sm font-medium text-muted">
-                {game.year}
-              </span>
-            )}
-          </div>
+      {/* Content */}
+      <div className="mx-auto max-w-5xl px-4 py-8">
+        <InlineAsk
+          gameId={gameId}
+          baseSlug={game.parent ? game.parent.slug : game.slug}
+          moduleId={game.parent ? game._id : undefined}
+        />
 
-          {game.designers.length > 0 && (
-            <p className="mb-5 text-sm text-muted">by {game.designers.join(", ")}</p>
-          )}
+        <BggStats bgg={game.bgg} />
 
-          <div className="mb-6 flex flex-wrap gap-3">
-            {players && <StatBadge icon={PeopleIcon} value={players} label="Players" />}
-            {playTime && <StatBadge icon={ClockIcon} value={playTime} label="Play Time" />}
-            {game.minAge && <StatBadge icon={AgeIcon} value={`${game.minAge}+`} label="Min Age" />}
-          </div>
+        <FaqAccordion gameId={gameId} />
 
-          <div className="flex flex-wrap gap-3">
-            {ingestedCount > 0 ? (
-              <Link
-                href={
-                  game.parent
-                    ? `/boardgames/${game.parent.slug}/chat?module=${game._id}`
-                    : `/boardgames/${game.slug}/chat`
-                }
-                className="inline-flex items-center gap-2 rounded-xl bg-accent px-4 py-2.5 text-sm font-semibold text-accent-foreground shadow-sm transition-opacity hover:opacity-90"
-              >
-                💬 Chat about rules
-              </Link>
-            ) : (
-              <span className="rounded-xl border border-border bg-surface-2 px-4 py-2.5 text-sm text-muted">
-                No rulebook ingested yet
-              </span>
-            )}
-            <Link
-              href={`/tuckbox?gameId=${gameId}`}
-              className="inline-flex items-center gap-2 rounded-xl border border-border bg-surface px-4 py-2.5 text-sm font-semibold text-muted transition-colors hover:bg-surface-2"
-            >
-              ✂️ Make a tuckbox
-            </Link>
-          </div>
-        </div>
+        {(game.designers.length > 0 ||
+          game.artists.length > 0 ||
+          game.publishers.length > 0 ||
+          game.categories.length > 0 ||
+          game.gameMechanics.length > 0) && (
+          <InfoSection title="Credits">
+            <div className="divide-y divide-border-muted overflow-hidden rounded-2xl border border-border bg-surface">
+              <CreditRow label="Designer" items={game.designers} />
+              <CreditRow label="Artist" items={game.artists} />
+              <CreditRow label="Publisher" items={game.publishers} />
+              <CreditRow label="Categories" items={game.categories} />
+              <CreditRow label="Mechanics" items={game.gameMechanics} />
+              {game.year && <CreditRow label="Year" text={game.year} />}
+            </div>
+          </InfoSection>
+        )}
+
+        <ComponentsList gameId={gameId} />
+
+        <GlossaryList gameId={gameId} />
+
+        {rulebooks.length > 0 && (
+          <InfoSection title="Rules & Guides" delay={0.1}>
+            <ul className="space-y-2">
+              {rulebooks.map((rb) => (
+                <li key={rb._id}>
+                  <FileRow
+                    href={rb.downloadUrl ?? "#"}
+                    label={rb.label}
+                    icon={<FileText className="h-4 w-4" />}
+                  />
+                </li>
+              ))}
+            </ul>
+          </InfoSection>
+        )}
+
+        {downloads.length > 0 && (
+          <InfoSection title="Downloads">
+            <ul className="space-y-2">
+              {downloads.map((dl) => (
+                <li key={dl._id}>
+                  <FileRow
+                    href={dl.downloadUrl ?? "#"}
+                    label={dl.label}
+                    icon={<Paperclip className="h-4 w-4" />}
+                  />
+                </li>
+              ))}
+            </ul>
+          </InfoSection>
+        )}
+
+        {game.expansions.length > 0 && (
+          <ExpansionsSection expansions={game.expansions} />
+        )}
+
+        <SimilarGames gameId={gameId} />
       </div>
 
-      {/* About */}
-      {game.description && (
-        <InfoSection title="About" delay={0.05}>
-          <ExpandableText text={game.description} className="text-muted" />
-        </InfoSection>
-      )}
-
-      {/* Metadata grid */}
-      {(game.categories.length > 0 ||
-        game.gameMechanics.length > 0 ||
-        game.artists.length > 0 ||
-        game.publishers.length > 0) && (
-        <div className="grid grid-cols-1 gap-x-8 sm:grid-cols-2">
-          {game.categories.length > 0 && (
-            <InfoSection title="Categories">
-              <ChipList items={game.categories} />
-            </InfoSection>
-          )}
-          {game.gameMechanics.length > 0 && (
-            <InfoSection title="Mechanics">
-              <ChipList items={game.gameMechanics} />
-            </InfoSection>
-          )}
-          {game.artists.length > 0 && (
-            <InfoSection title="Artists">
-              <p className="text-sm text-muted">{game.artists.join(", ")}</p>
-            </InfoSection>
-          )}
-          {game.publishers.length > 0 && (
-            <InfoSection title="Publishers">
-              <ExpandableInline items={game.publishers} />
-            </InfoSection>
-          )}
+      {/* Footer CTA — the page's single accent moment */}
+      <section className="bg-accent text-accent-foreground">
+        <div className="mx-auto flex max-w-5xl flex-col items-center gap-4 px-4 py-12 text-center sm:flex-row sm:justify-between sm:text-left">
+          <h2 className="font-display text-2xl font-extrabold leading-tight sm:text-3xl">
+            Stop flipping through the rulebook mid-game.
+          </h2>
+          <Link
+            href={ingestedCount > 0 ? chatHref : "/boardgames"}
+            className="inline-flex shrink-0 items-center gap-2 rounded-xl bg-surface px-5 py-3 text-sm font-bold text-foreground shadow-sm transition-transform hover:-translate-y-0.5"
+          >
+            <MessageCircle className="h-4 w-4" />
+            Get an answer
+          </Link>
         </div>
-      )}
-
-      {/* Rulebook files — downloadable, with a note when searchable in chat. */}
-      {rulebooks.length > 0 && (
-        <InfoSection title="Rules & Guides" delay={0.1}>
-          <ul className="space-y-1.5">
-            {rulebooks.map((rb) => (
-              <li key={rb._id}>
-                <a
-                  href={rb.downloadUrl ?? "#"}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center justify-between gap-3 rounded-lg border border-border bg-surface px-3 py-2 text-sm transition-colors hover:bg-surface-2"
-                >
-                  <span className="inline-flex min-w-0 items-center gap-2">
-                    <span>📖</span>
-                    <span className="truncate">{rb.label}</span>
-                  </span>
-                  <span className="shrink-0 text-accent" aria-label="Download">
-                    {DownloadIcon}
-                  </span>
-                </a>
-              </li>
-            ))}
-          </ul>
-        </InfoSection>
-      )}
-
-      {/* Downloads (add-ons) */}
-      {downloads.length > 0 && (
-        <InfoSection title="Downloads">
-          <ul className="space-y-1.5">
-            {downloads.map((dl) => (
-              <li key={dl._id}>
-                <a
-                  href={dl.downloadUrl ?? "#"}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center justify-between rounded-lg border border-border bg-surface px-3 py-2 text-sm transition-colors hover:bg-surface-2"
-                >
-                  <span className="inline-flex min-w-0 items-center gap-2">
-                    <span>📎</span>
-                    <span className="truncate">{dl.label}</span>
-                  </span>
-                  <span className="shrink-0 text-accent" aria-label="Download">
-                    {DownloadIcon}
-                  </span>
-                </a>
-              </li>
-            ))}
-          </ul>
-        </InfoSection>
-      )}
-
-      {/* Expansions */}
-      {game.expansions.length > 0 && (
-        <InfoSection title={`Expansions (${game.expansions.length})`} delay={0.15}>
-          {/* Mobile: a compact list. */}
-          <ul className="space-y-2 sm:hidden">
-            {game.expansions.map((exp) => (
-              <li key={exp._id}>
-                <Link
-                  href={`/boardgames/${exp.slug}`}
-                  className="group flex items-center gap-3 rounded-lg border border-border bg-surface p-2 transition-colors hover:bg-surface-2"
-                >
-                  <div className="h-12 w-12 shrink-0 overflow-hidden rounded-md bg-surface-2">
-                    {exp.thumbnailUrl || exp.imageUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={exp.thumbnailUrl ?? exp.imageUrl ?? ""}
-                        alt=""
-                        className="h-full w-full object-cover"
-                      />
-                    ) : (
-                      <div className="flex h-full w-full items-center justify-center opacity-40">
-                        🎲
-                      </div>
-                    )}
-                  </div>
-                  <span className="min-w-0 flex-1 truncate text-sm font-medium transition-colors group-hover:text-accent">
-                    {exp.title}
-                  </span>
-                </Link>
-              </li>
-            ))}
-          </ul>
-
-          {/* Desktop: a smaller cover grid. */}
-          <div className="hidden gap-3 sm:grid sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6">
-            {game.expansions.map((exp) => (
-              <Link key={exp._id} href={`/boardgames/${exp.slug}`} className="group flex flex-col">
-                <div className="aspect-3/4 overflow-hidden rounded-lg bg-surface-2 shadow-sm">
-                  {exp.thumbnailUrl || exp.imageUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={exp.thumbnailUrl ?? exp.imageUrl ?? ""}
-                      alt={exp.title}
-                      className="h-full w-full object-cover transition-transform group-hover:scale-105"
-                    />
-                  ) : (
-                    <div className="flex h-full w-full items-center justify-center text-xl opacity-40">
-                      🎲
-                    </div>
-                  )}
-                </div>
-                <p className="mt-1 truncate px-0.5 text-xs font-medium leading-tight">
-                  {exp.title}
-                </p>
-              </Link>
-            ))}
-          </div>
-        </InfoSection>
-      )}
+      </section>
 
       {/* Full-artwork lightbox */}
       {zoomed && cover && (
@@ -470,13 +513,10 @@ export default function GameDetailPage({
             aria-label="Close"
             className="absolute right-4 top-4 rounded-full bg-white/10 p-2 text-white transition-colors hover:bg-white/20"
           >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
-              <path d="M18 6 6 18" />
-              <path d="m6 6 12 12" />
-            </svg>
+            <X className="h-5 w-5" />
           </button>
         </div>
       )}
-    </div>
+    </>
   );
 }
