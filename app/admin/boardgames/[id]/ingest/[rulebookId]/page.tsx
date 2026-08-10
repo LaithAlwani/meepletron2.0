@@ -1,13 +1,13 @@
 "use client";
 
-import { use, useMemo, useState } from "react";
+import { use, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useQuery, useAction, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Doc, Id } from "@/convex/_generated/dataModel";
 import { ChunkCard, InsertChunkForm } from "@/components/admin/ChunkCard";
 import { friendlyError } from "@/lib/friendlyError";
-import { Plus, ChevronDown } from "lucide-react";
+import { Plus, ChevronDown, ArrowUp } from "lucide-react";
 
 type Filter = "all" | "flagged" | "excluded" | "edited";
 
@@ -496,6 +496,30 @@ export default function IngestReviewPage({
             </button>
           </div>
         )}
+
+      <ScrollTopButton />
     </div>
+  );
+}
+
+/** Floating "back to top" button — appears after scrolling down a bit. */
+function ScrollTopButton() {
+  const [show, setShow] = useState(false);
+  useEffect(() => {
+    const onScroll = () => setShow(window.scrollY > 400);
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+  if (!show) return null;
+  return (
+    <button
+      onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+      aria-label="Scroll to top"
+      title="Scroll to top"
+      className="fixed bottom-24 right-4 z-40 flex h-10 w-10 items-center justify-center rounded-full border border-border bg-surface text-muted shadow-lg transition-colors hover:bg-surface-2 hover:text-foreground"
+    >
+      <ArrowUp className="h-5 w-5" />
+    </button>
   );
 }
