@@ -271,6 +271,28 @@ body::before {
   animation: msg-in 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
+/* Slim, accent-tinted horizontal scrollbar for card rows (related games etc.). */
+.hscroll {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--accent) 45%, transparent) transparent;
+  -webkit-overflow-scrolling: touch;
+}
+.hscroll::-webkit-scrollbar {
+  height: 8px;
+}
+.hscroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.hscroll::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--accent) 40%, transparent);
+  border-radius: 9999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+.hscroll::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--accent) 70%, transparent);
+}
+
 /* --- Coming-soon splash --- */
 /* Gentle bob for the logo and floating game pieces. */
 @keyframes float {

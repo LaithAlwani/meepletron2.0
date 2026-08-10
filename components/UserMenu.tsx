@@ -11,6 +11,7 @@ import {
   Shield,
   type LucideIcon,
 } from "lucide-react";
+import { cn } from "@/lib/cn";
 
 export function UserMenu({
   initial,
@@ -36,11 +37,18 @@ export function UserMenu({
     };
   }, [open]);
 
-  const items: { href: string; label: string; icon: LucideIcon }[] = [
-    { href: "/chats", label: "Chats", icon: MessageCircle },
-    { href: "/favorites", label: "Favourites", icon: Heart },
+  // `bottomNav` items are already reachable from the mobile tab bar, so they're
+  // hidden here on small screens and only shown on desktop (which has no bar).
+  const items: {
+    href: string;
+    label: string;
+    icon: LucideIcon;
+    bottomNav?: boolean;
+  }[] = [
+    { href: "/chats", label: "Chats", icon: MessageCircle, bottomNav: true },
+    { href: "/favorites", label: "Favourites", icon: Heart, bottomNav: true },
     { href: "/tuckbox", label: "Tuckbox", icon: Scissors },
-    { href: "/profile", label: "Profile", icon: User },
+    { href: "/profile", label: "Profile", icon: User, bottomNav: true },
     { href: "/settings", label: "Settings", icon: Settings },
     ...(isAdmin
       ? [{ href: "/admin", label: "Admin", icon: Shield as LucideIcon }]
@@ -66,7 +74,10 @@ export function UserMenu({
                 key={it.href}
                 href={it.href}
                 onClick={() => setOpen(false)}
-                className="flex items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-medium text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
+                className={cn(
+                  "items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-medium text-muted transition-colors hover:bg-surface-2 hover:text-foreground",
+                  it.bottomNav ? "hidden sm:flex" : "flex",
+                )}
               >
                 <Icon className="h-4 w-4 shrink-0" />
                 {it.label}

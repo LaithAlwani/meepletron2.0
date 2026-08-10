@@ -5,7 +5,6 @@ import { BellRing } from "lucide-react";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
-import { stripIconBrackets } from "@/components/chat/MessageBubble";
 
 const heading =
   "mb-3 text-[11px] font-bold uppercase tracking-[0.16em] text-subtle";
@@ -107,37 +106,3 @@ export function RemindersList({ gameId }: { gameId: Id<"games"> }) {
   );
 }
 
-/** "Terms & icons" — rulebook-derived glossary. Collapsible past 8. */
-export function GlossaryList({ gameId }: { gameId: Id<"games"> }) {
-  const terms = useQuery(api.glossary.glossaryForGame, { gameId });
-  const [showAll, setShowAll] = useState(false);
-  if (!terms || terms.length === 0) return null;
-
-  const LIMIT = 8;
-  const shown = showAll ? terms : terms.slice(0, LIMIT);
-
-  return (
-    <section className="animate-in mb-8">
-      <h2 className={heading}>Terms &amp; icons</h2>
-      <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        {shown.map((t, i) => (
-          <div key={i} className="rounded-xl border border-border bg-surface p-3">
-            <dt className="text-sm font-semibold text-foreground">
-              {stripIconBrackets(t.term)}
-            </dt>
-            <dd className="mt-0.5 text-sm text-muted">
-              {stripIconBrackets(t.definition)}
-            </dd>
-          </div>
-        ))}
-      </dl>
-      {terms.length > LIMIT && (
-        <ShowMore
-          count={terms.length}
-          showAll={showAll}
-          onToggle={() => setShowAll((v) => !v)}
-        />
-      )}
-    </section>
-  );
-}

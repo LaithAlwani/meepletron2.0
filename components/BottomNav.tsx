@@ -8,7 +8,7 @@ import { cn } from "@/lib/cn";
 const TABS = [
   { href: "/boardgames", label: "Library", icon: LayoutGrid },
   { href: "/chats", label: "Chats", icon: MessageCircle },
-  { href: "/favorites", label: "Saved", icon: Heart },
+  { href: "/favorites", label: "Favourites", icon: Heart },
   { href: "/profile", label: "Profile", icon: User },
 ];
 

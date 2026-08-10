@@ -27,7 +27,6 @@ import { FaqAccordion } from "@/components/boardgames/FaqAccordion";
 import { BggStats } from "@/components/boardgames/BggStats";
 import {
   ComponentsList,
-  GlossaryList,
   RemindersList,
 } from "@/components/boardgames/GameReference";
 import { ExpandableText } from "@/components/ui/ExpandableText";
@@ -439,8 +438,6 @@ export default function GameDetailPage({
         )}
 
         <ComponentsList gameId={gameId} />
-
-        <GlossaryList gameId={gameId} />
 
         {rulebooks.length > 0 && (
           <InfoSection title="Rules & Guides" delay={0.1}>

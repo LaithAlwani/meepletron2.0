@@ -24,7 +24,7 @@ export function GameCard({
   return (
     <div
       style={{ animationDelay: `${Math.min(index, 10) * 40}ms` }}
-      className="animate-in group relative overflow-hidden rounded-2xl border border-border bg-surface shadow-sm transition-all duration-200 hover:-translate-y-1 hover:border-accent/50 hover:shadow-lg"
+      className="animate-in group relative w-full overflow-hidden rounded-2xl border border-border bg-surface shadow-sm transition-all duration-200 hover:-translate-y-1 hover:border-accent/50 hover:shadow-lg"
     >
       <Link href={`/boardgames/${game.slug}`} className="flex flex-col">
         <div className="relative aspect-[4/3] overflow-hidden bg-surface-2">

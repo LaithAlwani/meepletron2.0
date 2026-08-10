@@ -12,12 +12,14 @@ export function SimilarGames({ gameId }: { gameId: Id<"games"> }) {
 
   return (
     <section className="animate-in mb-8">
-      <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted">
+      <h2 className="mb-3 text-[11px] font-bold uppercase tracking-[0.16em] text-subtle">
         You might also like
       </h2>
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+      <div className="hscroll -mx-4 flex snap-x scroll-px-4 gap-3 overflow-x-auto px-4 pb-3">
         {games.map((g, i) => (
-          <GameCard key={g._id} game={g} index={i} />
+          <div key={g._id} className="w-40 shrink-0 snap-start sm:w-44">
+            <GameCard game={g} index={i} />
+          </div>
         ))}
       </div>
     </section>
