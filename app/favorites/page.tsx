@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { MessageCircle } from "lucide-react";
 import {
   useQuery,
   Authenticated,
@@ -8,21 +9,23 @@ import {
   AuthLoading,
 } from "convex/react";
 import { api } from "@/convex/_generated/api";
+import { Die } from "@/components/ui/icons";
+import { buttonClasses } from "@/components/ui/Button";
+import { Skeleton } from "@/components/ui/Surface";
 
 export default function FavoritesPage() {
   return (
     <div className="mx-auto max-w-3xl px-4 py-8">
-      <h1 className="mb-4 text-2xl font-bold">Your favourites</h1>
+      <h1 className="font-display mb-5 text-3xl font-extrabold tracking-tight">
+        Your favourites
+      </h1>
       <AuthLoading>
-        <p className="text-muted">Loading…</p>
+        <FavSkeleton />
       </AuthLoading>
       <Unauthenticated>
-        <div className="rounded-xl border border-border bg-surface p-6 text-center">
+        <div className="rounded-2xl border border-border bg-surface p-6 text-center">
           <p className="text-sm text-muted">Sign in to save favourite games.</p>
-          <Link
-            href="/auth"
-            className="mt-3 inline-block rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-accent-foreground"
-          >
+          <Link href="/auth" className={`mt-4 ${buttonClasses("primary", "sm")}`}>
             Sign in
           </Link>
         </div>
@@ -34,37 +37,36 @@ export default function FavoritesPage() {
   );
 }
 
-const ChatBubbleIcon = (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
-    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-  </svg>
-);
+function FavSkeleton() {
+  return (
+    <ul className="space-y-3">
+      {Array.from({ length: 4 }).map((_, i) => (
+        <li
+          key={i}
+          className="flex items-center gap-3 rounded-2xl border border-border bg-surface p-3"
+        >
+          <Skeleton className="h-14 w-14 shrink-0 rounded-xl" />
+          <Skeleton className="h-4 flex-1" />
+          <Skeleton className="h-9 w-20 shrink-0 rounded-xl" />
+        </li>
+      ))}
+    </ul>
+  );
+}
 
 function FavoritesList() {
   const favorites = useQuery(api.favorites.list);
 
-  if (favorites === undefined) {
-    return (
-      <ul className="space-y-3">
-        {Array.from({ length: 4 }).map((_, i) => (
-          <li
-            key={i}
-            className="flex items-center gap-3 rounded-xl border border-border bg-surface p-3"
-          >
-            <div className="h-14 w-14 shrink-0 animate-pulse rounded-md bg-surface-2" />
-            <div className="h-4 flex-1 animate-pulse rounded bg-surface-2" />
-            <div className="h-8 w-16 shrink-0 animate-pulse rounded-lg bg-surface-2" />
-          </li>
-        ))}
-      </ul>
-    );
-  }
+  if (favorites === undefined) return <FavSkeleton />;
 
   if (favorites.length === 0) {
     return (
-      <div className="rounded-xl border border-dashed border-border p-8 text-center text-muted">
-        <p>No favourites yet.</p>
-        <Link href="/boardgames" className="mt-2 inline-block text-accent hover:underline">
+      <div className="rounded-2xl border border-dashed border-border p-10 text-center text-muted">
+        <p className="font-medium">No favourites yet.</p>
+        <Link
+          href="/boardgames"
+          className="mt-2 inline-block font-semibold text-accent hover:underline"
+        >
           Browse games
         </Link>
       </div>
@@ -76,13 +78,13 @@ function FavoritesList() {
       {favorites.map((f) => (
         <li
           key={f.gameId}
-          className="flex items-center gap-3 rounded-xl border border-border bg-surface p-3"
+          className="flex items-center gap-3 rounded-2xl border border-border bg-surface p-3 transition-colors hover:border-accent/40"
         >
           <Link
             href={`/boardgames/${f.slug}`}
             className="flex min-w-0 flex-1 items-center gap-3"
           >
-            <div className="h-14 w-14 shrink-0 overflow-hidden rounded-md bg-surface-2">
+            <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-surface-2 text-subtle">
               {f.thumbnailUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
@@ -91,18 +93,16 @@ function FavoritesList() {
                   className="h-full w-full object-cover"
                 />
               ) : (
-                <div className="flex h-full w-full items-center justify-center opacity-40">
-                  🎲
-                </div>
+                <Die className="h-6 w-6" />
               )}
             </div>
-            <span className="truncate font-medium">{f.title}</span>
+            <span className="font-display truncate font-bold">{f.title}</span>
           </Link>
           <Link
             href={`/boardgames/${f.slug}/chat`}
-            className="flex shrink-0 items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-accent transition-colors hover:bg-surface-2"
+            className="flex shrink-0 items-center gap-1.5 rounded-xl border border-border px-3.5 py-2 text-xs font-semibold text-accent transition-colors hover:bg-surface-2"
           >
-            {ChatBubbleIcon}
+            <MessageCircle className="h-4 w-4" />
             Chat
           </Link>
         </li>

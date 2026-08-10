@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { ChevronDown } from "lucide-react";
 
 const STEPS: { title: string; body: string }[] = [
   {
@@ -53,9 +54,11 @@ export function AssemblyInstructions() {
       <button
         type="button"
         onClick={() => setOpen((current) => !current)}
-        className="text-sm font-medium text-primary hover:underline flex items-center gap-2"
+        className="flex items-center gap-1.5 text-sm font-semibold text-accent hover:underline"
       >
-        <span>{open ? "▾" : "▸"}</span>
+        <ChevronDown
+          className={`h-4 w-4 transition-transform ${open ? "" : "-rotate-90"}`}
+        />
         How to assemble the box
       </button>
       {open && (

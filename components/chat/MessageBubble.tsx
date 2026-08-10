@@ -2,41 +2,13 @@
 
 import { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
+import { Copy, Check, ThumbsUp, ThumbsDown } from "lucide-react";
 import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Doc } from "@/convex/_generated/dataModel";
 import { usePreferences } from "@/lib/usePreferences";
 
 type Annotation = NonNullable<Doc<"messages">["annotations"]>[number];
-
-/* ---------- action-row icons ---------- */
-const CopyIcon = (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5">
-    <rect x="9" y="9" width="13" height="13" rx="2" />
-    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-  </svg>
-);
-const CheckIcon = (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5">
-    <path d="M20 6 9 17l-5-5" />
-  </svg>
-);
-function ThumbUpIcon({ filled }: { filled: boolean }) {
-  return (
-    <svg viewBox="0 0 24 24" fill={filled ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5">
-      <path d="M7 10v12" />
-      <path d="M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h2.76a2 2 0 0 0 1.79-1.11L12 2a3.13 3.13 0 0 1 3 3.88Z" />
-    </svg>
-  );
-}
-function ThumbDownIcon({ filled }: { filled: boolean }) {
-  return (
-    <svg viewBox="0 0 24 24" fill={filled ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5">
-      <path d="M17 14V2" />
-      <path d="M9 18.12 10 14H4.17a2 2 0 0 1-1.92-2.56l2.33-8A2 2 0 0 1 6.5 2H20a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-2.76a2 2 0 0 0-1.79 1.11L12 22a3.13 3.13 0 0 1-3-3.88Z" />
-    </svg>
-  );
-}
 
 function MessageActions({ message }: { message: Doc<"messages"> }) {
   const rate = useMutation(api.chat.rateMessage);
@@ -62,23 +34,33 @@ function MessageActions({ message }: { message: Doc<"messages"> }) {
   return (
     <div className="mt-2 flex items-center gap-0.5 opacity-70 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
       <button onClick={copy} aria-label="Copy answer" className={`${base} ${idle}`}>
-        {copied ? <span className="text-green-600 dark:text-green-400">{CheckIcon}</span> : CopyIcon}
+        {copied ? (
+          <Check className="h-3.5 w-3.5 text-accent-2" />
+        ) : (
+          <Copy className="h-3.5 w-3.5" />
+        )}
       </button>
       <button
         onClick={() => rate({ messageId: message._id, rating: "down" })}
         aria-label="Not helpful"
         aria-pressed={rating === "down"}
-        className={`${base} ${rating === "down" ? "text-red-600 dark:text-red-400" : idle}`}
+        className={`${base} ${rating === "down" ? "text-red-500" : idle}`}
       >
-        <ThumbDownIcon filled={rating === "down"} />
+        <ThumbsDown
+          className="h-3.5 w-3.5"
+          fill={rating === "down" ? "currentColor" : "none"}
+        />
       </button>
       <button
         onClick={() => rate({ messageId: message._id, rating: "up" })}
         aria-label="Helpful"
         aria-pressed={rating === "up"}
-        className={`${base} ${rating === "up" ? "text-green-600 dark:text-green-400" : idle}`}
+        className={`${base} ${rating === "up" ? "text-accent-2" : idle}`}
       >
-        <ThumbUpIcon filled={rating === "up"} />
+        <ThumbsUp
+          className="h-3.5 w-3.5"
+          fill={rating === "up" ? "currentColor" : "none"}
+        />
       </button>
     </div>
   );

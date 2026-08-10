@@ -375,6 +375,9 @@ export const finalizeCommit = internalMutation({
       await ctx.scheduler.runAfter(0, internal.glossary.generateForGame, {
         gameId: rb.gameId,
       });
+      await ctx.scheduler.runAfter(0, internal.reminders.generateForGame, {
+        gameId: rb.gameId,
+      });
     }
   },
 });

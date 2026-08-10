@@ -77,7 +77,7 @@ export default function ComingSoonPage() {
 
       {/* Wordmark */}
       <h1
-        className="animate-in text-shimmer text-balance text-5xl font-extrabold tracking-tight sm:text-7xl"
+        className="font-display animate-in text-shimmer text-balance text-5xl font-extrabold tracking-tight sm:text-7xl"
         style={{ animationDelay: "80ms" }}
       >
         Meepletron

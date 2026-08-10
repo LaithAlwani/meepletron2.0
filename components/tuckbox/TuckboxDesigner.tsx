@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Scissors } from "lucide-react";
 import { computeLayout, getPanel } from "@/lib/tuckbox/geometry";
 import { renderTuckboxPdf, triggerDownload } from "@/lib/tuckbox/pdf";
 import {
@@ -315,8 +316,8 @@ export function TuckboxDesigner({
     <div className="grid grid-cols-1 lg:grid-cols-[440px_1fr] gap-4 lg:gap-6 max-w-7xl mx-auto p-4 sm:p-6 overflow-x-hidden">
       <div className="space-y-4 lg:space-y-6 order-2 lg:order-1">
         <header className="hidden lg:block">
-          <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight text-foreground">
-            <span aria-hidden>✂️</span> Tuckbox Generator
+          <h1 className="font-display flex items-center gap-2 text-2xl font-extrabold tracking-tight text-foreground">
+            <Scissors className="h-6 w-6 text-accent" /> Tuckbox Generator
           </h1>
           <p className="text-sm text-muted mt-1">
             Set your card size, add cover art to each face, then download a

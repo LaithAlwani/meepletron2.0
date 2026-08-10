@@ -7,24 +7,27 @@ import {
   Unauthenticated,
   AuthLoading,
 } from "convex/react";
+import { ChevronRight } from "lucide-react";
 import { api } from "@/convex/_generated/api";
+import { Die } from "@/components/ui/icons";
+import { buttonClasses } from "@/components/ui/Button";
+import { Skeleton } from "@/components/ui/Surface";
 
 export default function ChatsPage() {
   return (
     <div className="mx-auto max-w-3xl px-4 py-8">
-      <h1 className="mb-4 text-2xl font-bold">Your chats</h1>
+      <h1 className="font-display mb-5 text-3xl font-extrabold tracking-tight">
+        Your chats
+      </h1>
       <AuthLoading>
         <ChatsSkeleton />
       </AuthLoading>
       <Unauthenticated>
-        <div className="rounded-xl border border-border bg-surface p-6 text-center">
+        <div className="rounded-2xl border border-border bg-surface p-6 text-center">
           <p className="text-sm text-muted">
             Sign in to see your rulebook chats.
           </p>
-          <Link
-            href="/auth"
-            className="mt-3 inline-block rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-accent-foreground"
-          >
+          <Link href="/auth" className={`mt-4 ${buttonClasses("primary", "sm")}`}>
             Sign in
           </Link>
         </div>
@@ -36,24 +39,18 @@ export default function ChatsPage() {
   );
 }
 
-const ChevronIcon = (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4 shrink-0 text-subtle">
-    <path d="m9 18 6-6-6-6" />
-  </svg>
-);
-
 function ChatsSkeleton() {
   return (
     <ul className="space-y-3">
       {Array.from({ length: 5 }).map((_, i) => (
         <li
           key={i}
-          className="flex items-center gap-3 rounded-xl border border-border bg-surface p-3"
+          className="flex items-center gap-3 rounded-2xl border border-border bg-surface p-3"
         >
-          <div className="h-14 w-14 shrink-0 animate-pulse rounded-md bg-surface-2" />
+          <Skeleton className="h-14 w-14 shrink-0 rounded-xl" />
           <div className="flex-1 space-y-2">
-            <div className="h-4 w-1/3 animate-pulse rounded bg-surface-2" />
-            <div className="h-3 w-2/3 animate-pulse rounded bg-surface-2" />
+            <Skeleton className="h-4 w-1/3" />
+            <Skeleton className="h-3 w-2/3" />
           </div>
         </li>
       ))}
@@ -85,9 +82,12 @@ function ChatsList() {
 
   if (chats.length === 0) {
     return (
-      <div className="rounded-xl border border-dashed border-border p-8 text-center text-muted">
-        <p>No chats yet.</p>
-        <Link href="/boardgames" className="mt-2 inline-block text-accent hover:underline">
+      <div className="rounded-2xl border border-dashed border-border p-10 text-center text-muted">
+        <p className="font-medium">No chats yet.</p>
+        <Link
+          href="/boardgames"
+          className="mt-2 inline-block font-semibold text-accent hover:underline"
+        >
           Browse games to start one
         </Link>
       </div>
@@ -99,7 +99,7 @@ function ChatsList() {
       {chats.map((c) => {
         const row = (
           <>
-            <div className="h-14 w-14 shrink-0 overflow-hidden rounded-md bg-surface-2">
+            <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-surface-2 text-subtle">
               {c.thumbnailUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
@@ -108,14 +108,14 @@ function ChatsList() {
                   className="h-full w-full object-cover"
                 />
               ) : (
-                <div className="flex h-full w-full items-center justify-center opacity-40">
-                  🎲
+                <div className="flex h-full w-full items-center justify-center">
+                  <Die className="h-6 w-6" />
                 </div>
               )}
             </div>
             <div className="min-w-0 flex-1">
               <div className="flex items-center justify-between gap-2">
-                <span className="truncate font-medium">{c.gameTitle}</span>
+                <span className="font-display truncate font-bold">{c.gameTitle}</span>
                 <span className="shrink-0 text-xs text-subtle">
                   {relativeTime(c.lastMessageAt)}
                 </span>
@@ -134,14 +134,14 @@ function ChatsList() {
             {c.gameSlug ? (
               <Link
                 href={`/boardgames/${c.gameSlug}/chat`}
-                className="flex items-center gap-3 rounded-xl border border-border bg-surface p-3 transition-colors hover:bg-surface-2"
+                className="flex items-center gap-3 rounded-2xl border border-border bg-surface p-3 transition-colors hover:border-accent/40 hover:bg-surface-2"
               >
                 {row}
-                {ChevronIcon}
+                <ChevronRight className="h-4 w-4 shrink-0 text-subtle" />
               </Link>
             ) : (
               // Game was removed — keep the row visible but non-clickable.
-              <div className="flex items-center gap-3 rounded-xl border border-border bg-surface p-3 opacity-60">
+              <div className="flex items-center gap-3 rounded-2xl border border-border bg-surface p-3 opacity-60">
                 {row}
               </div>
             )}

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import Image from "next/image";
+import { LayoutGrid, Heart } from "lucide-react";
 
 export const metadata: Metadata = {
   title: "Page not found",
@@ -17,7 +18,7 @@ export default function NotFound() {
           </span>
         </div>
 
-        <h1 className="mb-3 text-3xl font-bold sm:text-4xl">You drew an empty card</h1>
+        <h1 className="font-display mb-3 text-3xl font-extrabold sm:text-4xl">You drew an empty card</h1>
         <p className="mb-8 text-sm text-muted sm:text-base">
           This page isn&apos;t in the rulebook. Maybe it rolled off the table — or it
           never existed at all. Pick a path and keep playing.
@@ -28,13 +29,13 @@ export default function NotFound() {
             href="/boardgames"
             className="inline-flex items-center justify-center gap-2 rounded-xl bg-accent px-5 py-2.5 text-sm font-semibold text-accent-foreground shadow-sm transition-opacity hover:opacity-90"
           >
-            📖 Browse board games
+            <LayoutGrid className="h-4 w-4" /> Browse board games
           </Link>
           <Link
             href="/favorites"
             className="inline-flex items-center justify-center gap-2 rounded-xl border border-border bg-surface px-5 py-2.5 text-sm font-semibold transition-colors hover:bg-surface-2"
           >
-            💬 Your favourites
+            <Heart className="h-4 w-4" /> Your favourites
           </Link>
         </div>
       </div>

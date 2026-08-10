@@ -1,14 +1,8 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { Send } from "lucide-react";
 import { usePreferences } from "@/lib/usePreferences";
-
-const SendIcon = (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4.5 w-4.5">
-    <path d="M22 2 11 13" />
-    <path d="M22 2 15 22l-4-9-9-4 20-7z" />
-  </svg>
-);
 
 export function ChatInput({
   onSend,
@@ -74,7 +68,7 @@ export function ChatInput({
         aria-label="Send"
         className="flex shrink-0 items-center justify-center rounded-xl bg-accent p-2.5 text-accent-foreground shadow-sm transition-opacity hover:opacity-90 disabled:opacity-40"
       >
-        {SendIcon}
+        <Send className="h-[18px] w-[18px]" />
       </button>
     </form>
   );

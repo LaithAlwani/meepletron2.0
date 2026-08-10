@@ -28,6 +28,7 @@ import { BggStats } from "@/components/boardgames/BggStats";
 import {
   ComponentsList,
   GlossaryList,
+  RemindersList,
 } from "@/components/boardgames/GameReference";
 import { ExpandableText } from "@/components/ui/ExpandableText";
 import { buttonClasses } from "@/components/ui/Button";
@@ -417,6 +418,8 @@ export default function GameDetailPage({
         <BggStats bgg={game.bgg} />
 
         <FaqAccordion gameId={gameId} />
+
+        <RemindersList gameId={gameId} />
 
         {(game.designers.length > 0 ||
           game.artists.length > 0 ||

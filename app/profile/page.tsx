@@ -16,6 +16,7 @@ import type { Doc } from "@/convex/_generated/dataModel";
 import { useToast } from "@/components/ui/Toast";
 import { useConfirm } from "@/components/ui/Confirm";
 import { InstallPrompt } from "@/components/InstallPrompt";
+import { Die } from "@/components/ui/icons";
 
 const icon = "h-4 w-4";
 const CalendarIcon = (
@@ -121,9 +122,9 @@ function ProfileBody() {
       {/* Avatar card */}
       <div className="mb-6 flex flex-col items-center rounded-2xl border border-border-muted bg-surface p-8 text-center shadow-sm">
         <div className="mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-primary/15 text-3xl font-bold text-primary">
-          {isGuest ? "🎲" : initial}
+          {isGuest ? <Die className="h-8 w-8" /> : initial}
         </div>
-        <h1 className="text-xl font-bold text-foreground">{fullName}</h1>
+        <h1 className="font-display text-xl font-extrabold text-foreground">{fullName}</h1>
         <p className="mt-0.5 text-sm text-subtle">{me.email ?? "—"}</p>
         <div className="mt-3 flex items-center gap-1.5 text-xs text-subtle">
           {CalendarIcon}

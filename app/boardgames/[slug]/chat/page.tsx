@@ -33,15 +33,12 @@ import { GuestBanner } from "@/components/chat/GuestBanner";
 import { ThinkingIndicator } from "@/components/chat/ThinkingIndicator";
 import { BackgroundCover } from "@/components/boardgames/BackgroundCover";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { ArrowLeft } from "lucide-react";
+import { Die } from "@/components/ui/icons";
 
 const SITE_URL = process.env.NEXT_PUBLIC_CONVEX_SITE_URL!;
 
-const BackIcon = (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-[18px] w-[18px]">
-    <path d="m12 19-7-7 7-7" />
-    <path d="M19 12H5" />
-  </svg>
-);
+const BackIcon = <ArrowLeft className="h-[18px] w-[18px]" />;
 
 const SKELETON_ROWS: { side: "l" | "r"; w: string }[] = [
   { side: "l", w: "w-64" },
@@ -391,10 +388,12 @@ function ChatView({ gameId, slug }: { gameId: Id<"games">; slug: string }) {
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={coverUrl} alt="" className="h-full w-full object-cover" />
                 ) : (
-                  <div className="flex h-full w-full items-center justify-center">🎲</div>
+                  <div className="flex h-full w-full items-center justify-center text-subtle">
+                    <Die className="h-5 w-5" />
+                  </div>
                 )}
               </div>
-              <h1 className="truncate font-semibold transition-colors group-hover:text-accent">
+              <h1 className="font-display truncate font-bold transition-colors group-hover:text-accent">
                 {game?.title ?? "Game"}
               </h1>
             </Link>
@@ -447,13 +446,13 @@ function ChatView({ gameId, slug }: { gameId: Id<"games">; slug: string }) {
                     className="h-full w-full object-cover"
                   />
                 ) : (
-                  <div className="flex h-full w-full items-center justify-center text-4xl opacity-40">
-                    🎲
+                  <div className="flex h-full w-full items-center justify-center text-subtle">
+                    <Die className="h-9 w-9" />
                   </div>
                 )}
               </div>
               <div>
-                <p className="font-semibold">
+                <p className="font-display text-lg font-bold">
                   Ask about {game?.title ?? "this game"}
                 </p>
                 <p className="text-sm text-muted">

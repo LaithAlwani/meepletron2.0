@@ -20,7 +20,9 @@ function TuckboxInner() {
   return (
     <div className="mx-auto max-w-6xl px-4 py-8">
       <header className="mb-6">
-        <h1 className="text-2xl font-bold">Tuckbox generator</h1>
+        <h1 className="font-display text-3xl font-extrabold tracking-tight">
+          Tuckbox generator
+        </h1>
         <p className="mt-1 text-sm text-muted">
           Design a print-ready card box.
           {game

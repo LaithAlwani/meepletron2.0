@@ -234,6 +234,15 @@ export default defineSchema({
     order: v.number(),
   }).index("by_game", ["gameId"]),
 
+  // Rulebook-derived "rules refresher" — easily-forgotten nitty-gritty facts
+  // (starting resources, tie-breakers, scoring specifics, turn edge-cases).
+  gameReminders: defineTable({
+    gameId: v.id("games"),
+    label: v.string(),
+    detail: v.string(),
+    order: v.number(),
+  }).index("by_game", ["gameId"]),
+
   // --- ingestion draft (3 tables, keyed on a rulebook) ---
   migrationDrafts: defineTable({
     rulebookId: v.id("rulebooks"),

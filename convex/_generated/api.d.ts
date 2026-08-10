@@ -39,6 +39,7 @@ import type * as lib_slug from "../lib/slug.js";
 import type * as maintenance from "../maintenance.js";
 import type * as migrations from "../migrations.js";
 import type * as rag from "../rag.js";
+import type * as reminders from "../reminders.js";
 import type * as rulebooks from "../rulebooks.js";
 import type * as search from "../search.js";
 import type * as seed from "../seed.js";
@@ -84,6 +85,7 @@ declare const fullApi: ApiFromModules<{
   maintenance: typeof maintenance;
   migrations: typeof migrations;
   rag: typeof rag;
+  reminders: typeof reminders;
   rulebooks: typeof rulebooks;
   search: typeof search;
   seed: typeof seed;
