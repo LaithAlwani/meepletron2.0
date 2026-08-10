@@ -137,7 +137,7 @@ export default function IngestReviewPage({
         ← Back to game
       </Link>
 
-      <h2 className="font-semibold">Rulebook ingestion</h2>
+      <h2 className="font-display text-lg font-bold">Rulebook ingestion</h2>
 
       {/* Status */}
       {status === undefined ? (

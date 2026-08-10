@@ -10,7 +10,7 @@ export default function AdminSearchesPage() {
 
   return (
     <div>
-      <h2 className="mb-3 font-semibold">Top searches</h2>
+      <h2 className="mb-3 font-display text-lg font-bold">Top searches</h2>
       {searches.length === 0 ? (
         <p className="text-muted">No searches logged yet.</p>
       ) : (

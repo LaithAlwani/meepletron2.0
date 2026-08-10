@@ -37,7 +37,7 @@ export default function AdminUsersPage() {
 
   return (
     <div>
-      <h2 className="mb-3 font-semibold">Users ({users.length})</h2>
+      <h2 className="mb-3 font-display text-lg font-bold">Users ({users.length})</h2>
       <div className="overflow-x-auto rounded-xl border border-border">
         <table className="w-full text-sm">
           <thead className="bg-surface-2 text-left text-muted">

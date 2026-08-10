@@ -223,14 +223,6 @@ export default defineSchema({
     vote: v.union(v.literal("up"), v.literal("down")),
   }).index("by_user_and_faq", ["userId", "faqId"]),
 
-  // Rulebook-derived glossary of terms/icons (keyed on the base game).
-  glossaryTerms: defineTable({
-    gameId: v.id("games"),
-    term: v.string(),
-    definition: v.string(),
-    order: v.number(),
-  }).index("by_game", ["gameId"]),
-
   // Rulebook-derived component list ("what's in the box"), keyed on the base game.
   gameComponents: defineTable({
     gameId: v.id("games"),

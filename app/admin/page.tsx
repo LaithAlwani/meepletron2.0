@@ -3,7 +3,21 @@
 import { useMemo } from "react";
 import Link from "next/link";
 import { useQuery } from "convex/react";
+import {
+  Users,
+  Puzzle,
+  Ghost,
+  MessagesSquare,
+  User,
+  Bot,
+  Calendar,
+  TrendingUp,
+  DollarSign,
+} from "lucide-react";
+import type { ComponentType } from "react";
 import { api } from "@/convex/_generated/api";
+import { Die } from "@/components/ui/icons";
+import { buttonClasses } from "@/components/ui/Button";
 
 const num = (n: number) => n.toLocaleString();
 const compact = (n: number) =>
@@ -12,14 +26,14 @@ const usd = (n: number) =>
   `$${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 function StatCard({
-  icon,
+  icon: Icon,
   tint,
   value,
   label,
   hint,
   href,
 }: {
-  icon: string;
+  icon: ComponentType<{ className?: string }>;
   tint: string;
   value: string;
   label: string;
@@ -28,10 +42,10 @@ function StatCard({
 }) {
   const inner = (
     <div className="h-full rounded-2xl border border-border bg-surface p-5 shadow-sm transition-colors hover:bg-surface-2">
-      <div className={`mb-4 flex h-11 w-11 items-center justify-center rounded-full text-lg ${tint}`}>
-        {icon}
+      <div className={`mb-4 flex h-11 w-11 items-center justify-center rounded-full ${tint}`}>
+        <Icon className="h-5 w-5" />
       </div>
-      <div className="text-2xl font-bold sm:text-3xl">{value}</div>
+      <div className="font-display text-2xl font-bold sm:text-3xl">{value}</div>
       <div className="mt-1 text-sm text-muted">{label}</div>
       {hint && <div className="mt-1 text-xs text-subtle">{hint}</div>}
     </div>
@@ -64,7 +78,7 @@ export default function AdminOverviewPage() {
         </h2>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
           <StatCard
-            icon="👥"
+            icon={Users}
             tint="bg-blue-500/15 text-blue-600 dark:text-blue-400"
             value={dash(num(stats?.users ?? 0))}
             label="Users"
@@ -76,21 +90,21 @@ export default function AdminOverviewPage() {
             href="/admin/users"
           />
           <StatCard
-            icon="🎲"
+            icon={Die}
             tint="bg-purple-500/15 text-purple-600 dark:text-purple-400"
             value={dash(num(stats?.baseGames ?? 0))}
             label="Base games"
             href="/admin/boardgames"
           />
           <StatCard
-            icon="🧩"
+            icon={Puzzle}
             tint="bg-amber-500/15 text-amber-600 dark:text-amber-400"
             value={dash(num(stats?.expansions ?? 0))}
             label="Expansions"
             href="/admin/boardgames"
           />
           <StatCard
-            icon="🕵️"
+            icon={Ghost}
             tint="bg-slate-500/15 text-slate-600 dark:text-slate-400"
             value={guestStats === undefined ? "—" : num(guestStats.active)}
             label="Active guests"
@@ -111,19 +125,19 @@ export default function AdminOverviewPage() {
         </h2>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
           <StatCard
-            icon="💬"
+            icon={MessagesSquare}
             tint="bg-indigo-500/15 text-indigo-600 dark:text-indigo-400"
             value={dash(num(stats?.messages.total ?? 0))}
             label="All messages"
           />
           <StatCard
-            icon="🙋"
+            icon={User}
             tint="bg-sky-500/15 text-sky-600 dark:text-sky-400"
             value={dash(num(stats?.messages.byUser ?? 0))}
             label="From users"
           />
           <StatCard
-            icon="🤖"
+            icon={Bot}
             tint="bg-violet-500/15 text-violet-600 dark:text-violet-400"
             value={dash(num(stats?.messages.byAi ?? 0))}
             label="From the AI"
@@ -138,7 +152,7 @@ export default function AdminOverviewPage() {
         </h2>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
           <StatCard
-            icon="📅"
+            icon={Calendar}
             tint="bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
             value={dash(
               compact((stats?.tokensMonth.input ?? 0) + (stats?.tokensMonth.output ?? 0)),
@@ -152,7 +166,7 @@ export default function AdminOverviewPage() {
             href="/admin/usage"
           />
           <StatCard
-            icon="📈"
+            icon={TrendingUp}
             tint="bg-teal-500/15 text-teal-600 dark:text-teal-400"
             value={dash(
               compact((stats?.tokensTotal.input ?? 0) + (stats?.tokensTotal.output ?? 0)),
@@ -166,7 +180,7 @@ export default function AdminOverviewPage() {
             href="/admin/usage"
           />
           <StatCard
-            icon="💵"
+            icon={DollarSign}
             tint="bg-green-500/15 text-green-600 dark:text-green-400"
             value={dash(usd(stats?.costMonth ?? 0))}
             label="Est. cost this month"
@@ -177,13 +191,13 @@ export default function AdminOverviewPage() {
       </section>
 
       <div className="rounded-2xl border border-border bg-surface p-5">
-        <h2 className="font-semibold">Manage content</h2>
+        <h2 className="font-display text-lg font-bold">Manage content</h2>
         <p className="mt-1 text-sm text-muted">
           Add games, upload rulebooks, and run ingestion.
         </p>
         <Link
           href="/admin/boardgames"
-          className="mt-3 inline-block rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-accent-foreground"
+          className={`mt-3 ${buttonClasses("primary", "sm")}`}
         >
           Go to games
         </Link>

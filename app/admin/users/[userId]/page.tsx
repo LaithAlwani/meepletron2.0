@@ -63,7 +63,7 @@ export default function AdminUserDetailPage({
       </Link>
 
       <div className="rounded-xl border border-border bg-surface p-5">
-        <h2 className="text-lg font-semibold">
+        <h2 className="font-display text-lg font-bold">
           {user.name || user.email || "Unnamed user"}
         </h2>
         {user.email && <p className="text-sm text-muted">{user.email}</p>}

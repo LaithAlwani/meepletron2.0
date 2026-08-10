@@ -85,9 +85,6 @@ export function UserMenu({
           })}
 
           <div className="my-1 border-t border-border" />
-          <p className="px-3 pb-1 pt-1 text-xs font-semibold uppercase tracking-wide text-subtle">
-            Theme
-          </p>
           <ThemeMenu />
         </div>
       )}

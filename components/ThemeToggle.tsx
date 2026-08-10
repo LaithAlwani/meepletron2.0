@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Sun, Moon, Monitor, Check, type LucideIcon } from "lucide-react";
+import { Sun, Moon, Monitor, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/cn";
 
 type Theme = "light" | "dark" | "system";
@@ -53,31 +53,39 @@ const OPTIONS: { value: Theme; label: string; icon: LucideIcon }[] = [
   { value: "system", label: "System", icon: Monitor },
 ];
 
-/** Labelled Light / Dark / System rows for inside a dropdown menu. */
+/** Compact single-row theme control: a label + a 3-way segmented icon toggle. */
 export function ThemeMenu() {
   const { theme, setTheme, mounted } = useTheme();
   return (
-    <div role="group" aria-label="Theme">
-      {OPTIONS.map((o) => {
-        const Icon = o.icon;
-        const active = mounted && theme === o.value;
-        return (
-          <button
-            key={o.value}
-            onClick={() => setTheme(o.value)}
-            className={cn(
-              "flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-medium transition-colors",
-              active
-                ? "bg-accent/10 text-accent"
-                : "text-muted hover:bg-surface-2 hover:text-foreground",
-            )}
-          >
-            <Icon className="h-4 w-4 shrink-0" />
-            {o.label}
-            {active && <Check className="ml-auto h-4 w-4" />}
-          </button>
-        );
-      })}
+    <div className="flex items-center justify-between gap-2 px-3 py-1.5">
+      <span className="text-sm font-medium text-muted">Theme</span>
+      <div
+        role="group"
+        aria-label="Theme"
+        className="flex items-center gap-0.5 rounded-lg bg-surface-2 p-0.5"
+      >
+        {OPTIONS.map((o) => {
+          const Icon = o.icon;
+          const active = mounted && theme === o.value;
+          return (
+            <button
+              key={o.value}
+              onClick={() => setTheme(o.value)}
+              aria-label={o.label}
+              aria-pressed={active}
+              title={o.label}
+              className={cn(
+                "flex h-7 w-7 items-center justify-center rounded-md transition-colors",
+                active
+                  ? "bg-surface text-accent shadow-sm"
+                  : "text-muted hover:text-foreground",
+              )}
+            >
+              <Icon className="h-4 w-4" />
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }

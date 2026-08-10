@@ -173,7 +173,7 @@ export default function AdminGamesPage() {
     <div>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="font-semibold">All games</h2>
+          <h2 className="font-display text-lg font-bold">All games</h2>
           {games && (
             <p className="mt-0.5 text-xs text-muted">
               <span className="font-medium text-foreground">{baseCount}</span> base

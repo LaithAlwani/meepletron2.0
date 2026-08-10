@@ -62,7 +62,7 @@ export default function NewGamePage() {
 
   return (
     <div className="max-w-2xl space-y-6">
-      <h2 className="font-semibold">Add a game</h2>
+      <h2 className="font-display text-lg font-bold">Add a game</h2>
 
       <section className="space-y-3 rounded-xl border border-border bg-surface p-4">
         <div>

@@ -33,7 +33,7 @@ export default function AdminLayout({
   if (!me || me.role !== "admin") {
     return (
       <div className="mx-auto max-w-md px-4 py-20 text-center">
-        <h1 className="text-xl font-bold">Not authorized</h1>
+        <h1 className="font-display text-xl font-extrabold">Not authorized</h1>
         <p className="mt-2 text-sm text-muted">
           You need an admin account to view this area.
         </p>
@@ -50,7 +50,9 @@ export default function AdminLayout({
   return (
     <div className="mx-auto max-w-5xl px-4 py-8">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold">Admin</h1>
+        <h1 className="font-display text-2xl font-extrabold tracking-tight">
+          Admin
+        </h1>
         <div className="mt-3 border-b border-border">
           <nav className="flex gap-1 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {adminNav.map((item) => {
