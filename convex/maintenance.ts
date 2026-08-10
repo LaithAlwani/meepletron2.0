@@ -4,6 +4,23 @@ import { internal } from "./_generated/api";
 import { finite } from "./lib/num";
 import { deleteUserAndAuth, deleteUserAppData } from "./lib/purge";
 
+/**
+ * One-off: empty the retired `glossaryTerms` table so it can be dropped from the
+ * schema. Batched + self-rescheduling. Remove this (and the table) once run on
+ * every deployment.
+ */
+export const clearGlossaryTerms = internalMutation({
+  args: {},
+  handler: async (ctx): Promise<{ deleted: number }> => {
+    const rows = await ctx.db.query("glossaryTerms").take(DELETE_PAGE);
+    for (const r of rows) await ctx.db.delete("glossaryTerms", r._id);
+    if (rows.length === DELETE_PAGE) {
+      await ctx.scheduler.runAfter(0, internal.maintenance.clearGlossaryTerms, {});
+    }
+    return { deleted: rows.length };
+  },
+});
+
 /** Abandoned (non-committed) ingestion drafts older than this are purged. */
 const STALE_DRAFT_MS = 7 * 24 * 60 * 60 * 1000;
 /** Anonymous guests idle this long (and this old) are purged. */

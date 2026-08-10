@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import type { Id } from "./_generated/dataModel";
 import { getCurrentUser, requireUser } from "./lib/auth";
 
 const transformV = v.object({
@@ -74,6 +75,18 @@ export const save = mutation({
       const existing = await ctx.db.get("tuckboxes", id);
       if (!existing || existing.userId !== user._id) {
         throw new Error("Not found");
+      }
+      // Free any blob no longer referenced after this save (replaced images).
+      const stillUsed = new Set<Id<"_storage">>(
+        rest.faces.map((f) => f.storageId),
+      );
+      if (rest.wrap) stillUsed.add(rest.wrap.storageId);
+      const previous = new Set<Id<"_storage">>(
+        existing.faces.map((f) => f.storageId),
+      );
+      if (existing.wrap) previous.add(existing.wrap.storageId);
+      for (const sid of previous) {
+        if (!stillUsed.has(sid)) await ctx.storage.delete(sid);
       }
       await ctx.db.patch("tuckboxes", id, doc);
       return id;

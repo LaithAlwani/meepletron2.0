@@ -72,7 +72,7 @@ export default function ProfilePage() {
             <p className="text-sm text-muted">You&apos;re not signed in.</p>
             <Link
               href="/auth"
-              className="mt-3 inline-block rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-fg"
+              className="mt-3 inline-block rounded-xl bg-accent px-4 py-2 text-sm font-semibold text-accent-foreground"
             >
               Sign in
             </Link>
@@ -121,7 +121,7 @@ function ProfileBody() {
     <div>
       {/* Avatar card */}
       <div className="mb-6 flex flex-col items-center rounded-2xl border border-border-muted bg-surface p-8 text-center shadow-sm">
-        <div className="mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-primary/15 text-3xl font-bold text-primary">
+        <div className="mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-accent/15 text-3xl font-bold text-accent">
           {isGuest ? <Die className="h-8 w-8" /> : initial}
         </div>
         <h1 className="font-display text-xl font-extrabold text-foreground">{fullName}</h1>
@@ -134,7 +134,7 @@ function ProfileBody() {
         {isGuest ? (
           <Link
             href="/auth"
-            className="mt-6 rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-primary-fg hover:opacity-90"
+            className="mt-6 rounded-xl bg-accent px-5 py-2.5 text-sm font-semibold text-accent-foreground hover:opacity-90"
           >
             Create an account
           </Link>
@@ -279,7 +279,7 @@ function PersonalInfo({ me }: { me: Doc<"users"> }) {
 
   const dirty = name !== (me.name ?? "");
   const inputCls =
-    "w-full rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/50 disabled:opacity-50";
+    "w-full rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-accent/50 disabled:opacity-50";
 
   async function save() {
     if (!dirty) {
@@ -307,7 +307,7 @@ function PersonalInfo({ me }: { me: Doc<"users"> }) {
         {!editing && (
           <button
             onClick={() => setEditing(true)}
-            className="flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+            className="flex items-center gap-1 text-xs font-medium text-accent hover:underline"
           >
             {EditIcon}
             Edit
@@ -348,14 +348,14 @@ function PersonalInfo({ me }: { me: Doc<"users"> }) {
               setEditing(false);
             }}
             disabled={saving}
-            className="rounded-xl px-3 py-1.5 text-xs font-medium text-muted hover:bg-surface-muted disabled:opacity-50"
+            className="rounded-xl px-3 py-1.5 text-xs font-medium text-muted hover:bg-surface-2 disabled:opacity-50"
           >
             Cancel
           </button>
           <button
             onClick={save}
             disabled={saving || !dirty}
-            className="rounded-xl bg-primary px-3 py-1.5 text-xs font-semibold text-primary-fg hover:opacity-90 disabled:opacity-50"
+            className="rounded-xl bg-accent px-3 py-1.5 text-xs font-semibold text-accent-foreground hover:opacity-90 disabled:opacity-50"
           >
             {saving ? "Saving…" : "Save"}
           </button>

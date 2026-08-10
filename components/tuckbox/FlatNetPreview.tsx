@@ -108,7 +108,7 @@ export function FlatNetPreview({
   }
 
   return (
-    <div className="w-full h-full flex items-center justify-center bg-surface-muted rounded-lg p-4">
+    <div className="w-full h-full flex items-center justify-center bg-surface-2 rounded-lg p-4">
       <svg
         viewBox={`0 0 ${pageWidth} ${pageHeight}`}
         className="max-w-full max-h-full touch-none"
@@ -150,7 +150,7 @@ export function FlatNetPreview({
           width={pageWidth}
           height={pageHeight}
           fill="white"
-          stroke="rgb(var(--color-primary) / 0)"
+          stroke="transparent"
           strokeWidth={pageWidth * 0.001}
         />
 
@@ -274,7 +274,7 @@ export function FlatNetPreview({
                   width={panel.width}
                   height={panel.height}
                   fill="none"
-                  stroke="rgb(var(--color-primary))"
+                  stroke="var(--color-accent)"
                   strokeWidth={pageWidth * 0.002}
                   style={{ pointerEvents: "none" }}
                 />

@@ -9,7 +9,8 @@ import {
 } from "convex/react";
 import { ChevronRight } from "lucide-react";
 import { api } from "@/convex/_generated/api";
-import { Die } from "@/components/ui/icons";
+import { MediaRow } from "@/components/boardgames/MediaRow";
+import { relativeTime } from "@/lib/format";
 import { buttonClasses } from "@/components/ui/Button";
 import { Skeleton } from "@/components/ui/Surface";
 
@@ -58,23 +59,6 @@ function ChatsSkeleton() {
   );
 }
 
-/** Short relative time: "just now", "5m", "3h", "2d", else a date. */
-function relativeTime(ms: number): string {
-  const diff = Date.now() - ms;
-  const min = Math.floor(diff / 60000);
-  if (min < 1) return "just now";
-  if (min < 60) return `${min}m ago`;
-  const hr = Math.floor(min / 60);
-  if (hr < 24) return `${hr}h ago`;
-  const day = Math.floor(hr / 24);
-  if (day < 7) return `${day}d ago`;
-  return new Date(ms).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: new Date(ms).getFullYear() === new Date().getFullYear() ? undefined : "numeric",
-  });
-}
-
 function ChatsList() {
   const chats = useQuery(api.chat.listMyChats);
 
@@ -96,58 +80,22 @@ function ChatsList() {
 
   return (
     <ul className="space-y-3">
-      {chats.map((c) => {
-        const row = (
-          <>
-            <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-surface-2 text-subtle">
-              {c.thumbnailUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={c.thumbnailUrl}
-                  alt=""
-                  className="h-full w-full object-cover"
-                />
-              ) : (
-                <div className="flex h-full w-full items-center justify-center">
-                  <Die className="h-6 w-6" />
-                </div>
-              )}
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center justify-between gap-2">
-                <span className="font-display truncate font-bold">{c.gameTitle}</span>
-                <span className="shrink-0 text-xs text-subtle">
-                  {relativeTime(c.lastMessageAt)}
-                </span>
-              </div>
-              {c.lastMessage && (
-                <p className="mt-0.5 truncate text-sm text-muted">
-                  {c.lastMessage}
-                </p>
-              )}
-            </div>
-          </>
-        );
-
-        return (
-          <li key={c._id}>
-            {c.gameSlug ? (
-              <Link
-                href={`/boardgames/${c.gameSlug}/chat`}
-                className="flex items-center gap-3 rounded-2xl border border-border bg-surface p-3 transition-colors hover:border-accent/40 hover:bg-surface-2"
-              >
-                {row}
-                <ChevronRight className="h-4 w-4 shrink-0 text-subtle" />
-              </Link>
-            ) : (
-              // Game was removed — keep the row visible but non-clickable.
-              <div className="flex items-center gap-3 rounded-2xl border border-border bg-surface p-3 opacity-60">
-                {row}
-              </div>
-            )}
-          </li>
-        );
-      })}
+      {chats.map((c) => (
+        <MediaRow
+          key={c._id}
+          href={c.gameSlug ? `/boardgames/${c.gameSlug}/chat` : undefined}
+          dimmed={!c.gameSlug}
+          thumbUrl={c.thumbnailUrl}
+          title={c.gameTitle}
+          subtitle={c.lastMessage}
+          meta={relativeTime(c.lastMessageAt)}
+          trailing={
+            c.gameSlug ? (
+              <ChevronRight className="h-4 w-4 shrink-0 text-subtle" />
+            ) : undefined
+          }
+        />
+      ))}
     </ul>
   );
 }

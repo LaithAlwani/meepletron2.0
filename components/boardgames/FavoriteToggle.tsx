@@ -1,16 +1,24 @@
 "use client";
 
 import { useConvexAuth, useQuery, useMutation } from "convex/react";
+import { Heart } from "lucide-react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { useToast } from "@/components/ui/Toast";
 
-export function FavoriteButton({
+/**
+ * Favourite toggle used everywhere (cards, rows, detail hero). Always stops the
+ * surrounding link/click; `className` replaces the button styling and `size`
+ * picks the icon scale.
+ */
+export function FavoriteToggle({
   gameId,
   className,
+  size = "md",
 }: {
   gameId: Id<"games">;
   className?: string;
+  size?: "sm" | "md";
 }) {
   const { isAuthenticated } = useConvexAuth();
   const isFav = useQuery(
@@ -20,7 +28,9 @@ export function FavoriteButton({
   const toggle = useMutation(api.favorites.toggle);
   const toast = useToast();
 
-  async function onClick() {
+  async function onClick(e: React.MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
     if (!isAuthenticated) {
       toast("Sign in to save favourites", "info");
       return;
@@ -39,21 +49,14 @@ export function FavoriteButton({
       title={isFav ? "Remove from favourites" : "Add to favourites"}
       className={
         className ??
-        "rounded-md p-1.5 text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
+        "flex h-8 w-8 items-center justify-center rounded-full text-muted transition-colors hover:text-accent"
       }
     >
-      <svg
-        xmlns="http://www.w3.org/2000/svg"
-        viewBox="0 0 24 24"
-        fill={isFav ? "currentColor" : "none"}
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        className={`h-5 w-5 ${isFav ? "text-accent" : ""}`}
-      >
-        <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 1 0-7.78 7.78L12 21.23l8.84-8.84a5.5 5.5 0 0 0 0-7.78Z" />
-      </svg>
+      <Heart
+        className={`${size === "sm" ? "h-4 w-4" : "h-5 w-5"} ${
+          isFav ? "fill-accent text-accent" : ""
+        }`}
+      />
     </button>
   );
 }

@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Users, Clock } from "lucide-react";
 import type { GameWithMedia } from "@/convex/games";
 import { formatPlayTime } from "@/lib/format";
-import { FavoriteHeart } from "./FavoriteHeart";
+import { FavoriteToggle } from "./FavoriteToggle";
 import { Die } from "@/components/ui/icons";
 
 export function GameCard({
@@ -74,9 +74,10 @@ export function GameCard({
         </div>
       </Link>
 
-      <FavoriteHeart
+      <FavoriteToggle
         gameId={game._id}
-        className="absolute right-2 top-2 z-10 bg-background/70 shadow-sm backdrop-blur"
+        size="sm"
+        className="absolute right-2 top-2 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-background/70 text-muted shadow-sm backdrop-blur transition-colors hover:text-accent"
       />
     </div>
   );

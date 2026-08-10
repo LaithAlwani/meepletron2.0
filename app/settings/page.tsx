@@ -29,7 +29,7 @@ export default function SettingsPage() {
           <p className="text-sm text-muted">Sign in to change your settings.</p>
           <Link
             href="/auth"
-            className="mt-3 inline-block rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-fg"
+            className="mt-3 inline-block rounded-xl bg-accent px-4 py-2 text-sm font-semibold text-accent-foreground"
           >
             Sign in
           </Link>

@@ -35,7 +35,7 @@ export default function ComingSoonPage() {
           style={{ ["--aurora-dur"]: "20s" } as CSSProperties}
         />
         <div
-          className="aurora absolute -right-24 top-1/3 h-96 w-96 rounded-full bg-primary/20 blur-3xl"
+          className="aurora absolute -right-24 top-1/3 h-96 w-96 rounded-full bg-accent/20 blur-3xl"
           style={{ ["--aurora-dur"]: "26s", animationDelay: "3s" } as CSSProperties}
         />
         <div

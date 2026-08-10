@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { GameWithMedia } from "@/convex/games";
 import { formatPlayTime } from "@/lib/format";
-import { FavoriteHeart } from "./FavoriteHeart";
+import { FavoriteToggle } from "./FavoriteToggle";
 import { Die } from "@/components/ui/icons";
 
 export function GameListItem({ game }: { game: GameWithMedia }) {
@@ -39,7 +39,11 @@ export function GameListItem({ game }: { game: GameWithMedia }) {
           {stats && <p className="mt-0.5 text-xs text-muted">{stats}</p>}
         </div>
       </Link>
-      <FavoriteHeart gameId={game._id} className="shrink-0 hover:bg-surface-2" />
+      <FavoriteToggle
+        gameId={game._id}
+        size="sm"
+        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-muted transition-colors hover:bg-surface-2 hover:text-accent"
+      />
     </div>
   );
 }

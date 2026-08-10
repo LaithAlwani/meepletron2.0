@@ -9,7 +9,7 @@ import {
   AuthLoading,
 } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { Die } from "@/components/ui/icons";
+import { MediaRow } from "@/components/boardgames/MediaRow";
 import { buttonClasses } from "@/components/ui/Button";
 import { Skeleton } from "@/components/ui/Surface";
 
@@ -76,36 +76,21 @@ function FavoritesList() {
   return (
     <ul className="space-y-3">
       {favorites.map((f) => (
-        <li
+        <MediaRow
           key={f.gameId}
-          className="flex items-center gap-3 rounded-2xl border border-border bg-surface p-3 transition-colors hover:border-accent/40"
-        >
-          <Link
-            href={`/boardgames/${f.slug}`}
-            className="flex min-w-0 flex-1 items-center gap-3"
-          >
-            <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-surface-2 text-subtle">
-              {f.thumbnailUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={f.thumbnailUrl}
-                  alt=""
-                  className="h-full w-full object-cover"
-                />
-              ) : (
-                <Die className="h-6 w-6" />
-              )}
-            </div>
-            <span className="font-display truncate font-bold">{f.title}</span>
-          </Link>
-          <Link
-            href={`/boardgames/${f.slug}/chat`}
-            className="flex shrink-0 items-center gap-1.5 rounded-xl border border-border px-3.5 py-2 text-xs font-semibold text-accent transition-colors hover:bg-surface-2"
-          >
-            <MessageCircle className="h-4 w-4" />
-            Chat
-          </Link>
-        </li>
+          href={`/boardgames/${f.slug}`}
+          thumbUrl={f.thumbnailUrl}
+          title={f.title}
+          trailing={
+            <Link
+              href={`/boardgames/${f.slug}/chat`}
+              className="flex shrink-0 items-center gap-1.5 rounded-xl border border-border px-3.5 py-2 text-xs font-semibold text-accent transition-colors hover:bg-surface-2"
+            >
+              <MessageCircle className="h-4 w-4" />
+              Chat
+            </Link>
+          }
+        />
       ))}
     </ul>
   );

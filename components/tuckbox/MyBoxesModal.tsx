@@ -5,18 +5,8 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { X, Plus, Trash2, Box } from "lucide-react";
-
-function relativeTime(ms: number): string {
-  const diff = Date.now() - ms;
-  const min = Math.round(diff / 60000);
-  if (min < 1) return "just now";
-  if (min < 60) return `${min}m ago`;
-  const hr = Math.round(min / 60);
-  if (hr < 24) return `${hr}h ago`;
-  const day = Math.round(hr / 24);
-  if (day < 30) return `${day}d ago`;
-  return new Date(ms).toLocaleDateString();
-}
+import { useConfirm } from "@/components/ui/Confirm";
+import { relativeTime } from "@/lib/format";
 
 export function MyBoxesModal({
   open,
@@ -33,6 +23,7 @@ export function MyBoxesModal({
 }) {
   const boxes = useQuery(api.tuckboxes.listMine, open ? {} : "skip");
   const remove = useMutation(api.tuckboxes.remove);
+  const confirm = useConfirm();
 
   useEffect(() => {
     if (!open) return;
@@ -132,9 +123,14 @@ export function MyBoxesModal({
                       </div>
                     </button>
                     <button
-                      onClick={() => {
-                        if (window.confirm(`Delete “${b.name || "Untitled box"}”?`))
-                          void remove({ id: b._id });
+                      onClick={async () => {
+                        const ok = await confirm({
+                          title: `Delete “${b.name || "Untitled box"}”?`,
+                          message: "This can't be undone.",
+                          confirmText: "Delete",
+                          danger: true,
+                        });
+                        if (ok) void remove({ id: b._id });
                       }}
                       aria-label="Delete box"
                       className="absolute right-1.5 top-1.5 rounded-md bg-background/80 p-1.5 text-subtle opacity-0 shadow-sm backdrop-blur transition-opacity hover:text-red-600 group-hover:opacity-100"

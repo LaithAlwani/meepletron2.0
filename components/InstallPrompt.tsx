@@ -78,7 +78,7 @@ export function InstallPrompt() {
   }
 
   return (
-    <div className="mb-6 rounded-2xl border border-primary/30 bg-primary/5 p-6 shadow-sm">
+    <div className="mb-6 rounded-2xl border border-accent/30 bg-accent/5 p-6 shadow-sm">
       <div className="flex items-start gap-4">
         <Image
           src="/logo.webp"
@@ -98,7 +98,7 @@ export function InstallPrompt() {
             <button
               onClick={install}
               disabled={installing}
-              className="mt-4 inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-primary-fg transition-opacity hover:opacity-90 disabled:opacity-50"
+              className="mt-4 inline-flex items-center gap-2 rounded-xl bg-accent px-5 py-2.5 text-sm font-semibold text-accent-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
             >
               {DownloadIcon}
               {installing ? "Installing…" : "Install app"}

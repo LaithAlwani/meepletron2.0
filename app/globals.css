@@ -74,13 +74,8 @@
   --color-cat-3: var(--cat-3);
   --color-cat-4: var(--cat-4);
   --color-cat-5: var(--cat-5);
-  /* Aliases used across the app + ported components (→ canonical tokens). */
-  --color-bg: var(--background);
-  --color-surface-muted: var(--surface-2);
+  /* Remaining alias — `border-muted` is still used across cards/panels. */
   --color-border-muted: var(--border-muted);
-  --color-primary: var(--accent);
-  --color-primary-hover: var(--accent-hover);
-  --color-primary-fg: var(--accent-foreground);
   --font-display: var(--font-bricolage), var(--font-hanken), system-ui, sans-serif;
   --font-sans: var(--font-hanken), var(--font-geist-sans), system-ui, sans-serif;
   --font-mono: var(--font-geist-mono), monospace;

@@ -126,7 +126,7 @@ export function ImagePositioner({ data, frameAspect, onChange }: Props) {
   return (
     <div className="flex items-start gap-3">
       <div
-        className="relative overflow-hidden rounded border border-border bg-surface-muted cursor-grab active:cursor-grabbing touch-none shrink-0"
+        className="relative overflow-hidden rounded border border-border bg-surface-2 cursor-grab active:cursor-grabbing touch-none shrink-0"
         style={{ width: frameWidth, height: frameHeight }}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
@@ -189,8 +189,8 @@ export function ImagePositioner({ data, frameAspect, onChange }: Props) {
                   }
                   className={`flex h-6 w-6 items-center justify-center rounded transition-colors ${
                     active
-                      ? "bg-primary text-primary-fg"
-                      : "bg-surface-muted text-muted hover:bg-border"
+                      ? "bg-accent text-accent-foreground"
+                      : "bg-surface-2 text-muted hover:bg-border"
                   }`}
                 >
                   <Icon className="h-3.5 w-3.5" />
@@ -207,7 +207,7 @@ export function ImagePositioner({ data, frameAspect, onChange }: Props) {
                 360) as ImageRotation;
               onChange({ ...data.transform, rotation: next });
             }}
-            className="flex items-center gap-1 rounded bg-surface-muted px-2 py-1 text-muted hover:bg-border"
+            className="flex items-center gap-1 rounded bg-surface-2 px-2 py-1 text-muted hover:bg-border"
             title="Rotate 90°"
           >
             <RotateCw className="h-3.5 w-3.5" />

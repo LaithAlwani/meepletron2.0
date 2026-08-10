@@ -131,7 +131,7 @@ export function AssembledBoxPreview({ layout, assets, wrapAsset }: Props) {
 
   return (
     <div
-      className="w-full h-full flex flex-col items-center justify-center bg-surface-muted rounded-lg p-4 select-none"
+      className="w-full h-full flex flex-col items-center justify-center bg-surface-2 rounded-lg p-4 select-none"
       style={{ minHeight: 360 }}
     >
       <div
@@ -265,7 +265,7 @@ export function AssembledBoxPreview({ layout, assets, wrapAsset }: Props) {
         <button
           type="button"
           onClick={() => setAutoRotate((current) => !current)}
-          className="px-3 py-1 rounded-full bg-surface-muted hover:bg-border"
+          className="px-3 py-1 rounded-full bg-surface-2 hover:bg-border"
         >
           {autoRotate ? "Pause rotation" : "Auto-rotate"}
         </button>

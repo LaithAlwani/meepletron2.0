@@ -19,7 +19,7 @@ import {
 } from "lucide-react";
 import { api } from "@/convex/_generated/api";
 import { formatPlayTime } from "@/lib/format";
-import { FavoriteButton } from "@/components/boardgames/FavoriteButton";
+import { FavoriteToggle } from "@/components/boardgames/FavoriteToggle";
 import { BackgroundCover } from "@/components/boardgames/BackgroundCover";
 import { SimilarGames } from "@/components/boardgames/SimilarGames";
 import { InlineAsk } from "@/components/boardgames/InlineAsk";
@@ -313,9 +313,9 @@ export default function GameDetailPage({
                     <Die className="h-14 w-14" />
                   </div>
                 )}
-                <FavoriteButton
+                <FavoriteToggle
                   gameId={gameId}
-                  className="absolute right-2 top-2 z-10 rounded-full bg-background/80 p-2 text-muted shadow-md backdrop-blur transition-colors hover:bg-background hover:text-foreground"
+                  className="absolute right-2 top-2 z-10 flex items-center justify-center rounded-full bg-background/80 p-2 text-muted shadow-md backdrop-blur transition-colors hover:bg-background hover:text-foreground"
                 />
                 {isAdmin && (
                   <Link
