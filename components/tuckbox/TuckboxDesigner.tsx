@@ -1,7 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Scissors } from "lucide-react";
+import Link from "next/link";
+import { useQuery, useMutation } from "convex/react";
+import { Download, Upload, Check, FolderOpen } from "lucide-react";
+import { api } from "@/convex/_generated/api";
+import type { Id } from "@/convex/_generated/dataModel";
 import { computeLayout, getPanel } from "@/lib/tuckbox/geometry";
 import { renderTuckboxPdf, triggerDownload } from "@/lib/tuckbox/pdf";
 import {
@@ -11,6 +15,7 @@ import {
   type FaceImageData,
   type FaceImageTransform,
   type FaceKey,
+  type ImageRotation,
   type Orientation,
   type PaperSize,
   type TuckboxConfig,
@@ -20,6 +25,7 @@ import { FlatNetPreview } from "./FlatNetPreview";
 import { AssembledBoxPreview } from "./AssembledBoxPreview";
 import { ImagePositioner } from "./ImagePositioner";
 import { AssemblyInstructions } from "./AssemblyInstructions";
+import { MyBoxesModal } from "./MyBoxesModal";
 
 export type InitialBoardgame = {
   title?: string;
@@ -46,14 +52,28 @@ const FACE_KEYS: FaceKey[] = [
   "bottom",
 ];
 
-const FACE_LABELS_DISPLAY: Record<FaceKey, string> = {
+/** Short face labels for the faces bar. */
+const FACE_SHORT: Record<FaceKey, string> = {
   front: "Front",
   back: "Back",
-  leftSide: "Left side (spine)",
-  rightSide: "Right side (spine)",
+  leftSide: "Left spine",
+  rightSide: "Right spine",
   top: "Top",
   bottom: "Bottom",
 };
+
+/** Common card sizes (mm) offered as one-tap presets. */
+const CARD_PRESETS: { label: string; w: number; h: number }[] = [
+  { label: "Standard", w: 63, h: 88 },
+  { label: "Mini", w: 44, h: 68 },
+  { label: "Tarot", w: 70, h: 120 },
+  { label: "Square", w: 70, h: 70 },
+];
+
+const PAPER_OPTIONS: PaperSize[] = ["A4", "Letter", "A3"];
+
+const BODY_FACES: FaceKey[] = ["front", "back", "leftSide", "rightSide"];
+const isBodyFace = (face: FaceKey) => BODY_FACES.includes(face);
 
 function readFileAsDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -88,13 +108,14 @@ async function fetchImageAsDataUrl(url: string): Promise<string> {
   });
 }
 
+type SaveState = "idle" | "saving" | "saved" | "error";
+
 export function TuckboxDesigner({
   initialBoardgame,
 }: {
   initialBoardgame?: InitialBoardgame;
 }) {
   const [config, setConfig] = useState<TuckboxConfig>(DEFAULT_CONFIG_MM);
-  const [useCardCount, setUseCardCount] = useState(true);
   const [cardCount, setCardCount] = useState(60);
   const [cardThickness, setCardThickness] = useState(0.32);
   const [assets, setAssets] = useState<FaceAssets>({});
@@ -103,29 +124,46 @@ export function TuckboxDesigner({
     undefined,
   );
   const [previewTab, setPreviewTab] = useState<"assembled" | "flat">("flat");
-  const [selectedFace, setSelectedFace] = useState<FaceKey | "wrap" | null>(
-    null,
-  );
+  const [selectedFace, setSelectedFace] = useState<FaceKey | "wrap">("front");
   const [busy, setBusy] = useState(false);
 
-  const effectiveConfig: TuckboxConfig = useMemo(() => {
-    if (useCardCount) {
-      return {
-        ...config,
-        stackThickness: Math.max(1, cardCount * cardThickness),
-      };
-    }
-    return config;
-  }, [config, useCardCount, cardCount, cardThickness]);
+  // --- persistence / autosave ---
+  const me = useQuery(api.users.me);
+  const signedIn = me != null;
+  const saveMut = useMutation(api.tuckboxes.save);
+  const genUploadUrl = useMutation(api.tuckboxes.generateUploadUrl);
+  const [boxId, setBoxId] = useState<Id<"tuckboxes"> | null>(null);
+  const [boxName, setBoxName] = useState(
+    initialBoardgame?.title?.trim() || "Untitled box",
+  );
+  const [saveState, setSaveState] = useState<SaveState>("idle");
+  const [myBoxesOpen, setMyBoxesOpen] = useState(false);
+  const [loadId, setLoadId] = useState<Id<"tuckboxes"> | null>(null);
+
+  // Marks that the user has made a real edit (prefill/hydration don't count, so
+  // merely visiting — or opening a saved box — never spawns a duplicate).
+  const touchedRef = useRef(false);
+  const touch = () => {
+    touchedRef.current = true;
+  };
+  // dataURL → uploaded storageId, so identical images upload only once.
+  const storageCacheRef = useRef<Map<string, Id<"_storage">>>(new Map());
+
+  const effectiveConfig: TuckboxConfig = useMemo(
+    () => ({
+      ...config,
+      stackThickness: Math.max(1, cardCount * cardThickness),
+    }),
+    [config, cardCount, cardThickness],
+  );
 
   const layout = useMemo(
     () => computeLayout(effectiveConfig),
     [effectiveConfig],
   );
 
-  // Pre-fill from a board game (image → all 6 face images). Title is intentionally
-  // not pushed into the front label — users edit text themselves to keep it clean.
-  // Runs once per imageUrl change.
+  // Pre-fill from a board game (image → all 6 face images + wrap). Runs once per
+  // imageUrl change. Does NOT mark the design touched.
   useEffect(() => {
     if (!initialBoardgame) return;
     let cancelled = false;
@@ -139,16 +177,8 @@ export function TuckboxDesigner({
           if (cancelled) return;
           setAssets((previousAssets) => {
             const next = { ...previousAssets };
-            const faces: FaceKey[] = [
-              "front",
-              "back",
-              "leftSide",
-              "rightSide",
-              "top",
-              "bottom",
-            ];
             let changed = false;
-            for (const face of faces) {
+            for (const face of FACE_KEYS) {
               if (!next[face]) {
                 next[face] = {
                   url: dataUrl,
@@ -161,9 +191,6 @@ export function TuckboxDesigner({
             }
             return changed ? next : previousAssets;
           });
-
-          // Also prefill the "wrap around" slot — same image, single asset that
-          // spans back→leftSide→front→rightSide if the user switches modes.
           setWrapAsset((previousWrap) =>
             previousWrap
               ? previousWrap
@@ -175,7 +202,7 @@ export function TuckboxDesigner({
                 },
           );
         } catch {
-          // CORS blocked or fetch failed — leave the front face empty.
+          // CORS blocked or fetch failed — leave the faces empty.
         }
       })();
     }
@@ -191,11 +218,13 @@ export function TuckboxDesigner({
     key: K,
     value: TuckboxConfig[K],
   ) {
+    touch();
     setConfig((previousConfig) => ({ ...previousConfig, [key]: value }));
   }
 
   function setUnit(unit: Unit) {
     if (unit === config.unit) return;
+    touch();
     if (unit === "in") {
       setConfig({
         unit: "in",
@@ -223,7 +252,28 @@ export function TuckboxDesigner({
     }
   }
 
+  function applyCardPreset(wMm: number, hMm: number) {
+    touch();
+    const factor = config.unit === "mm" ? 1 : 1 / 25.4;
+    const round = (n: number) =>
+      config.unit === "mm" ? +n.toFixed(1) : +n.toFixed(2);
+    setConfig((prev) => ({
+      ...prev,
+      cardWidth: round(wMm * factor),
+      cardHeight: round(hMm * factor),
+    }));
+  }
+
+  function cardPresetActive(wMm: number, hMm: number) {
+    const toMm = config.unit === "mm" ? 1 : 25.4;
+    return (
+      Math.abs(config.cardWidth * toMm - wMm) < 0.6 &&
+      Math.abs(config.cardHeight * toMm - hMm) < 0.6
+    );
+  }
+
   async function handleImageUpload(face: FaceKey, file: File | undefined) {
+    touch();
     if (!file) {
       setAssets((previousAssets) => {
         const next = { ...previousAssets };
@@ -246,6 +296,7 @@ export function TuckboxDesigner({
   }
 
   function updateTransform(face: FaceKey, transform: FaceImageTransform) {
+    touch();
     setAssets((previousAssets) => {
       const current = previousAssets[face];
       if (!current) return previousAssets;
@@ -254,6 +305,7 @@ export function TuckboxDesigner({
   }
 
   async function handleWrapUpload(file: File | undefined) {
+    touch();
     if (!file) {
       setWrapAsset(undefined);
       return;
@@ -269,6 +321,7 @@ export function TuckboxDesigner({
   }
 
   function updateWrapTransform(transform: FaceImageTransform) {
+    touch();
     setWrapAsset((previousWrap) =>
       previousWrap ? { ...previousWrap, transform } : previousWrap,
     );
@@ -312,232 +365,545 @@ export function TuckboxDesigner({
     return idealPixelsForPanel(panel.width, panel.height, layout.unit);
   }
 
+  function faceHasArt(face: FaceKey): boolean {
+    if (imageMode === "wrap" && isBodyFace(face)) return !!wrapAsset;
+    return !!assets[face];
+  }
+
+  const faceForEditor: FaceKey = selectedFace === "wrap" ? "front" : selectedFace;
+  const isWrapView =
+    imageMode === "wrap" &&
+    (selectedFace === "wrap" || isBodyFace(faceForEditor));
+
+  const activeData = isWrapView ? wrapAsset : assets[faceForEditor];
+  const activeAspect = isWrapView ? wrapAspect : getFaceAspect(faceForEditor);
+  const activeIdeal = isWrapView ? wrapIdealPx : getFaceIdealPx(faceForEditor);
+  const activeName = isWrapView ? "Body wrap" : FACE_SHORT[faceForEditor];
+  const activeMeta = isWrapView
+    ? "front + back + spines"
+    : `${FACE_KEYS.indexOf(faceForEditor) + 1} of 6 faces`;
+
+  function onArtImage(file: File | undefined) {
+    if (isWrapView) void handleWrapUpload(file);
+    else void handleImageUpload(faceForEditor, file);
+  }
+  function onArtTransform(transform: FaceImageTransform) {
+    if (isWrapView) updateWrapTransform(transform);
+    else updateTransform(faceForEditor, transform);
+  }
+  function useOnAllFaces() {
+    if (!activeData) return;
+    touch();
+    const src = activeData;
+    setAssets(() => {
+      const next: FaceAssets = {};
+      for (const face of FACE_KEYS) {
+        next[face] = {
+          url: src.url,
+          naturalWidth: src.naturalWidth,
+          naturalHeight: src.naturalHeight,
+          transform: { ...DEFAULT_IMAGE_TRANSFORM },
+        };
+      }
+      return next;
+    });
+    if (imageMode === "wrap") {
+      setWrapAsset({
+        url: src.url,
+        naturalWidth: src.naturalWidth,
+        naturalHeight: src.naturalHeight,
+        transform: { ...DEFAULT_IMAGE_TRANSFORM },
+      });
+    }
+  }
+
+  // Upload a data URL to storage once; cache by content.
+  async function ensureUploaded(dataUrl: string): Promise<Id<"_storage">> {
+    const cached = storageCacheRef.current.get(dataUrl);
+    if (cached) return cached;
+    const blob = await (await fetch(dataUrl)).blob();
+    const url = await genUploadUrl();
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": blob.type || "image/png" },
+      body: blob,
+    });
+    if (!res.ok) throw new Error("Upload failed");
+    const { storageId } = (await res.json()) as {
+      storageId: Id<"_storage">;
+    };
+    storageCacheRef.current.set(dataUrl, storageId);
+    return storageId;
+  }
+
+  // Latest-state save closure, refreshed each render so the debounce always
+  // persists current values.
+  const doSaveRef = useRef<() => Promise<void>>(async () => {});
+  doSaveRef.current = async () => {
+    const hasContent =
+      Object.keys(assets).length > 0 || !!wrapAsset || boxId != null;
+    if (!hasContent) return;
+    setSaveState("saving");
+    try {
+      const faces = [];
+      for (const face of FACE_KEYS) {
+        const a = assets[face];
+        if (!a) continue;
+        const storageId = await ensureUploaded(a.url);
+        faces.push({
+          face,
+          storageId,
+          naturalWidth: a.naturalWidth,
+          naturalHeight: a.naturalHeight,
+          transform: {
+            zoom: a.transform.zoom,
+            anchorX: a.transform.anchorX,
+            anchorY: a.transform.anchorY,
+            rotation: a.transform.rotation,
+          },
+        });
+      }
+      let wrap:
+        | {
+            storageId: Id<"_storage">;
+            naturalWidth: number;
+            naturalHeight: number;
+            transform: {
+              zoom: number;
+              anchorX: number;
+              anchorY: number;
+              rotation: number;
+            };
+          }
+        | undefined;
+      if (wrapAsset) {
+        const storageId = await ensureUploaded(wrapAsset.url);
+        wrap = {
+          storageId,
+          naturalWidth: wrapAsset.naturalWidth,
+          naturalHeight: wrapAsset.naturalHeight,
+          transform: {
+            zoom: wrapAsset.transform.zoom,
+            anchorX: wrapAsset.transform.anchorX,
+            anchorY: wrapAsset.transform.anchorY,
+            rotation: wrapAsset.transform.rotation,
+          },
+        };
+      }
+      const id = await saveMut({
+        id: boxId ?? undefined,
+        name: boxName.trim() || "Untitled box",
+        unit: config.unit,
+        cardWidth: config.cardWidth,
+        cardHeight: config.cardHeight,
+        cardCount,
+        cardThickness,
+        tolerance: config.tolerance,
+        materialThickness: config.materialThickness,
+        paperSize: config.paperSize,
+        orientation: config.orientation,
+        imageMode,
+        faces,
+        wrap,
+      });
+      if (!boxId) setBoxId(id);
+      setSaveState("saved");
+    } catch {
+      setSaveState("error");
+    }
+  };
+
+  // Debounced autosave — only once the user has actually edited something.
+  useEffect(() => {
+    if (!signedIn || !touchedRef.current) return;
+    const t = setTimeout(() => void doSaveRef.current(), 1500);
+    return () => clearTimeout(t);
+  }, [config, cardCount, cardThickness, imageMode, assets, wrapAsset, boxName, signedIn]);
+
+  // Hydrate the designer when the user opens a saved box.
+  const loaded = useQuery(api.tuckboxes.get, loadId ? { id: loadId } : "skip");
+  useEffect(() => {
+    if (!loadId || !loaded || loaded._id !== loadId) return;
+    let cancelled = false;
+    (async () => {
+      const cache = new Map<string, Id<"_storage">>();
+      const nextAssets: FaceAssets = {};
+      for (const f of loaded.faces) {
+        if (!f.url) continue;
+        const dataUrl = await fetchImageAsDataUrl(f.url).catch(() => null);
+        if (!dataUrl) continue;
+        cache.set(dataUrl, f.storageId);
+        nextAssets[f.face] = {
+          url: dataUrl,
+          naturalWidth: f.naturalWidth,
+          naturalHeight: f.naturalHeight,
+          transform: {
+            zoom: f.transform.zoom,
+            anchorX: f.transform.anchorX,
+            anchorY: f.transform.anchorY,
+            rotation: f.transform.rotation as ImageRotation,
+          },
+        };
+      }
+      let nextWrap: FaceImageData | undefined;
+      if (loaded.wrap?.url) {
+        const dataUrl = await fetchImageAsDataUrl(loaded.wrap.url).catch(
+          () => null,
+        );
+        if (dataUrl) {
+          cache.set(dataUrl, loaded.wrap.storageId);
+          nextWrap = {
+            url: dataUrl,
+            naturalWidth: loaded.wrap.naturalWidth,
+            naturalHeight: loaded.wrap.naturalHeight,
+            transform: {
+              zoom: loaded.wrap.transform.zoom,
+              anchorX: loaded.wrap.transform.anchorX,
+              anchorY: loaded.wrap.transform.anchorY,
+              rotation: loaded.wrap.transform.rotation as ImageRotation,
+            },
+          };
+        }
+      }
+      if (cancelled) return;
+      storageCacheRef.current = cache;
+      setConfig({
+        unit: loaded.unit,
+        cardWidth: loaded.cardWidth,
+        cardHeight: loaded.cardHeight,
+        stackThickness: Math.max(1, loaded.cardCount * loaded.cardThickness),
+        tolerance: loaded.tolerance,
+        materialThickness: loaded.materialThickness,
+        paperSize: loaded.paperSize,
+        orientation: loaded.orientation,
+      });
+      setCardCount(loaded.cardCount);
+      setCardThickness(loaded.cardThickness);
+      setImageMode(loaded.imageMode);
+      setBoxName(loaded.name);
+      setBoxId(loaded._id);
+      setAssets(nextAssets);
+      setWrapAsset(nextWrap);
+      setSelectedFace("front");
+      setSaveState("saved");
+      touchedRef.current = false; // hydration is not an edit
+      setLoadId(null);
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loaded, loadId]);
+
+  function newBox() {
+    setBoxId(null);
+    setBoxName("Untitled box");
+    setConfig(DEFAULT_CONFIG_MM);
+    setCardCount(60);
+    setCardThickness(0.32);
+    setImageMode("per-face");
+    setAssets({});
+    setWrapAsset(undefined);
+    setSelectedFace("front");
+    storageCacheRef.current = new Map();
+    setSaveState("idle");
+    touchedRef.current = false;
+  }
+
+  const blankCount = FACE_KEYS.filter((f) => !faceHasArt(f)).length;
+  const dims = `${layout.boxWidth.toFixed(1)} × ${layout.boxHeight.toFixed(
+    1,
+  )} × ${layout.boxDepth.toFixed(1)} ${layout.unit} · ${layout.pageWidth.toFixed(
+    1,
+  )} × ${layout.pageHeight.toFixed(1)} ${layout.unit}`;
+
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-[440px_1fr] gap-4 lg:gap-6 max-w-7xl mx-auto p-4 sm:p-6 overflow-x-hidden">
-      <div className="space-y-4 lg:space-y-6 order-2 lg:order-1">
-        <header className="hidden lg:block">
-          <h1 className="font-display flex items-center gap-2 text-2xl font-extrabold tracking-tight text-foreground">
-            <Scissors className="h-6 w-6 text-accent" /> Tuckbox Generator
-          </h1>
-          <p className="text-sm text-muted mt-1">
-            Set your card size, add cover art to each face, then download a
-            print-ready PDF.
-          </p>
-        </header>
-
-        <Section title="Units & Paper" defaultOpen={false}>
-          <Row label="Units">
-            <SegmentedControl
-              value={config.unit}
-              onChange={(value) => setUnit(value as Unit)}
-              options={[
-                { value: "mm", label: "mm" },
-                { value: "in", label: "in" },
-              ]}
-            />
-          </Row>
-          <Row label="Paper">
-            <SegmentedControl
-              value={config.paperSize}
-              onChange={(value) =>
-                updateConfig("paperSize", value as PaperSize)
-              }
-              options={[
-                { value: "A4", label: "A4" },
-                { value: "Letter", label: "Letter" },
-              ]}
-            />
-          </Row>
-          <Row label="Orientation">
-            <SegmentedControl
-              value={config.orientation}
-              onChange={(value) =>
-                updateConfig("orientation", value as Orientation)
-              }
-              options={[
-                { value: "portrait", label: "Portrait" },
-                { value: "landscape", label: "Landscape" },
-              ]}
-            />
-          </Row>
-        </Section>
-
-        <Section title="Card dimensions">
-          <PairRow>
-            <MiniField label={`Width (${unitLabel})`}>
-              <NumberInput
-                value={config.cardWidth}
-                step={config.unit === "mm" ? 0.5 : 0.05}
-                onChange={(value) => updateConfig("cardWidth", value)}
-              />
-            </MiniField>
-            <MiniField label={`Height (${unitLabel})`}>
-              <NumberInput
-                value={config.cardHeight}
-                step={config.unit === "mm" ? 0.5 : 0.05}
-                onChange={(value) => updateConfig("cardHeight", value)}
-              />
-            </MiniField>
-          </PairRow>
-          <Row label="Stack input">
-            <SegmentedControl
-              value={useCardCount ? "count" : "thickness"}
-              onChange={(value) => setUseCardCount(value === "count")}
-              options={[
-                { value: "count", label: "Count × thickness" },
-                { value: "thickness", label: "Direct" },
-              ]}
-            />
-          </Row>
-          {useCardCount ? (
-            <>
-              <PairRow>
-                <MiniField label="# of cards">
-                  <NumberInput
-                    value={cardCount}
-                    step={1}
-                    onChange={(value) =>
-                      setCardCount(Math.max(1, Math.round(value)))
-                    }
-                  />
-                </MiniField>
-                <MiniField label={`Thickness/card (${unitLabel})`}>
-                  <NumberInput
-                    value={cardThickness}
-                    step={config.unit === "mm" ? 0.01 : 0.001}
-                    onChange={setCardThickness}
-                  />
-                </MiniField>
-              </PairRow>
-              <div className="text-xs text-muted -mt-1">
-                Stack:{" "}
-                <strong>
-                  {(cardCount * cardThickness).toFixed(2)} {unitLabel}
-                </strong>
-              </div>
-            </>
-          ) : (
-            <Row label={`Stack thickness (${unitLabel})`}>
-              <NumberInput
-                value={config.stackThickness}
-                step={config.unit === "mm" ? 0.5 : 0.05}
-                onChange={(value) => updateConfig("stackThickness", value)}
-              />
-            </Row>
-          )}
-          <details className="text-sm">
-            <summary className="cursor-pointer text-muted hover:text-foreground">
-              Advanced (tolerance & material)
-            </summary>
-            <div className="mt-3 space-y-3">
-              <div>
-                <Row label={`Tolerance (${unitLabel})`}>
-                  <NumberInput
-                    value={config.tolerance}
-                    step={config.unit === "mm" ? 0.1 : 0.01}
-                    onChange={(value) => updateConfig("tolerance", value)}
-                  />
-                </Row>
-                <p className="text-[11px] text-muted mt-1 ml-[140px]">
-                  Total slack added to each axis — half goes to each side of
-                  the cards. Material thickness is compensated for separately.
-                </p>
-              </div>
-              <div>
-                <Row label={`Material thickness (${unitLabel})`}>
-                  <NumberInput
-                    value={config.materialThickness}
-                    step={config.unit === "mm" ? 0.05 : 0.005}
-                    onChange={(value) =>
-                      updateConfig("materialThickness", value)
-                    }
-                  />
-                </Row>
-                <p className="text-[11px] text-muted mt-1 ml-[140px]">
-                  Cardstock thickness. The box grows by 2× this on each axis
-                  so the inside cavity equals card + tolerance.
-                </p>
-              </div>
+    <div className="flex flex-col lg:h-[calc(100dvh-60px)] lg:overflow-hidden">
+      {/* Body: sidebar (controls) + main (preview) */}
+      <div className="flex flex-1 flex-col overflow-hidden lg:min-h-0 lg:flex-row">
+        <aside className="themed-scroll order-2 w-full divide-y divide-border overflow-y-auto border-t border-border lg:order-1 lg:w-[360px] lg:shrink-0 lg:border-r lg:border-t-0">
+          {/* 01 — Card size */}
+          <NumSection
+            n="01"
+            title="Card size"
+            meta={unitLabel === "mm" ? "millimetres" : "inches"}
+          >
+            <div className="grid grid-cols-2 gap-2">
+              {CARD_PRESETS.map((p) => (
+                <PresetButton
+                  key={p.label}
+                  active={cardPresetActive(p.w, p.h)}
+                  onClick={() => applyCardPreset(p.w, p.h)}
+                >
+                  {p.label} {p.w}×{p.h}
+                </PresetButton>
+              ))}
             </div>
-          </details>
-        </Section>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Width" suffix={unitLabel}>
+                <NumberInput
+                  value={config.cardWidth}
+                  step={config.unit === "mm" ? 0.5 : 0.05}
+                  onChange={(v) => updateConfig("cardWidth", v)}
+                />
+              </Field>
+              <Field label="Height" suffix={unitLabel}>
+                <NumberInput
+                  value={config.cardHeight}
+                  step={config.unit === "mm" ? 0.5 : 0.05}
+                  onChange={(v) => updateConfig("cardHeight", v)}
+                />
+              </Field>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Cards">
+                <NumberInput
+                  value={cardCount}
+                  step={1}
+                  onChange={(v) => {
+                    touch();
+                    setCardCount(Math.max(1, Math.round(v)));
+                  }}
+                />
+              </Field>
+              <Field label="Per card" suffix={unitLabel}>
+                <NumberInput
+                  value={cardThickness}
+                  step={config.unit === "mm" ? 0.01 : 0.001}
+                  onChange={(v) => {
+                    touch();
+                    setCardThickness(v);
+                  }}
+                />
+              </Field>
+            </div>
+            <div className="rounded-lg border-l-2 border-accent bg-surface-2 px-3 py-2">
+              <span className="text-[11px] font-bold uppercase tracking-wide text-subtle">
+                Stack
+              </span>{" "}
+              <span className="font-display text-lg font-bold text-foreground">
+                {(cardCount * cardThickness).toFixed(2)} {unitLabel}
+              </span>
+            </div>
+          </NumSection>
 
-        <Section title="Artwork">
-          <Row label="Image mode">
+          {/* 02 — Artwork */}
+          <NumSection n="02" title="Artwork" meta={activeMeta}>
             <SegmentedControl
               value={imageMode}
-              onChange={(value) =>
-                setImageMode(value as "per-face" | "wrap")
-              }
+              onChange={(v) => {
+                touch();
+                setImageMode(v as "per-face" | "wrap");
+              }}
               options={[
                 { value: "per-face", label: "Per face" },
                 { value: "wrap", label: "Wrap around" },
               ]}
             />
-          </Row>
-          <div className="space-y-3">
-            {imageMode === "wrap" && (
-              <WrapEditor
-                data={wrapAsset}
-                aspect={wrapAspect}
-                idealPx={wrapIdealPx}
-                isSelected={selectedFace === "wrap"}
-                onSelect={() => setSelectedFace("wrap")}
-                onImage={handleWrapUpload}
-                onTransform={updateWrapTransform}
-              />
+
+            <div className="flex items-baseline justify-between gap-2">
+              <h3 className="font-display text-lg font-bold text-foreground">
+                {activeName}
+              </h3>
+              <span className="text-[11px] text-subtle">
+                {activeIdeal.width} × {activeIdeal.height} px @300DPI
+              </span>
+            </div>
+
+            {!activeData ? (
+              <ImageDropzone onFile={onArtImage} />
+            ) : (
+              <div className="space-y-2">
+                <ImagePositioner
+                  data={activeData}
+                  frameAspect={activeAspect}
+                  onChange={onArtTransform}
+                />
+                <ImageDropzone onFile={onArtImage} compact />
+              </div>
             )}
-            {FACE_KEYS.filter((face) => {
-              if (imageMode !== "wrap") return true;
-              return face === "top" || face === "bottom";
-            }).map((face) => (
-              <FaceEditor
-                key={face}
-                displayName={FACE_LABELS_DISPLAY[face]}
-                data={assets[face]}
-                aspect={getFaceAspect(face)}
-                idealPx={getFaceIdealPx(face)}
-                isSelected={selectedFace === face}
-                onSelect={() => setSelectedFace(face)}
-                onImage={(file) => handleImageUpload(face, file)}
-                onTransform={(transform) => updateTransform(face, transform)}
-              />
-            ))}
-          </div>
-        </Section>
-      </div>
 
-      <div className="space-y-4 lg:sticky lg:top-4 self-start order-1 lg:order-2">
-        <header className="lg:hidden">
-          <h1 className="text-xl font-semibold tracking-tight text-foreground">
-            Tuckbox Generator
-          </h1>
-        </header>
-
-        <div className="overflow-hidden rounded-2xl border border-border bg-surface shadow-sm">
-          <div className="flex items-center gap-1 border-b border-border p-2">
-            {(
-              [
-                ["assembled", "3D box"],
-                ["flat", "Flat net (print)"],
-              ] as const
-            ).map(([value, tabLabel]) => (
-              <button
-                key={value}
-                type="button"
-                onClick={() => setPreviewTab(value)}
-                className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
-                  previewTab === value
-                    ? "bg-accent/10 text-accent"
-                    : "text-muted hover:bg-surface-2 hover:text-foreground"
-                }`}
+            <div className="flex flex-wrap gap-2">
+              <SmallButton
+                onClick={() => onArtImage(undefined)}
+                disabled={!activeData}
               >
-                {tabLabel}
-              </button>
-            ))}
+                Clear face
+              </SmallButton>
+              <SmallButton onClick={useOnAllFaces} disabled={!activeData}>
+                Use cover on all
+              </SmallButton>
+            </div>
+          </NumSection>
+
+          {/* 03 — Paper & fit */}
+          <NumSection n="03" title="Paper & fit">
+            <div className="grid grid-cols-3 gap-2">
+              {PAPER_OPTIONS.map((p) => (
+                <PresetButton
+                  key={p}
+                  active={config.paperSize === p}
+                  onClick={() => updateConfig("paperSize", p)}
+                >
+                  {p}
+                </PresetButton>
+              ))}
+            </div>
+            <div>
+              <ReadRow
+                label="Finished box"
+                value={`${layout.boxWidth.toFixed(1)} × ${layout.boxHeight.toFixed(
+                  1,
+                )} × ${layout.boxDepth.toFixed(1)} ${layout.unit}`}
+              />
+              <ReadRow
+                label="Page"
+                value={`${layout.pageWidth.toFixed(1)} × ${layout.pageHeight.toFixed(
+                  1,
+                )} ${layout.unit}`}
+              />
+              <ReadRow
+                label="Tolerance"
+                value={`+${config.tolerance} ${unitLabel} · ${config.materialThickness} ${unitLabel} material`}
+              />
+            </div>
+
+            <details className="group">
+              <summary className="cursor-pointer list-none text-xs font-bold uppercase tracking-wide text-accent">
+                Advanced — tolerance &amp; material
+              </summary>
+              <div className="mt-3 space-y-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <Field label="Tolerance" suffix={unitLabel}>
+                    <NumberInput
+                      value={config.tolerance}
+                      step={config.unit === "mm" ? 0.1 : 0.01}
+                      onChange={(v) => updateConfig("tolerance", v)}
+                    />
+                  </Field>
+                  <Field label="Material" suffix={unitLabel}>
+                    <NumberInput
+                      value={config.materialThickness}
+                      step={config.unit === "mm" ? 0.05 : 0.005}
+                      onChange={(v) => updateConfig("materialThickness", v)}
+                    />
+                  </Field>
+                </div>
+                <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] font-bold uppercase tracking-wide text-subtle">
+                      Orientation
+                    </span>
+                    <SegmentedControl
+                      value={config.orientation}
+                      onChange={(v) =>
+                        updateConfig("orientation", v as Orientation)
+                      }
+                      options={[
+                        { value: "portrait", label: "Portrait" },
+                        { value: "landscape", label: "Landscape" },
+                      ]}
+                    />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] font-bold uppercase tracking-wide text-subtle">
+                      Units
+                    </span>
+                    <SegmentedControl
+                      value={config.unit}
+                      onChange={(v) => setUnit(v as Unit)}
+                      options={[
+                        { value: "mm", label: "mm" },
+                        { value: "in", label: "in" },
+                      ]}
+                    />
+                  </div>
+                </div>
+              </div>
+            </details>
+
+            <div className="pt-1">
+              <AssemblyInstructions />
+            </div>
+          </NumSection>
+        </aside>
+
+        {/* Preview */}
+        <main className="order-1 flex min-h-0 flex-1 flex-col lg:order-2">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-3 py-2 sm:px-4">
+            <div className="flex shrink-0 gap-1">
+              {(
+                [
+                  ["flat", "Flat net"],
+                  ["assembled", "3D box"],
+                ] as const
+              ).map(([value, tabLabel]) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setPreviewTab(value)}
+                  className={`rounded-lg px-3 py-1.5 text-xs font-bold uppercase tracking-wide transition-colors ${
+                    previewTab === value
+                      ? "bg-accent/10 text-accent"
+                      : "text-muted hover:bg-surface-2 hover:text-foreground"
+                  }`}
+                >
+                  {tabLabel}
+                </button>
+              ))}
+            </div>
+            <div className="flex min-w-0 flex-1 flex-wrap items-center justify-end gap-2">
+              <input
+                value={boxName}
+                onChange={(e) => {
+                  touch();
+                  setBoxName(e.target.value);
+                }}
+                placeholder="Untitled box"
+                aria-label="Box name"
+                className="min-w-0 flex-1 rounded-md border border-border bg-surface px-2.5 py-1.5 text-sm font-semibold text-foreground outline-none focus:ring-2 focus:ring-ring sm:w-52 sm:flex-none"
+              />
+              {signedIn ? (
+                <span className="hidden items-center gap-1 whitespace-nowrap text-xs text-subtle sm:flex">
+                  {saveState === "saving" ? (
+                    "Saving…"
+                  ) : saveState === "saved" ? (
+                    <>
+                      <Check className="h-3.5 w-3.5 text-accent-2" /> Saved
+                    </>
+                  ) : saveState === "error" ? (
+                    <span className="text-red-500">Save failed</span>
+                  ) : (
+                    "Autosaves"
+                  )}
+                </span>
+              ) : (
+                <Link
+                  href="/auth"
+                  className="hidden whitespace-nowrap text-xs text-muted underline hover:text-foreground sm:inline"
+                >
+                  Sign in to save
+                </Link>
+              )}
+              {signedIn && (
+                <button
+                  onClick={() => setMyBoxesOpen(true)}
+                  className="flex shrink-0 items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-semibold text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
+                >
+                  <FolderOpen className="h-4 w-4" />
+                  <span className="hidden sm:inline">My boxes</span>
+                </button>
+              )}
+              <Link
+                href="/boardgames"
+                className="hidden shrink-0 rounded-lg border border-border px-3 py-1.5 text-xs font-semibold text-muted transition-colors hover:bg-surface-2 hover:text-foreground sm:inline"
+              >
+                Open from a game
+              </Link>
+            </div>
           </div>
 
-          <div className="h-[58vh] min-h-[400px] p-3">
+          <div className="min-h-[340px] flex-1 overflow-auto p-3 lg:min-h-0">
             {previewTab === "assembled" ? (
               <AssembledBoxPreview
                 layout={layout}
@@ -550,107 +916,203 @@ export function TuckboxDesigner({
                 assets={assets}
                 wrapAsset={imageMode === "wrap" ? wrapAsset : undefined}
                 selectedFace={selectedFace}
-                onSelectFace={setSelectedFace}
+                onSelectFace={(f) => f && setSelectedFace(f)}
                 onTransformChange={updateTransform}
                 onWrapTransform={updateWrapTransform}
               />
             )}
           </div>
 
-          <div className="space-y-3 border-t border-border p-3">
-            {layout.error && (
-              <div className="rounded-lg border border-amber-500/40 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
-                {layout.error}
-              </div>
-            )}
-            <p className="text-xs text-muted">
-              Box{" "}
-              <strong className="text-foreground">
-                {layout.boxWidth.toFixed(1)} × {layout.boxHeight.toFixed(1)} ×{" "}
-                {layout.boxDepth.toFixed(1)} {layout.unit}
-              </strong>{" "}
-              · Page{" "}
-              <strong className="text-foreground">
-                {layout.pageWidth.toFixed(1)} × {layout.pageHeight.toFixed(1)}{" "}
-                {layout.unit}
-              </strong>
-            </p>
-            <button
-              type="button"
-              onClick={handleDownload}
-              disabled={!!layout.error || busy}
-              className="w-full rounded-xl bg-accent px-4 py-3 font-semibold text-accent-foreground shadow-sm transition-opacity hover:opacity-90 disabled:opacity-40"
-            >
-              {busy ? "Generating…" : "⬇  Download print-ready PDF"}
-            </button>
+          {/* Faces bar */}
+          <div className="flex items-center gap-3 border-t border-border px-4 py-3">
+            <span className="shrink-0 text-[11px] font-bold uppercase tracking-wide text-subtle">
+              Faces
+            </span>
+            <div className="hscroll flex gap-2 overflow-x-auto">
+              {FACE_KEYS.map((face) => (
+                <FaceChip
+                  key={face}
+                  label={FACE_SHORT[face]}
+                  active={faceForEditor === face}
+                  filled={faceHasArt(face)}
+                  onClick={() => setSelectedFace(face)}
+                />
+              ))}
+            </div>
           </div>
-        </div>
-
-        <AssemblyInstructions />
+        </main>
       </div>
+
+      {/* Status + download */}
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 bg-accent px-4 py-3 text-accent-foreground">
+        <div className="min-w-0">
+          <p className="font-display font-bold leading-tight">
+            {layout.error
+              ? layout.error
+              : blankCount > 0
+                ? `Ready — ${blankCount} face${blankCount === 1 ? "" : "s"} still blank`
+                : "Ready to print"}
+          </p>
+          <p className="truncate text-xs opacity-90">{dims}</p>
+        </div>
+        <button
+          type="button"
+          onClick={handleDownload}
+          disabled={!!layout.error || busy}
+          className="inline-flex shrink-0 items-center gap-2 rounded-lg bg-surface px-4 py-2 text-sm font-semibold text-accent shadow-sm transition-colors hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          <Download className="h-4 w-4" />
+          {busy ? "Generating…" : "Download print-ready PDF"}
+        </button>
+      </div>
+
+      <MyBoxesModal
+        open={myBoxesOpen}
+        onClose={() => setMyBoxesOpen(false)}
+        onOpenBox={(id) => setLoadId(id)}
+        onNewBox={newBox}
+        currentId={boxId}
+      />
     </div>
   );
 }
 
-function Section({
+/* ---------- layout primitives ---------- */
+
+function NumSection({
+  n,
   title,
+  meta,
   children,
-  defaultOpen = true,
 }: {
+  n: string;
   title: string;
+  meta?: string;
   children: React.ReactNode;
-  defaultOpen?: boolean;
 }) {
   return (
-    <details
-      open={defaultOpen}
-      className="group rounded-lg border border-border-muted bg-surface/40 lg:border-0 lg:bg-transparent lg:rounded-none"
-    >
-      <summary className="flex items-center justify-between cursor-pointer list-none px-3 py-2 lg:px-0 lg:py-0">
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-muted">
-          {title}
+    <section className="space-y-3 px-4 py-4 lg:px-5">
+      <div className="flex items-center justify-between gap-2">
+        <h2 className="text-xs font-bold uppercase tracking-[0.14em]">
+          <span className="text-accent">{n} / </span>
+          <span className="text-foreground">{title}</span>
         </h2>
-        <span className="text-muted text-lg leading-none group-open:rotate-90 transition-transform">
-          ›
-        </span>
-      </summary>
-      <div className="space-y-3 px-3 pb-3 pt-1 lg:px-0 lg:pb-0 lg:pt-3">
-        {children}
+        {meta && <span className="text-[11px] text-subtle">{meta}</span>}
       </div>
-    </details>
+      {children}
+    </section>
   );
 }
 
-function Row({
-  label,
+function PresetButton({
+  active,
+  onClick,
   children,
 }: {
-  label: string;
+  active: boolean;
+  onClick: () => void;
   children: React.ReactNode;
 }) {
   return (
-    <label className="grid grid-cols-1 sm:grid-cols-[140px_1fr] items-start sm:items-center gap-1.5 sm:gap-3 text-sm text-foreground">
+    <button
+      type="button"
+      onClick={onClick}
+      className={`rounded-lg border px-3 py-2 text-sm font-semibold transition-colors ${
+        active
+          ? "border-accent bg-accent text-accent-foreground"
+          : "border-border text-muted hover:bg-surface-2 hover:text-foreground"
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function FaceChip({
+  label,
+  active,
+  filled,
+  onClick,
+}: {
+  label: string;
+  active: boolean;
+  filled: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`flex shrink-0 items-center gap-2 rounded-lg border px-3 py-2 text-sm font-semibold transition-colors ${
+        active
+          ? "border-accent bg-accent text-accent-foreground"
+          : "border-border text-muted hover:bg-surface-2 hover:text-foreground"
+      }`}
+    >
+      <span
+        className={`h-3 w-3 rounded-[3px] border ${
+          filled
+            ? active
+              ? "border-accent-foreground bg-accent-foreground"
+              : "border-accent bg-accent"
+            : active
+              ? "border-accent-foreground/70"
+              : "border-current"
+        }`}
+      />
+      {label}
+    </button>
+  );
+}
+
+function SmallButton({
+  onClick,
+  disabled,
+  children,
+}: {
+  onClick: () => void;
+  disabled?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className="rounded-lg border border-border px-3 py-1.5 text-sm font-medium text-muted transition-colors hover:bg-surface-2 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+    >
+      {children}
+    </button>
+  );
+}
+
+function ReadRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between border-t border-border-muted py-1.5 text-sm first:border-t-0">
       <span className="text-muted">{label}</span>
-      <div className="min-w-0">{children}</div>
-    </label>
+      <span className="font-medium text-foreground">{value}</span>
+    </div>
   );
 }
 
-function PairRow({ children }: { children: React.ReactNode }) {
-  return <div className="grid grid-cols-2 gap-3">{children}</div>;
-}
-
-function MiniField({
+function Field({
   label,
+  suffix,
   children,
 }: {
   label: string;
+  suffix?: string;
   children: React.ReactNode;
 }) {
   return (
-    <label className="flex flex-col gap-1 text-sm text-foreground min-w-0">
-      <span className="text-xs text-muted">{label}</span>
-      <div className="min-w-0">{children}</div>
+    <label className="block min-w-0">
+      <span className="mb-1 block text-[11px] font-bold uppercase tracking-wide text-subtle">
+        {label}
+      </span>
+      <div className="flex items-center gap-2">
+        <div className="min-w-0 flex-1">{children}</div>
+        {suffix && <span className="shrink-0 text-xs text-muted">{suffix}</span>}
+      </div>
     </label>
   );
 }
@@ -664,14 +1126,9 @@ function NumberInput({
   step: number;
   onChange: (value: number) => void;
 }) {
-  // Keep a local string so the user can clear the field while typing
-  // (an empty input no longer snaps back to the last numeric value).
   const [text, setText] = useState<string>(() => String(value));
   const focusedRef = useRef(false);
 
-  // Sync from parent when the value changes externally (e.g. unit conversion)
-  // — but only when the input isn't focused, to avoid overwriting the user's
-  // in-progress text.
   useEffect(() => {
     if (focusedRef.current) return;
     setText(String(value));
@@ -695,13 +1152,12 @@ function NumberInput({
         focusedRef.current = false;
         const parsed = parseFloat(text);
         if (Number.isNaN(parsed)) {
-          // Invalid / empty on blur — restore the last valid parent value.
           setText(String(value));
         } else if (parsed !== value) {
           onChange(parsed);
         }
       }}
-      className="w-full rounded-md border border-border bg-surface text-foreground px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+      className="w-full rounded-md border border-border bg-surface px-3 py-1.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
     />
   );
 }
@@ -716,13 +1172,13 @@ function SegmentedControl({
   options: { value: string; label: string }[];
 }) {
   return (
-    <div className="inline-flex rounded-full bg-surface-muted p-0.5 text-xs font-medium">
+    <div className="inline-flex rounded-full bg-surface-2 p-0.5 text-xs font-medium">
       {options.map((option) => (
         <button
           key={option.value}
           type="button"
           onClick={() => onChange(option.value)}
-          className={`px-3 py-1 rounded-full transition-colors ${
+          className={`rounded-full px-3 py-1 transition-colors ${
             value === option.value
               ? "bg-surface text-foreground shadow-sm"
               : "text-muted"
@@ -734,14 +1190,6 @@ function SegmentedControl({
     </div>
   );
 }
-
-const UploadIcon = (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5 shrink-0">
-    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-    <path d="m17 8-5-5-5 5" />
-    <path d="M12 3v12" />
-  </svg>
-);
 
 /** Custom drag-and-drop / click image uploader. `compact` is for "replace". */
 function ImageDropzone({
@@ -788,14 +1236,12 @@ function ImageDropzone({
           : "border-border text-muted hover:border-accent/50 hover:bg-surface-2 hover:text-foreground"
       }`}
     >
-      {UploadIcon}
+      <Upload className="h-5 w-5 shrink-0" />
       <div>
         <div className="text-sm font-medium">
           {compact ? "Replace image" : "Drop image or click to upload"}
         </div>
-        {!compact && (
-          <div className="mt-0.5 text-xs text-subtle">PNG or JPG</div>
-        )}
+        {!compact && <div className="mt-0.5 text-xs text-subtle">PNG or JPG</div>}
       </div>
       <input
         ref={inputRef}
@@ -808,201 +1254,5 @@ function ImageDropzone({
         }}
       />
     </div>
-  );
-}
-
-function WrapEditor({
-  data,
-  aspect,
-  idealPx,
-  isSelected,
-  onSelect,
-  onImage,
-  onTransform,
-}: {
-  data: FaceImageData | undefined;
-  aspect: number;
-  idealPx: { width: number; height: number };
-  isSelected: boolean;
-  onSelect: () => void;
-  onImage: (file: File | undefined) => void;
-  onTransform: (transform: FaceImageTransform) => void;
-}) {
-  const lowResWarning =
-    data &&
-    (data.naturalWidth < idealPx.width * 0.6 ||
-      data.naturalHeight < idealPx.height * 0.6);
-
-  return (
-    <details
-      open
-      onPointerDown={onSelect}
-      className={`group rounded-lg border transition-colors ${
-        isSelected
-          ? "border-primary ring-2 ring-primary/30"
-          : "border-border"
-      }`}
-    >
-      <summary className="flex items-center justify-between cursor-pointer list-none p-3">
-        <span className="text-sm font-medium text-foreground">
-          Body wrap (front + back + sides)
-        </span>
-        <div className="flex items-center gap-3">
-          {data && (
-            <button
-              type="button"
-              onClick={(event) => {
-                event.preventDefault();
-                event.stopPropagation();
-                onImage(undefined);
-              }}
-              className="text-xs text-muted hover:text-red-600"
-            >
-              Remove
-            </button>
-          )}
-          <span className="text-muted text-lg leading-none group-open:rotate-90 transition-transform">
-            ›
-          </span>
-        </div>
-      </summary>
-
-      <div className="px-3 pb-3 space-y-3">
-      <div className="text-[11px] text-muted">
-        Recommended image:{" "}
-        <strong>
-          {idealPx.width} × {idealPx.height} px
-        </strong>{" "}
-        (300 DPI, wraps back → left → front → right)
-        {data && (
-          <>
-            {" — "}
-            <span
-              className={
-                lowResWarning ? "text-amber-600 dark:text-amber-400" : ""
-              }
-            >
-              yours: {data.naturalWidth} × {data.naturalHeight} px
-              {lowResWarning ? " (may look pixelated)" : ""}
-            </span>
-          </>
-        )}
-      </div>
-
-      {!data && (
-        <ImageDropzone onFile={onImage} />
-      )}
-
-      {data && (
-        <div className="space-y-2">
-          <ImagePositioner
-            data={data}
-            frameAspect={aspect}
-            onChange={onTransform}
-          />
-          <ImageDropzone onFile={onImage} compact />
-        </div>
-      )}
-      </div>
-    </details>
-  );
-}
-
-function FaceEditor({
-  displayName,
-  data,
-  aspect,
-  idealPx,
-  isSelected,
-  onSelect,
-  onImage,
-  onTransform,
-}: {
-  displayName: string;
-  data: FaceImageData | undefined;
-  aspect: number;
-  idealPx: { width: number; height: number };
-  isSelected: boolean;
-  onSelect: () => void;
-  onImage: (file: File | undefined) => void;
-  onTransform: (transform: FaceImageTransform) => void;
-}) {
-  const lowResWarning =
-    data &&
-    (data.naturalWidth < idealPx.width * 0.6 ||
-      data.naturalHeight < idealPx.height * 0.6);
-
-  return (
-    <details
-      open
-      onPointerDown={onSelect}
-      className={`group rounded-lg border transition-colors ${
-        isSelected
-          ? "border-primary ring-2 ring-primary/30"
-          : "border-border"
-      }`}
-    >
-      <summary className="flex items-center justify-between cursor-pointer list-none p-3">
-        <span className="text-sm font-medium text-foreground">
-          {displayName}
-        </span>
-        <div className="flex items-center gap-3">
-          {data && (
-            <button
-              type="button"
-              onClick={(event) => {
-                event.preventDefault();
-                event.stopPropagation();
-                onImage(undefined);
-              }}
-              className="text-xs text-muted hover:text-red-600"
-            >
-              Remove
-            </button>
-          )}
-          <span className="text-muted text-lg leading-none group-open:rotate-90 transition-transform">
-            ›
-          </span>
-        </div>
-      </summary>
-
-      <div className="px-3 pb-3 space-y-3">
-      <div className="text-[11px] text-muted">
-        Recommended image:{" "}
-        <strong>
-          {idealPx.width} × {idealPx.height} px
-        </strong>{" "}
-        (300 DPI)
-        {data && (
-          <>
-            {" — "}
-            <span
-              className={
-                lowResWarning ? "text-amber-600 dark:text-amber-400" : ""
-              }
-            >
-              yours: {data.naturalWidth} × {data.naturalHeight} px
-              {lowResWarning ? " (may look pixelated)" : ""}
-            </span>
-          </>
-        )}
-      </div>
-
-      {!data && (
-        <ImageDropzone onFile={onImage} />
-      )}
-
-      {data && (
-        <div className="space-y-2">
-          <ImagePositioner
-            data={data}
-            frameAspect={aspect}
-            onChange={onTransform}
-          />
-          <ImageDropzone onFile={onImage} compact />
-        </div>
-      )}
-      </div>
-    </details>
   );
 }

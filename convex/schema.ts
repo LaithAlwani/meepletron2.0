@@ -314,6 +314,60 @@ export default defineSchema({
     edited: v.boolean(),
   }).index("by_draft", ["draftId"]),
 
+  // Saved tuckbox designs (per user) for autosave + the "My boxes" gallery.
+  // Face artwork lives in file storage (data URLs are too big to inline).
+  tuckboxes: defineTable({
+    userId: v.id("users"),
+    name: v.string(),
+    unit: v.union(v.literal("mm"), v.literal("in")),
+    cardWidth: v.number(),
+    cardHeight: v.number(),
+    cardCount: v.number(),
+    cardThickness: v.number(),
+    tolerance: v.number(),
+    materialThickness: v.number(),
+    paperSize: v.union(v.literal("A4"), v.literal("Letter"), v.literal("A3")),
+    orientation: v.union(v.literal("portrait"), v.literal("landscape")),
+    imageMode: v.union(v.literal("per-face"), v.literal("wrap")),
+    faces: v.array(
+      v.object({
+        face: v.union(
+          v.literal("front"),
+          v.literal("back"),
+          v.literal("leftSide"),
+          v.literal("rightSide"),
+          v.literal("top"),
+          v.literal("bottom"),
+        ),
+        storageId: v.id("_storage"),
+        naturalWidth: v.number(),
+        naturalHeight: v.number(),
+        transform: v.object({
+          zoom: v.number(),
+          anchorX: v.number(),
+          anchorY: v.number(),
+          rotation: v.number(),
+        }),
+      }),
+    ),
+    wrap: v.optional(
+      v.object({
+        storageId: v.id("_storage"),
+        naturalWidth: v.number(),
+        naturalHeight: v.number(),
+        transform: v.object({
+          zoom: v.number(),
+          anchorX: v.number(),
+          anchorY: v.number(),
+          rotation: v.number(),
+        }),
+      }),
+    ),
+    // Front (or wrap) blob, reused as the gallery thumbnail.
+    coverStorageId: v.optional(v.id("_storage")),
+    updatedAt: v.number(),
+  }).index("by_user", ["userId"]),
+
   // --- ops / analytics ---
   // Singleton row of runtime-tunable RAG knobs. Read newest via .order("desc").take(1).
   siteConfig: defineTable({

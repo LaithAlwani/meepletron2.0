@@ -17,30 +17,14 @@ function TuckboxInner() {
 
   const cover = game ? (game.imageUrl ?? game.thumbnailUrl ?? undefined) : undefined;
 
+  // Remount when the game changes so a fresh prefill resets the box artwork.
   return (
-    <div className="mx-auto max-w-6xl px-4 py-8">
-      <header className="mb-6">
-        <h1 className="font-display text-3xl font-extrabold tracking-tight">
-          Tuckbox generator
-        </h1>
-        <p className="mt-1 text-sm text-muted">
-          Design a print-ready card box.
-          {game
-            ? ` Prefilled from ${game.title}${cover ? "" : " (no cover image — upload your own artwork below)"}.`
-            : " Upload your own artwork below, or open it from a game to use its cover."}
-        </p>
-      </header>
-
-      {/* Remount when the game changes so a fresh prefill resets the box artwork. */}
-      <TuckboxDesigner
-        key={gameId ?? "blank"}
-        initialBoardgame={
-          gameId && game
-            ? { title: game.title, imageUrl: cover }
-            : undefined
-        }
-      />
-    </div>
+    <TuckboxDesigner
+      key={gameId ?? "blank"}
+      initialBoardgame={
+        gameId && game ? { title: game.title, imageUrl: cover } : undefined
+      }
+    />
   );
 }
 
@@ -48,7 +32,7 @@ export default function TuckboxPage() {
   return (
     <Suspense
       fallback={
-        <div className="mx-auto max-w-6xl px-4 py-8 text-muted">Loading…</div>
+        <div className="mx-auto max-w-7xl px-4 py-8 text-muted">Loading…</div>
       }
     >
       <TuckboxInner />

@@ -2,6 +2,19 @@
 
 import { useRef } from "react";
 import {
+  ArrowUpLeft,
+  ArrowUp,
+  ArrowUpRight,
+  ArrowLeft,
+  ArrowRight,
+  ArrowDownLeft,
+  ArrowDown,
+  ArrowDownRight,
+  Dot,
+  RotateCw,
+  type LucideIcon,
+} from "lucide-react";
+import {
   computeImagePlacement,
   type FaceImageData,
   type FaceImageTransform,
@@ -17,25 +30,25 @@ type Props = {
 const FRAME_MAX = 140;
 
 const ANCHORS: {
-  label: string;
+  icon: LucideIcon;
   anchorX: number;
   anchorY: number;
   title: string;
 }[][] = [
   [
-    { label: "↖", anchorX: 0, anchorY: 0, title: "Top-left" },
-    { label: "↑", anchorX: 0.5, anchorY: 0, title: "Top-center" },
-    { label: "↗", anchorX: 1, anchorY: 0, title: "Top-right" },
+    { icon: ArrowUpLeft, anchorX: 0, anchorY: 0, title: "Top-left" },
+    { icon: ArrowUp, anchorX: 0.5, anchorY: 0, title: "Top-center" },
+    { icon: ArrowUpRight, anchorX: 1, anchorY: 0, title: "Top-right" },
   ],
   [
-    { label: "←", anchorX: 0, anchorY: 0.5, title: "Left" },
-    { label: "•", anchorX: 0.5, anchorY: 0.5, title: "Center" },
-    { label: "→", anchorX: 1, anchorY: 0.5, title: "Right" },
+    { icon: ArrowLeft, anchorX: 0, anchorY: 0.5, title: "Left" },
+    { icon: Dot, anchorX: 0.5, anchorY: 0.5, title: "Center" },
+    { icon: ArrowRight, anchorX: 1, anchorY: 0.5, title: "Right" },
   ],
   [
-    { label: "↙", anchorX: 0, anchorY: 1, title: "Bottom-left" },
-    { label: "↓", anchorX: 0.5, anchorY: 1, title: "Bottom-center" },
-    { label: "↘", anchorX: 1, anchorY: 1, title: "Bottom-right" },
+    { icon: ArrowDownLeft, anchorX: 0, anchorY: 1, title: "Bottom-left" },
+    { icon: ArrowDown, anchorX: 0.5, anchorY: 1, title: "Bottom-center" },
+    { icon: ArrowDownRight, anchorX: 1, anchorY: 1, title: "Bottom-right" },
   ],
 ];
 
@@ -161,6 +174,7 @@ export function ImagePositioner({ data, frameAspect, onChange }: Props) {
           <div className="grid grid-cols-3 gap-0.5 w-[78px]">
             {ANCHORS.flat().map((anchor) => {
               const active = isActiveAnchor(anchor.anchorX, anchor.anchorY);
+              const Icon = anchor.icon;
               return (
                 <button
                   key={anchor.title}
@@ -173,13 +187,13 @@ export function ImagePositioner({ data, frameAspect, onChange }: Props) {
                       anchorY: anchor.anchorY,
                     })
                   }
-                  className={`h-6 w-6 rounded text-xs flex items-center justify-center transition-colors ${
+                  className={`flex h-6 w-6 items-center justify-center rounded transition-colors ${
                     active
                       ? "bg-primary text-primary-fg"
-                      : "bg-surface-muted hover:bg-border text-muted"
+                      : "bg-surface-muted text-muted hover:bg-border"
                   }`}
                 >
-                  {anchor.label}
+                  <Icon className="h-3.5 w-3.5" />
                 </button>
               );
             })}
@@ -193,10 +207,11 @@ export function ImagePositioner({ data, frameAspect, onChange }: Props) {
                 360) as ImageRotation;
               onChange({ ...data.transform, rotation: next });
             }}
-            className="px-2 py-1 rounded bg-surface-muted hover:bg-border text-muted"
+            className="flex items-center gap-1 rounded bg-surface-muted px-2 py-1 text-muted hover:bg-border"
             title="Rotate 90°"
           >
-            ↻ {data.transform.rotation}°
+            <RotateCw className="h-3.5 w-3.5" />
+            {data.transform.rotation}°
           </button>
           <button
             type="button"

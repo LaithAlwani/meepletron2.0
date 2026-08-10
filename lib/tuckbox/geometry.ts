@@ -9,6 +9,7 @@ import type {
 const PAPER_SIZES = {
   A4: { mm: { w: 210, h: 297 }, in: { w: 8.27, h: 11.69 } },
   Letter: { mm: { w: 215.9, h: 279.4 }, in: { w: 8.5, h: 11 } },
+  A3: { mm: { w: 297, h: 420 }, in: { w: 11.69, h: 16.54 } },
 } as const;
 
 const GLUE_TAB_WIDTH_MM = 10;

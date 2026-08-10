@@ -46,6 +46,7 @@ import type * as search from "../search.js";
 import type * as seed from "../seed.js";
 import type * as seedRag from "../seedRag.js";
 import type * as siteConfig from "../siteConfig.js";
+import type * as tuckboxes from "../tuckboxes.js";
 import type * as users from "../users.js";
 
 import type {
@@ -93,6 +94,7 @@ declare const fullApi: ApiFromModules<{
   seed: typeof seed;
   seedRag: typeof seedRag;
   siteConfig: typeof siteConfig;
+  tuckboxes: typeof tuckboxes;
   users: typeof users;
 }>;
 

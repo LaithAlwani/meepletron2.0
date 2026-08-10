@@ -293,6 +293,29 @@ body::before {
   background: color-mix(in srgb, var(--accent) 70%, transparent);
 }
 
+/* Themed scrollbar for in-app scroll panels (tuckbox controls, etc.). Works on
+   both axes and in both themes; visible but slim + accent-tinted. */
+.themed-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--accent) 40%, transparent) transparent;
+}
+.themed-scroll::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.themed-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.themed-scroll::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--accent) 35%, transparent);
+  border-radius: 9999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+.themed-scroll::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--accent) 60%, transparent);
+}
+
 /* --- Coming-soon splash --- */
 /* Gentle bob for the logo and floating game pieces. */
 @keyframes float {

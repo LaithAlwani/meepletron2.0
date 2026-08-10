@@ -1,5 +1,5 @@
 export type Unit = "mm" | "in";
-export type PaperSize = "A4" | "Letter";
+export type PaperSize = "A4" | "Letter" | "A3";
 export type Orientation = "portrait" | "landscape";
 
 export type FaceKey =
