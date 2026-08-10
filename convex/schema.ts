@@ -82,6 +82,10 @@ export default defineSchema({
     searchText: v.optional(v.string()),
     // Denormalized: does this base game have ≥1 expansion? For the library filter.
     hasExpansions: v.optional(v.boolean()),
+    // Denormalized: does this base game's family (itself + expansions) have ≥1
+    // ingested rulebook? i.e. can a user actually chat with it. Maintained on
+    // ingest / un-ingest / delete. The library only shows chat-ready games.
+    chatReady: v.optional(v.boolean()),
     // BoardGameGeek id (from the original import) + cached BGG stats.
     bggId: v.optional(v.string()),
     bgg: v.optional(
@@ -105,10 +109,11 @@ export default defineSchema({
   })
     .index("by_slug", ["slug"])
     .index("by_isExpansion", ["isExpansion"])
+    .index("by_chat_ready", ["chatReady"])
     .index("by_parent", ["parentId"])
     .searchIndex("search_text", {
       searchField: "searchText",
-      filterFields: ["isExpansion"],
+      filterFields: ["isExpansion", "chatReady"],
     }),
 
   // A game can have several rulebooks (Base Rules, Solo Mode, ...). Each is the

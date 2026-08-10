@@ -1,12 +1,39 @@
 "use client";
 
-import { use, useState } from "react";
+import { use, useMemo, useState } from "react";
 import Link from "next/link";
 import { useQuery, useAction, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import type { Id } from "@/convex/_generated/dataModel";
-import { ChunkCard } from "@/components/admin/ChunkCard";
+import type { Doc, Id } from "@/convex/_generated/dataModel";
+import { ChunkCard, InsertChunkForm } from "@/components/admin/ChunkCard";
 import { friendlyError } from "@/lib/friendlyError";
+import { Plus } from "lucide-react";
+
+type Filter = "all" | "flagged" | "excluded" | "edited";
+
+/** Small labelled figure for the ingestion summary grid. */
+function Stat({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: string | number;
+  tone?: "default" | "warn";
+}) {
+  return (
+    <div className="rounded-lg border border-border bg-surface px-3 py-2">
+      <div
+        className={`font-display text-lg font-bold ${
+          tone === "warn" ? "text-red-600 dark:text-red-400" : "text-foreground"
+        }`}
+      >
+        {value}
+      </div>
+      <div className="text-xs text-muted">{label}</div>
+    </div>
+  );
+}
 
 export default function IngestReviewPage({
   params,
@@ -27,8 +54,54 @@ export default function IngestReviewPage({
 
   const [working, setWorking] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [filter, setFilter] = useState<Filter>("all");
+  const [addingTop, setAddingTop] = useState(false);
 
   const acceptedCount = chunks?.filter((c) => c.accepted).length ?? 0;
+
+  // Feedback: counts, flag breakdown, and pages that produced no chunk.
+  const stats = useMemo(() => {
+    if (!chunks) return null;
+    const flagged = chunks.filter((c) => c.flags.length > 0);
+    const flagCounts = new Map<string, number>();
+    for (const c of flagged)
+      for (const f of c.flags) flagCounts.set(f, (flagCounts.get(f) ?? 0) + 1);
+
+    const pagesSeen = new Set<number>();
+    for (const c of chunks) if (c.page != null) pagesSeen.add(c.page);
+    const totalPages = status?.totalPages ?? 0;
+    const missingPages: number[] = [];
+    if (totalPages > 0 && pagesSeen.size > 0) {
+      for (let p = 1; p <= totalPages; p++)
+        if (!pagesSeen.has(p)) missingPages.push(p);
+    }
+
+    return {
+      total: chunks.length,
+      accepted: chunks.filter((c) => c.accepted).length,
+      excluded: chunks.filter((c) => !c.accepted).length,
+      edited: chunks.filter((c) => c.edited).length,
+      flagged: flagged.length,
+      flagCounts: [...flagCounts.entries()].sort((a, b) => b[1] - a[1]),
+      totalPages,
+      pagesCovered: pagesSeen.size,
+      missingPages,
+    };
+  }, [chunks, status?.totalPages]);
+
+  const visibleChunks = useMemo(() => {
+    if (!chunks) return [];
+    switch (filter) {
+      case "flagged":
+        return chunks.filter((c) => c.flags.length > 0);
+      case "excluded":
+        return chunks.filter((c) => !c.accepted);
+      case "edited":
+        return chunks.filter((c) => c.edited);
+      default:
+        return chunks;
+    }
+  }, [chunks, filter]);
 
   async function handleCommit() {
     setWorking(true);
@@ -183,15 +256,116 @@ export default function IngestReviewPage({
         </div>
       )}
 
+      {/* Feedback summary */}
+      {stats && stats.total > 0 && (
+        <div className="space-y-3 rounded-lg border border-border bg-surface-2 p-4">
+          <h3 className="text-sm font-semibold uppercase tracking-wide text-muted">
+            Ingestion summary
+          </h3>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            <Stat label="Chunks" value={stats.total} />
+            <Stat label="Included" value={stats.accepted} />
+            <Stat
+              label="Pages covered"
+              value={
+                stats.totalPages
+                  ? `${stats.pagesCovered}/${stats.totalPages}`
+                  : stats.pagesCovered || "—"
+              }
+            />
+            <Stat
+              label="Flagged"
+              value={stats.flagged}
+              tone={stats.flagged > 0 ? "warn" : "default"}
+            />
+            {status && status.removedDuplicates > 0 && (
+              <Stat label="Duplicates removed" value={status.removedDuplicates} />
+            )}
+            {stats.edited > 0 && <Stat label="Edited" value={stats.edited} />}
+            {status?.geminiUsage && (
+              <Stat
+                label="Parse tokens"
+                value={status.geminiUsage.totalTokens.toLocaleString()}
+              />
+            )}
+          </div>
+
+          {stats.flagCounts.length > 0 && (
+            <p className="text-xs text-muted">
+              Flags:{" "}
+              {stats.flagCounts.map(([f, n], i) => (
+                <span key={f}>
+                  {i > 0 && ", "}
+                  <span className="text-red-600 dark:text-red-400">{f}</span> ×{n}
+                </span>
+              ))}
+            </p>
+          )}
+
+          {stats.missingPages.length > 0 && (
+            <p className="rounded-md bg-red-500/10 px-3 py-2 text-xs text-red-700 dark:text-red-300">
+              <span className="font-semibold">
+                {stats.missingPages.length} page
+                {stats.missingPages.length === 1 ? "" : "s"} produced no chunks
+              </span>{" "}
+              (nothing extracted — check for missed content): p.
+              {stats.missingPages.slice(0, 40).join(", p.")}
+              {stats.missingPages.length > 40 && " …"}
+            </p>
+          )}
+        </div>
+      )}
+
       {/* Chunks */}
       {chunks && chunks.length > 0 && (
         <div className="space-y-3">
-          <h3 className="text-sm font-semibold uppercase tracking-wide text-muted">
-            Chunks ({chunks.length})
-          </h3>
-          {chunks.map((c) => (
-            <ChunkCard key={c._id} chunk={c} />
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h3 className="text-sm font-semibold uppercase tracking-wide text-muted">
+              Chunks ({visibleChunks.length}
+              {filter !== "all" && ` of ${chunks.length}`})
+            </h3>
+            <div className="flex flex-wrap gap-1">
+              {(["all", "flagged", "excluded", "edited"] as Filter[]).map((f) => (
+                <button
+                  key={f}
+                  onClick={() => setFilter(f)}
+                  className={`rounded-full px-3 py-1 text-xs font-medium capitalize transition-colors ${
+                    filter === f
+                      ? "bg-accent text-accent-foreground"
+                      : "border border-border text-muted hover:bg-surface-2"
+                  }`}
+                >
+                  {f}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {filter === "all" &&
+            (addingTop ? (
+              <InsertChunkForm
+                rulebookId={rbId}
+                onDone={() => setAddingTop(false)}
+              />
+            ) : (
+              <button
+                onClick={() => setAddingTop(true)}
+                className="flex w-full items-center justify-center gap-1 rounded-lg border border-dashed border-border py-2 text-xs font-medium text-muted hover:bg-surface-2 hover:text-foreground"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                Add chunk at top
+              </button>
+            ))}
+
+          {visibleChunks.map((c: Doc<"draftChunks">) => (
+            <ChunkCard key={c._id} chunk={c} rulebookId={rbId} />
           ))}
+
+          {visibleChunks.length === 0 && (
+            <p className="rounded-lg border border-dashed border-border py-6 text-center text-sm text-muted">
+              No chunks match “{filter}”.
+            </p>
+          )}
         </div>
       )}
 

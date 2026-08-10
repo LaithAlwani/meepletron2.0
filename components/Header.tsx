@@ -9,9 +9,14 @@ import {
   Unauthenticated,
   AuthLoading,
 } from "convex/react";
-import { LayoutGrid, Scissors, LogIn } from "lucide-react";
+import {
+  LayoutGrid,
+  Scissors,
+  MessageCircle,
+  Heart,
+  LogIn,
+} from "lucide-react";
 import { api } from "@/convex/_generated/api";
-import { ThemeToggle } from "@/components/ThemeToggle";
 import { UserMenu } from "@/components/UserMenu";
 import { buttonClasses } from "@/components/ui/Button";
 import { cn } from "@/lib/cn";
@@ -19,6 +24,8 @@ import { cn } from "@/lib/cn";
 const NAV = [
   { href: "/boardgames", label: "Library", icon: LayoutGrid },
   { href: "/tuckbox", label: "Tuckbox", icon: Scissors },
+  { href: "/chats", label: "Chats", icon: MessageCircle },
+  { href: "/favorites", label: "Favourites", icon: Heart },
 ];
 
 function Brand() {
@@ -84,7 +91,6 @@ export function Header() {
           })}
         </nav>
         <div className="ml-auto flex items-center gap-1.5">
-          <ThemeToggle />
           <AuthLoading>
             <div className="h-9 w-9 animate-pulse rounded-full bg-surface-2" />
           </AuthLoading>

@@ -2,16 +2,9 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import {
-  MessageCircle,
-  Heart,
-  User,
-  Scissors,
-  Settings,
-  Shield,
-  type LucideIcon,
-} from "lucide-react";
+import { User, Scissors, Settings, Shield, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/cn";
+import { ThemeMenu } from "@/components/ThemeToggle";
 
 export function UserMenu({
   initial,
@@ -37,18 +30,20 @@ export function UserMenu({
     };
   }, [open]);
 
-  // `bottomNav` items are already reachable from the mobile tab bar, so they're
-  // hidden here on small screens and only shown on desktop (which has no bar).
+  // Avoid duplicating links that already live in a persistent nav:
+  //  - `bottomNav`: in the mobile tab bar → hide here on mobile, show on desktop.
+  //  - `headerNav`: in the desktop header nav → hide here on desktop, show on mobile.
+  // Chats/Favourites live in the header nav (desktop) + tab bar (mobile), so
+  // they're not repeated here.
   const items: {
     href: string;
     label: string;
     icon: LucideIcon;
     bottomNav?: boolean;
+    headerNav?: boolean;
   }[] = [
-    { href: "/chats", label: "Chats", icon: MessageCircle, bottomNav: true },
-    { href: "/favorites", label: "Favourites", icon: Heart, bottomNav: true },
-    { href: "/tuckbox", label: "Tuckbox", icon: Scissors },
     { href: "/profile", label: "Profile", icon: User, bottomNav: true },
+    { href: "/tuckbox", label: "Tuckbox", icon: Scissors, headerNav: true },
     { href: "/settings", label: "Settings", icon: Settings },
     ...(isAdmin
       ? [{ href: "/admin", label: "Admin", icon: Shield as LucideIcon }]
@@ -76,7 +71,11 @@ export function UserMenu({
                 onClick={() => setOpen(false)}
                 className={cn(
                   "items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-medium text-muted transition-colors hover:bg-surface-2 hover:text-foreground",
-                  it.bottomNav ? "hidden sm:flex" : "flex",
+                  it.bottomNav
+                    ? "hidden sm:flex"
+                    : it.headerNav
+                      ? "flex sm:hidden"
+                      : "flex",
                 )}
               >
                 <Icon className="h-4 w-4 shrink-0" />
@@ -84,6 +83,12 @@ export function UserMenu({
               </Link>
             );
           })}
+
+          <div className="my-1 border-t border-border" />
+          <p className="px-3 pb-1 pt-1 text-xs font-semibold uppercase tracking-wide text-subtle">
+            Theme
+          </p>
+          <ThemeMenu />
         </div>
       )}
     </div>

@@ -32,7 +32,6 @@ import { ResourcesSideNav, LayersIcon } from "@/components/chat/ResourcesSideNav
 import { GuestBanner } from "@/components/chat/GuestBanner";
 import { ThinkingIndicator } from "@/components/chat/ThinkingIndicator";
 import { BackgroundCover } from "@/components/boardgames/BackgroundCover";
-import { ThemeToggle } from "@/components/ThemeToggle";
 import { ArrowLeft } from "lucide-react";
 import { Die } from "@/components/ui/icons";
 
@@ -397,7 +396,6 @@ function ChatView({ gameId, slug }: { gameId: Id<"games">; slug: string }) {
                 {game?.title ?? "Game"}
               </h1>
             </Link>
-            <ThemeToggle />
             <button
               onClick={() => setResourcesOpen(true)}
               aria-label={`Open resources (${resourceCount} available)`}

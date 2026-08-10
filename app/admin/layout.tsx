@@ -51,28 +51,30 @@ export default function AdminLayout({
     <div className="mx-auto max-w-5xl px-4 py-8">
       <div className="mb-6">
         <h1 className="text-2xl font-bold">Admin</h1>
-        <nav className="mt-3 flex gap-1 overflow-x-auto border-b border-border">
-          {adminNav.map((item) => {
-            const active =
-              item.href === "/admin"
-                ? pathname === "/admin"
-                : pathname.startsWith(item.href);
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                aria-current={active ? "page" : undefined}
-                className={`-mb-px shrink-0 whitespace-nowrap border-b-2 px-3 py-2 text-sm font-medium transition-colors ${
-                  active
-                    ? "border-accent text-foreground"
-                    : "border-transparent text-muted hover:text-foreground"
-                }`}
-              >
-                {item.label}
-              </Link>
-            );
-          })}
-        </nav>
+        <div className="mt-3 border-b border-border">
+          <nav className="flex gap-1 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {adminNav.map((item) => {
+              const active =
+                item.href === "/admin"
+                  ? pathname === "/admin"
+                  : pathname.startsWith(item.href);
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  aria-current={active ? "page" : undefined}
+                  className={`shrink-0 whitespace-nowrap border-b-2 px-3 py-2 text-sm font-medium transition-colors ${
+                    active
+                      ? "border-accent text-foreground"
+                      : "border-transparent text-muted hover:text-foreground"
+                  }`}
+                >
+                  {item.label}
+                </Link>
+              );
+            })}
+          </nav>
+        </div>
       </div>
       {children}
     </div>

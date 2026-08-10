@@ -5,6 +5,7 @@ import type { Doc, Id } from "./_generated/dataModel";
 import { requireAdmin } from "./lib/auth";
 import { slugify } from "./lib/slug";
 import { buildSearchText } from "./lib/gameSearch";
+import { recomputeChatReady } from "./lib/chatReady";
 
 /** Resolve a game's storage ids into signed URLs for the client. */
 async function withMedia(ctx: QueryCtx, game: Doc<"games">) {
@@ -69,7 +70,10 @@ export const searchPaginated = query({
     const result = await ctx.db
       .query("games")
       .withSearchIndex("search_text", (q) =>
-        q.search("searchText", trimmed).eq("isExpansion", false),
+        q
+          .search("searchText", trimmed)
+          .eq("isExpansion", false)
+          .eq("chatReady", true),
       )
       .paginate(paginationOpts);
     return {
@@ -90,9 +94,10 @@ export const browsePaginated = query({
     hasExpansions: v.optional(v.boolean()),
   },
   handler: async (ctx, { paginationOpts, players, time, hasExpansions }) => {
+    // Only chat-ready games (family has an ingested rulebook) reach the library.
     const base = ctx.db
       .query("games")
-      .withIndex("by_isExpansion", (q) => q.eq("isExpansion", false))
+      .withIndex("by_chat_ready", (q) => q.eq("chatReady", true))
       .order("desc");
 
     const needsFilter = players != null || time != null || hasExpansions;
@@ -147,7 +152,7 @@ export const browseCount = query({
   handler: async (ctx, { players, time, hasExpansions }) => {
     const base = ctx.db
       .query("games")
-      .withIndex("by_isExpansion", (q) => q.eq("isExpansion", false));
+      .withIndex("by_chat_ready", (q) => q.eq("chatReady", true));
 
     const needsFilter = players != null || time != null || hasExpansions;
     const q = needsFilter
@@ -530,7 +535,7 @@ export const deleteGame = mutation({
     for (const id of blobs) await ctx.storage.delete(id);
     await ctx.db.delete("games", gameId);
 
-    // If this was an expansion, recompute its parent's hasExpansions flag.
+    // If this was an expansion, recompute its parent's hasExpansions + chatReady.
     if (game.isExpansion && game.parentId) {
       const sibling = await ctx.db
         .query("games")
@@ -539,6 +544,7 @@ export const deleteGame = mutation({
       await ctx.db.patch("games", game.parentId, {
         hasExpansions: sibling !== null,
       });
+      await recomputeChatReady(ctx, game.parentId);
     }
   },
 });

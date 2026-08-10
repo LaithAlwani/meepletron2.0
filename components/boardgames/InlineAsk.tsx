@@ -63,7 +63,7 @@ export function InlineAsk({
           <button
             onClick={submit}
             disabled={!q.trim()}
-            className="rounded-xl bg-accent px-5 py-2.5 text-sm font-semibold text-accent-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
+            className="rounded-xl bg-accent px-5 py-2.5 text-sm font-semibold text-accent-foreground transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:bg-surface-2 disabled:text-subtle"
           >
             Ask →
           </button>

@@ -9,6 +9,7 @@ import {
 import type { Id } from "./_generated/dataModel";
 import { internal } from "./_generated/api";
 import { requireAdmin } from "./lib/auth";
+import { recomputeChatReady } from "./lib/chatReady";
 
 const batchPlanValidator = v.array(
   v.object({
@@ -366,6 +367,8 @@ export const finalizeCommit = internalMutation({
       completionTokens: 0,
       totalTokens: embedTokens,
     });
+    // Mark the game's family chat-ready now that a rulebook is ingested.
+    if (rb) await recomputeChatReady(ctx, rb.gameId);
     // Refresh the derived detail-page content (FAQ, glossary, components) from
     // the freshly-ingested rulebook. Both resolve to the base game's family.
     if (rb) {
@@ -403,6 +406,8 @@ export const getIngestStatus = query({
       totalPages: draft.totalPages,
       totalBatches: draft.batchPlan.length,
       batchesDone: draft.nextBatchIndex,
+      removedDuplicates: draft.removedDuplicates ?? 0,
+      geminiUsage: draft.geminiUsage,
       error: draft.error,
     };
   },
@@ -479,9 +484,10 @@ export const updateDraftChunk = mutation({
   args: {
     draftChunkId: v.id("draftChunks"),
     text: v.optional(v.string()),
+    breadcrumb: v.optional(v.string()),
     accepted: v.optional(v.boolean()),
   },
-  handler: async (ctx, { draftChunkId, text, accepted }) => {
+  handler: async (ctx, { draftChunkId, text, breadcrumb, accepted }) => {
     await requireAdmin(ctx);
     const chunk = await ctx.db.get("draftChunks", draftChunkId);
     if (!chunk) throw new Error("Chunk not found");
@@ -492,6 +498,10 @@ export const updateDraftChunk = mutation({
       patch.edited = true;
       if (chunk.originalText === undefined) patch.originalText = chunk.text;
     }
+    if (breadcrumb !== undefined && breadcrumb !== chunk.breadcrumb) {
+      patch.breadcrumb = breadcrumb;
+      patch.edited = true;
+    }
     if (accepted !== undefined) patch.accepted = accepted;
     if (Object.keys(patch).length > 0) {
       await ctx.db.patch("draftChunks", draftChunkId, patch);
@@ -501,6 +511,81 @@ export const updateDraftChunk = mutation({
           status: "reviewing",
         });
       }
+    }
+  },
+});
+
+/**
+ * Insert a brand-new chunk the AI missed. `afterChunkId` places it right after
+ * that chunk (omit to insert at the very top); order is set to the midpoint so
+ * no other rows need re-numbering.
+ */
+export const insertDraftChunk = mutation({
+  args: {
+    rulebookId: v.id("rulebooks"),
+    afterChunkId: v.optional(v.id("draftChunks")),
+    breadcrumb: v.string(),
+    text: v.string(),
+    page: v.optional(v.number()),
+    chunkType: v.optional(v.string()),
+  },
+  handler: async (
+    ctx,
+    { rulebookId, afterChunkId, breadcrumb, text, page, chunkType },
+  ) => {
+    const draft = await requireDraft(ctx, rulebookId);
+    if (!draft) throw new Error("No ingestion draft for this rulebook");
+
+    const all = (
+      await ctx.db
+        .query("draftChunks")
+        .withIndex("by_draft", (q) => q.eq("draftId", draft._id))
+        .take(5000)
+    ).sort((a, b) => a.order - b.order);
+
+    let order: number;
+    if (!afterChunkId) {
+      order = all.length ? all[0].order - 1 : 0;
+    } else {
+      const idx = all.findIndex((c) => c._id === afterChunkId);
+      if (idx === -1) throw new Error("Anchor chunk not found");
+      const a = all[idx].order;
+      const next = all[idx + 1];
+      order = next ? (a + next.order) / 2 : a + 1;
+    }
+
+    const id = await ctx.db.insert("draftChunks", {
+      draftId: draft._id,
+      order,
+      breadcrumb,
+      page,
+      chunkType: chunkType ?? "rules",
+      scope: "shared",
+      text,
+      flags: [],
+      accepted: true,
+      edited: true,
+    });
+    if (draft.status === "parsed") {
+      await ctx.db.patch("migrationDrafts", draft._id, { status: "reviewing" });
+    }
+    return id;
+  },
+});
+
+/** Delete a draft chunk entirely (e.g. a manually-added one, or pure noise). */
+export const deleteDraftChunk = mutation({
+  args: { draftChunkId: v.id("draftChunks") },
+  handler: async (ctx, { draftChunkId }) => {
+    await requireAdmin(ctx);
+    const chunk = await ctx.db.get("draftChunks", draftChunkId);
+    if (!chunk) return;
+    await ctx.db.delete("draftChunks", draftChunkId);
+    const draft = await ctx.db.get("migrationDrafts", chunk.draftId);
+    if (draft?.status === "parsed") {
+      await ctx.db.patch("migrationDrafts", chunk.draftId, {
+        status: "reviewing",
+      });
     }
   },
 });
