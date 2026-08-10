@@ -7,7 +7,10 @@ import { useQuery, useMutation, useConvexAuth } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { useToast } from "@/components/ui/Toast";
-import { stripIconBrackets } from "@/components/chat/MessageBubble";
+import {
+  stripIconBrackets,
+  linkifyCitations,
+} from "@/components/chat/MessageBubble";
 
 type Faq = {
   _id: Id<"gameFaqs">;
@@ -79,7 +82,34 @@ function FaqItem({ faq }: { faq: Faq }) {
       {open && (
         <div className="border-t border-border px-4 py-3">
           <div className="prose-chat text-sm leading-relaxed">
-            <ReactMarkdown>{stripIconBrackets(faq.answer)}</ReactMarkdown>
+            <ReactMarkdown
+              components={{
+                a({ href, children }) {
+                  const m = /^#cite-(\d+)$/.exec(href ?? "");
+                  if (m) {
+                    // Inline citation → numbered accent pill, matching the
+                    // Sources chips below.
+                    return (
+                      <span className="mx-0.5 inline-flex h-[1.4em] min-w-[1.4em] items-center justify-center rounded-full bg-accent/15 px-1 align-super text-[0.65em] font-bold leading-none text-accent">
+                        {m[1]}
+                      </span>
+                    );
+                  }
+                  return (
+                    <a href={href} target="_blank" rel="noreferrer">
+                      {children}
+                    </a>
+                  );
+                },
+              }}
+            >
+              {stripIconBrackets(
+                linkifyCitations(
+                  faq.answer,
+                  new Set(faq.annotations.map((a) => a.n)),
+                ),
+              )}
+            </ReactMarkdown>
           </div>
 
           {faq.annotations.length > 0 && (

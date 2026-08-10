@@ -8,7 +8,6 @@ import {
   internalAction,
 } from "./_generated/server";
 import { internal } from "./_generated/api";
-import type { Id } from "./_generated/dataModel";
 import { getCurrentUser, requireUser } from "./lib/auth";
 import { generateText } from "ai";
 import { CHAT_MODEL, buildAnswer, type Annotation } from "./rag";
@@ -23,42 +22,24 @@ const STARTER_QUESTIONS = [
   "How and when does the game end?",
 ];
 
-/** Resolve a game to its family's ingested rulebook ids + source titles. */
-export const faqSetup = internalQuery({
+/**
+ * A game's OWN ingested rulebooks (never the family). FAQ + rules-refresher are
+ * per-game — a base game's questions must not pull in expansion content — so
+ * they resolve against just this game's rulebook, stored under this game's id.
+ */
+export const ownFaqSetup = internalQuery({
   args: { gameId: v.id("games") },
   handler: async (ctx, { gameId }) => {
     const game = await ctx.db.get("games", gameId);
     if (!game) return null;
-    const base =
-      game.isExpansion && game.parentId
-        ? ((await ctx.db.get("games", game.parentId)) ?? game)
-        : game;
-    const family = [
-      base,
-      ...(await ctx.db
-        .query("games")
-        .withIndex("by_parent", (q) => q.eq("parentId", base._id))
-        .collect()),
-    ];
-    const rulebookIds: Id<"rulebooks">[] = [];
-    const titles = new Set<string>();
-    for (const g of family) {
-      const rbs = await ctx.db
-        .query("rulebooks")
-        .withIndex("by_game", (q) => q.eq("gameId", g._id))
-        .collect();
-      for (const rb of rbs) {
-        if (rb.isIngested && (rb.kind ?? "rulebook") !== "download") {
-          rulebookIds.push(rb._id);
-          titles.add(g.title);
-        }
-      }
-    }
-    return {
-      baseGameId: base._id,
-      rulebookIds,
-      sourceTitles: [...titles],
-    };
+    const rbs = await ctx.db
+      .query("rulebooks")
+      .withIndex("by_game", (q) => q.eq("gameId", gameId))
+      .collect();
+    const rulebookIds = rbs
+      .filter((rb) => rb.isIngested && (rb.kind ?? "rulebook") !== "download")
+      .map((rb) => rb._id);
+    return { rulebookIds, title: game.title };
   },
 });
 
@@ -102,8 +83,11 @@ export const replaceFaqs = internalMutation({
 export const generateForGame = internalAction({
   args: { gameId: v.id("games") },
   handler: async (ctx, { gameId }): Promise<{ generated: number }> => {
-    const setup = await ctx.runQuery(internal.faqs.faqSetup, { gameId });
-    if (!setup || setup.rulebookIds.length === 0) return { generated: 0 };
+    const setup = await ctx.runQuery(internal.faqs.ownFaqSetup, { gameId });
+    if (!setup || setup.rulebookIds.length === 0) {
+      await ctx.runMutation(internal.faqs.replaceFaqs, { gameId, faqs: [] });
+      return { generated: 0 };
+    }
 
     const results: {
       question: string;
@@ -115,7 +99,7 @@ export const generateForGame = internalAction({
         rulebookIds: setup.rulebookIds,
         query: question,
         history: [{ role: "user", content: question }],
-        sourceTitles: setup.sourceTitles,
+        sourceTitles: [setup.title],
       });
       if (empty || !system) continue;
       const { text } = await generateText({
@@ -128,7 +112,7 @@ export const generateForGame = internalAction({
     }
 
     await ctx.runMutation(internal.faqs.replaceFaqs, {
-      gameId: setup.baseGameId,
+      gameId,
       faqs: results,
     });
     return { generated: results.length };
@@ -144,17 +128,13 @@ export const adminRegenerate = action({
   },
 });
 
-/** The FAQ for the detail page (resolved to the base game), with the caller's votes. */
+/** The FAQ for the detail page (this game's own), with the caller's votes. */
 export const listForGame = query({
   args: { gameId: v.id("games") },
   handler: async (ctx, { gameId }) => {
-    const game = await ctx.db.get("games", gameId);
-    if (!game) return [];
-    const baseId =
-      game.isExpansion && game.parentId ? game.parentId : game._id;
     const faqs = await ctx.db
       .query("gameFaqs")
-      .withIndex("by_game", (q) => q.eq("gameId", baseId))
+      .withIndex("by_game", (q) => q.eq("gameId", gameId))
       .collect();
     faqs.sort((a, b) => a.order - b.order);
 

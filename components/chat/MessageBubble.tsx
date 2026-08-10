@@ -220,7 +220,7 @@ function Sources({
  * so they can be rendered as interactive references — but only for markers that
  * actually have a matching source, so stray brackets are left untouched.
  */
-function linkifyCitations(content: string, validNs: Set<number>): string {
+export function linkifyCitations(content: string, validNs: Set<number>): string {
   return content.replace(/\[(\d+)\]/g, (whole, digits) =>
     validNs.has(Number(digits)) ? `[${digits}](#cite-${digits})` : whole,
   );

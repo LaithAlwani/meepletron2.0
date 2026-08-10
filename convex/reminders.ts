@@ -20,8 +20,16 @@ import { embedQuery } from "./lib/embedding";
 export const generateForGame = internalAction({
   args: { gameId: v.id("games") },
   handler: async (ctx, { gameId }): Promise<{ reminders: number }> => {
-    const setup = await ctx.runQuery(internal.faqs.faqSetup, { gameId });
-    if (!setup || setup.rulebookIds.length === 0) return { reminders: 0 };
+    // Per-game (own rulebook only) so a base game's refresher never mixes in
+    // expansion rules.
+    const setup = await ctx.runQuery(internal.faqs.ownFaqSetup, { gameId });
+    if (!setup || setup.rulebookIds.length === 0) {
+      await ctx.runMutation(internal.reminders.replaceReminders, {
+        gameId,
+        reminders: [],
+      });
+      return { reminders: 0 };
+    }
 
     // Retrieve the chunks most likely to hold the forgettable specifics.
     const { embedding } = await embedQuery(
@@ -71,7 +79,7 @@ ${context}`,
     }
 
     await ctx.runMutation(internal.reminders.replaceReminders, {
-      gameId: setup.baseGameId,
+      gameId,
       reminders,
     });
     return { reminders: reminders.length };
@@ -113,12 +121,9 @@ export const adminRegenerate = action({
 export const listForGame = query({
   args: { gameId: v.id("games") },
   handler: async (ctx, { gameId }) => {
-    const game = await ctx.db.get("games", gameId);
-    if (!game) return [];
-    const baseId = game.isExpansion && game.parentId ? game.parentId : game._id;
     const rows = await ctx.db
       .query("gameReminders")
-      .withIndex("by_game", (q) => q.eq("gameId", baseId))
+      .withIndex("by_game", (q) => q.eq("gameId", gameId))
       .collect();
     rows.sort((a, b) => a.order - b.order);
     return rows.map((r) => ({ label: r.label, detail: r.detail }));
