@@ -7,7 +7,7 @@ import { api } from "@/convex/_generated/api";
 import type { Doc, Id } from "@/convex/_generated/dataModel";
 import { ChunkCard, InsertChunkForm } from "@/components/admin/ChunkCard";
 import { friendlyError } from "@/lib/friendlyError";
-import { Plus } from "lucide-react";
+import { Plus, ChevronDown } from "lucide-react";
 
 type Filter = "all" | "flagged" | "excluded" | "edited";
 
@@ -102,6 +102,43 @@ export default function IngestReviewPage({
         return chunks;
     }
   }, [chunks, filter]);
+
+  // Group the (filtered) chunks into contiguous top-level sections (breadcrumbs
+  // are "Section > Sub > …"). Each group is collapsible and jump-to-able.
+  const groups = useMemo(() => {
+    const out: { id: string; label: string; chunks: Doc<"draftChunks">[] }[] =
+      [];
+    for (const c of visibleChunks) {
+      const label =
+        (c.breadcrumb?.split(">")[0] || "").trim() || "(no section)";
+      const last = out[out.length - 1];
+      if (last && last.label === label) last.chunks.push(c);
+      else out.push({ id: c._id, label, chunks: [c] });
+    }
+    return out;
+  }, [visibleChunks]);
+
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const toggleSection = (id: string) =>
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  const jumpToSection = (id: string) => {
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
+    // Defer so the section is expanded before we scroll to it.
+    requestAnimationFrame(() =>
+      document
+        .getElementById(`sec-${id}`)
+        ?.scrollIntoView({ behavior: "smooth", block: "start" }),
+    );
+  };
 
   async function handleCommit() {
     setWorking(true);
@@ -357,9 +394,79 @@ export default function IngestReviewPage({
               </button>
             ))}
 
-          {visibleChunks.map((c: Doc<"draftChunks">) => (
-            <ChunkCard key={c._id} chunk={c} rulebookId={rbId} />
-          ))}
+          {groups.length > 1 && (
+            <div className="rounded-lg border border-border bg-surface-2 p-3">
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <h4 className="text-xs font-semibold uppercase tracking-wide text-muted">
+                  Jump to section
+                </h4>
+                <div className="flex gap-1">
+                  <button
+                    onClick={() => setCollapsed(new Set())}
+                    className="rounded-md px-2 py-0.5 text-xs text-muted transition-colors hover:bg-surface hover:text-foreground"
+                  >
+                    Expand all
+                  </button>
+                  <button
+                    onClick={() =>
+                      setCollapsed(new Set(groups.map((g) => g.id)))
+                    }
+                    className="rounded-md px-2 py-0.5 text-xs text-muted transition-colors hover:bg-surface hover:text-foreground"
+                  >
+                    Collapse all
+                  </button>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {groups.map((g) => (
+                  <button
+                    key={g.id}
+                    onClick={() => jumpToSection(g.id)}
+                    className="flex items-center gap-1 rounded-full border border-border bg-surface px-2.5 py-1 text-xs text-muted transition-colors hover:border-accent/40 hover:text-foreground"
+                  >
+                    <span className="max-w-40 truncate">{g.label}</span>
+                    <span className="text-subtle">{g.chunks.length}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {groups.length <= 1
+            ? visibleChunks.map((c: Doc<"draftChunks">) => (
+                <ChunkCard key={c._id} chunk={c} rulebookId={rbId} />
+              ))
+            : groups.map((g) => {
+                const isCollapsed = collapsed.has(g.id);
+                return (
+                  <div
+                    key={g.id}
+                    id={`sec-${g.id}`}
+                    className="scroll-mt-2 space-y-3"
+                  >
+                    <button
+                      onClick={() => toggleSection(g.id)}
+                      className="sticky top-0 z-10 flex w-full items-center gap-2 rounded-lg border border-border bg-surface-2/95 px-3 py-2 text-left backdrop-blur"
+                    >
+                      <ChevronDown
+                        className={`h-4 w-4 shrink-0 text-subtle transition-transform ${
+                          isCollapsed ? "-rotate-90" : ""
+                        }`}
+                      />
+                      <span className="truncate text-sm font-semibold">
+                        {g.label}
+                      </span>
+                      <span className="ml-auto shrink-0 text-xs text-subtle">
+                        {g.chunks.length} chunk{g.chunks.length === 1 ? "" : "s"}
+                      </span>
+                    </button>
+                    {!isCollapsed &&
+                      g.chunks.map((c) => (
+                        <ChunkCard key={c._id} chunk={c} rulebookId={rbId} />
+                      ))}
+                  </div>
+                );
+              })}
 
           {visibleChunks.length === 0 && (
             <p className="rounded-lg border border-dashed border-border py-6 text-center text-sm text-muted">
