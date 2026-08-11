@@ -31,6 +31,14 @@ export function relativeTime(ms: number): string {
   });
 }
 
+/** Time of day, e.g. "3:45 PM". */
+export function timeOfDay(ms: number): string {
+  return new Date(ms).toLocaleTimeString([], {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
 /** Format a min/max play time as "60–90 min", "45 min", or null. */
 export function formatPlayTime(min?: number, max?: number): string | null {
   if (min && max) return min === max ? `${min} min` : `${min}–${max} min`;

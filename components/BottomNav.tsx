@@ -29,7 +29,7 @@ export function BottomNav() {
     <>
       <div
         aria-hidden
-        className="h-[calc(4rem+env(safe-area-inset-bottom))] sm:hidden"
+        className="h-[calc(3.25rem+env(safe-area-inset-bottom))] sm:hidden"
       />
       <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-surface/95 pb-[env(safe-area-inset-bottom)] backdrop-blur sm:hidden">
         <ul className="mx-auto flex max-w-md items-stretch">
@@ -43,11 +43,14 @@ export function BottomNav() {
                   href={t.href}
                   aria-current={active ? "page" : undefined}
                   className={cn(
-                    "flex h-16 flex-col items-center justify-center gap-1 text-[11px] font-semibold transition-colors",
+                    "flex h-13 flex-col items-center justify-center gap-0.5 text-[10px] font-semibold transition-colors",
                     active ? "text-accent" : "text-subtle hover:text-muted",
                   )}
                 >
-                  <Icon className="h-5 w-5" strokeWidth={active ? 2.4 : 2} />
+                  <Icon
+                    className="h-4.5 w-4.5"
+                    strokeWidth={active ? 2.4 : 2}
+                  />
                   {t.label}
                 </Link>
               </li>

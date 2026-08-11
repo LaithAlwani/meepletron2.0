@@ -482,7 +482,7 @@ export default function IngestReviewPage({
         (status.status === "parsed" || status.status === "reviewing") &&
         chunks &&
         chunks.length > 0 && (
-          <div className="sticky bottom-0 -mx-1 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-surface/90 p-4 shadow-lg backdrop-blur">
+          <div className="sticky bottom-[calc(3.25rem+env(safe-area-inset-bottom))] -mx-1 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-surface/90 p-4 shadow-lg backdrop-blur sm:bottom-0">
             <p className="text-sm">
               <span className="font-medium">{acceptedCount}</span> of{" "}
               {chunks.length} chunks selected.
@@ -517,7 +517,7 @@ function ScrollTopButton() {
       onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
       aria-label="Scroll to top"
       title="Scroll to top"
-      className="fixed bottom-5 right-5 z-40 flex h-11 w-11 items-center justify-center rounded-full bg-accent text-accent-foreground shadow-lg transition-colors hover:bg-accent-hover"
+      className="fixed right-5 bottom-[calc(8rem+env(safe-area-inset-bottom))] z-40 flex h-11 w-11 items-center justify-center rounded-full bg-accent text-accent-foreground shadow-lg transition-colors hover:bg-accent-hover sm:bottom-5"
     >
       <ArrowUp className="h-5 w-5" />
     </button>

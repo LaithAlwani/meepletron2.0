@@ -7,6 +7,7 @@ import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Doc } from "@/convex/_generated/dataModel";
 import { usePreferences } from "@/lib/usePreferences";
+import { timeOfDay } from "@/lib/format";
 
 type Annotation = NonNullable<Doc<"messages">["annotations"]>[number];
 
@@ -32,7 +33,7 @@ function MessageActions({ message }: { message: Doc<"messages"> }) {
   const idle = "text-muted hover:text-foreground";
 
   return (
-    <div className="mt-2 flex items-center gap-0.5 opacity-70 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
+    <div className="flex items-center gap-0.5 opacity-70 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
       <button onClick={copy} aria-label="Copy answer" className={`${base} ${idle}`}>
         {copied ? (
           <Check className="h-3.5 w-3.5 text-accent-2" />
@@ -247,10 +248,13 @@ export function MessageBubble({ message }: { message: Doc<"messages"> }) {
 
   if (message.role === "user") {
     return (
-      <div className="msg-in flex justify-end">
+      <div className="msg-in flex flex-col items-end">
         <div className="max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-br-sm bg-accent px-4 py-2.5 text-sm leading-relaxed text-accent-foreground">
           {message.content}
         </div>
+        <span className="mt-1 mr-1 text-[11px] text-subtle">
+          {timeOfDay(message._creationTime)}
+        </span>
       </div>
     );
   }
@@ -319,7 +323,12 @@ export function MessageBubble({ message }: { message: Doc<"messages"> }) {
           />
         )}
 
-        <MessageActions message={message} />
+        <div className="mt-2 flex items-center justify-between gap-2">
+          <MessageActions message={message} />
+          <span className="shrink-0 text-[11px] text-subtle">
+            {timeOfDay(message._creationTime)}
+          </span>
+        </div>
       </div>
     </div>
   );
