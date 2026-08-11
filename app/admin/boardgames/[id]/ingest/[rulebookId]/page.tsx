@@ -517,7 +517,7 @@ function ScrollTopButton() {
       onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
       aria-label="Scroll to top"
       title="Scroll to top"
-      className="fixed right-5 bottom-[calc(8rem+env(safe-area-inset-bottom))] z-40 flex h-11 w-11 items-center justify-center rounded-full bg-accent text-accent-foreground shadow-lg transition-colors hover:bg-accent-hover sm:bottom-5"
+      className="fixed right-5 bottom-[calc(6.25rem+env(safe-area-inset-bottom))] z-40 flex h-11 w-11 items-center justify-center rounded-full bg-accent text-accent-foreground shadow-lg transition-colors hover:bg-accent-hover sm:bottom-5"
     >
       <ArrowUp className="h-5 w-5" />
     </button>
