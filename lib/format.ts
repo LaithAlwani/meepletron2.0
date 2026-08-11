@@ -22,7 +22,7 @@ export function relativeTime(ms: number): string {
   const hr = Math.floor(min / 60);
   if (hr < 24) return `${hr}h ago`;
   const day = Math.floor(hr / 24);
-  if (day < 7) return `${day}d ago`;
+  if (day <= 7) return `${day}d ago`;
   const d = new Date(ms);
   return d.toLocaleDateString("en-US", {
     month: "short",

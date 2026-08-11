@@ -235,17 +235,34 @@ export const listMyChats = query({
       .withIndex("by_user", (q) => q.eq("userId", user._id))
       .order("desc")
       .take(100);
+
+    // Collapse each game family to a single entry anchored on the base game —
+    // chat is base-game-scoped, so a legacy expansion-anchored chat and the base
+    // chat lead to the same place. Keep the most-recently-active of the family.
+    const byBase = new Map<Id<"games">, (typeof chats)[number]>();
+    for (const chat of chats) {
+      const game = await ctx.db.get("games", chat.gameId);
+      const baseId =
+        game?.isExpansion && game.parentId ? game.parentId : chat.gameId;
+      const existing = byBase.get(baseId);
+      if (!existing || chat.lastMessageAt > existing.lastMessageAt) {
+        byBase.set(baseId, chat);
+      }
+    }
+
     const resolved = await Promise.all(
-      chats.map(async (chat) => {
-        const game = await ctx.db.get("games", chat.gameId);
+      [...byBase.entries()].map(async ([baseId, chat]) => {
+        const baseGame = await ctx.db.get("games", baseId);
         const thumbnailUrl =
-          game?.thumbnailId ?? game?.imageId
-            ? await ctx.storage.getUrl((game.thumbnailId ?? game.imageId)!)
+          baseGame?.thumbnailId ?? baseGame?.imageId
+            ? await ctx.storage.getUrl(
+                (baseGame.thumbnailId ?? baseGame.imageId)!,
+              )
             : null;
         return {
           ...chat,
-          gameTitle: game?.title ?? "Unknown game",
-          gameSlug: game?.slug ?? null,
+          gameTitle: baseGame?.title ?? "Unknown game",
+          gameSlug: baseGame?.slug ?? null,
           thumbnailUrl,
         };
       }),
