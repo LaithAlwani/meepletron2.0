@@ -11,6 +11,8 @@ import {
   postProcessMarkdown,
   extractIconTokens,
   extractSectionHeadings,
+  splitByPageMarker,
+  joinPages,
 } from "./lib/extraction";
 import { chunkMarkdown } from "./lib/chunker";
 import { embedDocuments } from "./lib/embedding";
@@ -25,12 +27,13 @@ async function extractMarkdown(
   knownIcons: string[],
   knownSections: string[],
 ) {
-  const { text, usage } = await generateText({
+  const { text, usage, finishReason } = await generateText({
     model: google("gemini-2.5-flash"),
-    // Extraction is a prescriptive "read pages → emit structured Markdown" task,
-    // not a reasoning one — disable Gemini "thinking" to avoid paying for hidden
-    // reasoning tokens on top of the (already large) Markdown output.
-    providerOptions: { google: { thinkingConfig: { thinkingBudget: 0 } } },
+    // Faithful transcription of dense/multi-column rulebook pages benefits from
+    // Gemini's "thinking" — leave it on (dynamic budget) for quality. Give a
+    // generous output cap so a page-heavy batch isn't silently truncated.
+    providerOptions: { google: { thinkingConfig: { thinkingBudget: -1 } } },
+    maxOutputTokens: 32768,
     messages: [
       {
         role: "user",
@@ -51,6 +54,7 @@ async function extractMarkdown(
   });
   return {
     markdown: text,
+    finishReason,
     usage: {
       promptTokens: usage.inputTokens ?? 0,
       completionTokens: usage.outputTokens ?? 0,
@@ -122,8 +126,9 @@ export const processBatch = internalAction({
     // Arm a watchdog: if this batch is killed mid-run (OOM/timeout) the catch
     // below never fires, so schedule a check that surfaces the stall as an error
     // instead of hanging silently. No-op once the batch advances the index.
+    // Generous window — thinking + per-page recovery can make a batch slower.
     await ctx.scheduler.runAfter(
-      6 * 60 * 1000,
+      10 * 60 * 1000,
       internal.ingestionDb.markStalledIfNoProgress,
       { draftId, expectedIndex: state.nextBatchIndex },
     );
@@ -137,7 +142,7 @@ export const processBatch = internalAction({
         batch.endPage,
       );
 
-      const { markdown, usage } = await extractMarkdown(
+      const { markdown, usage, finishReason } = await extractMarkdown(
         slice,
         batch.startPage,
         batch.endPage,
@@ -150,15 +155,43 @@ export const processBatch = internalAction({
         batch.endPage,
       );
 
+      // Coverage check: every page in the range should produce content. Pages
+      // with no marker (dropped/merged) — or all pages if the batch response was
+      // truncated — are re-extracted one page at a time (bulletproof page id)
+      // and spliced back in page order.
+      const pages = splitByPageMarker(cleaned, batch.startPage);
+      const truncated = finishReason === "length";
+      const totalUsage = { ...usage };
+      for (let p = batch.startPage; p <= batch.endPage; p++) {
+        const have = pages.get(p)?.trim();
+        if (!truncated && have) continue;
+        const pageSlice = await extractPageRange(bytes, p, p);
+        const r = await extractMarkdown(
+          pageSlice,
+          p,
+          p,
+          state.iconTokens,
+          state.sectionHeadings,
+        );
+        totalUsage.promptTokens += r.usage.promptTokens;
+        totalUsage.completionTokens += r.usage.completionTokens;
+        totalUsage.totalTokens += r.usage.totalTokens;
+        const pageMd = postProcessMarkdown(r.markdown, p, p);
+        for (const [pg, c] of splitByPageMarker(pageMd, p)) {
+          if (c.trim()) pages.set(pg, c);
+        }
+      }
+      const merged = joinPages(pages);
+
       await ctx.runMutation(internal.ingestionDb.saveBatch, {
         draftId,
         index: batch.index,
         startPage: batch.startPage,
         endPage: batch.endPage,
-        markdown: cleaned,
-        newIconTokens: extractIconTokens(cleaned),
-        newSectionHeadings: extractSectionHeadings(cleaned),
-        usage,
+        markdown: merged,
+        newIconTokens: extractIconTokens(merged),
+        newSectionHeadings: extractSectionHeadings(merged),
+        usage: totalUsage,
       });
 
       await ctx.scheduler.runAfter(0, internal.ingestion.processBatch, {

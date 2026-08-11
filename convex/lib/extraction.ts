@@ -23,7 +23,7 @@ Rules:
 - Transcribe the rules faithfully. Do NOT summarize, invent, or omit rules.
 - Use Markdown headings (#, ##, ###) that mirror the rulebook's section structure.
 - Preserve tables as Markdown tables and lists as Markdown lists.
-- At the START of each page's content, emit a marker comment on its own line: \`<!-- page N -->\`, where N is the ACTUAL rulebook page number (between ${startPage} and ${endPage}).
+- At the START of each page's content, emit a marker comment on its own line: \`<!-- page N -->\`, where N is the ACTUAL rulebook page number (between ${startPage} and ${endPage}). Emit a marker for EVERY page in this range in order — even a short, mostly-image, or section-continuing page — and never merge two pages under one marker. Transcribe every column and callout box; do not skip sidebars.
 - Normalize iconography to bracketed ALL-CAPS tokens, e.g. [WOOD], [VP], [BRICK]. If the pages define what icons mean, put those under a \`## Iconography\` section as a list like \`[WOOD] — one wood resource\`.
 - Ignore purely decorative images; describe an image only if it conveys a rule.
 - Output ONLY the Markdown. No preamble, no code fences around the whole thing.${iconHint}${sectionHint}`;
@@ -62,6 +62,49 @@ export function postProcessMarkdown(
 export function extractIconTokens(md: string): string[] {
   const found = md.match(ICON_TOKEN_REGEX) ?? [];
   return [...new Set(found.map((t) => t.toUpperCase()))];
+}
+
+/**
+ * Split batch Markdown into a page→content map using the `<!-- page N -->`
+ * markers. Content before the first marker (and any un-marked output) is
+ * attributed to `startPage`. Lets us detect coverage gaps and splice in
+ * per-page re-extractions while preserving page order.
+ */
+export function splitByPageMarker(
+  md: string,
+  startPage: number,
+): Map<number, string> {
+  const map = new Map<number, string>();
+  const re = /<!--\s*page\s+(\d+)\s*-->/gi;
+  const marks: { page: number; idx: number; len: number }[] = [];
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(md))) {
+    marks.push({ page: Number(m[1]), idx: m.index, len: m[0].length });
+  }
+  if (marks.length === 0) {
+    const t = md.trim();
+    if (t) map.set(startPage, t);
+    return map;
+  }
+  const preamble = md.slice(0, marks[0].idx).trim();
+  for (let i = 0; i < marks.length; i++) {
+    const contentStart = marks[i].idx + marks[i].len;
+    const contentEnd = i + 1 < marks.length ? marks[i + 1].idx : md.length;
+    let content = md.slice(contentStart, contentEnd).trim();
+    if (i === 0 && preamble) content = `${preamble}\n\n${content}`.trim();
+    const prev = map.get(marks[i].page);
+    map.set(marks[i].page, prev ? `${prev}\n\n${content}` : content);
+  }
+  return map;
+}
+
+/** Rebuild ordered batch Markdown (ascending pages) from a page→content map. */
+export function joinPages(map: Map<number, string>): string {
+  return [...map.entries()]
+    .filter(([, c]) => c.trim())
+    .sort((a, b) => a[0] - b[0])
+    .map(([p, c]) => `<!-- page ${p} -->\n${c}`)
+    .join("\n\n");
 }
 
 /** `##`/`###` section headings appearing in the Markdown. */
