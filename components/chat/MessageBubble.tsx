@@ -33,7 +33,7 @@ function MessageActions({ message }: { message: Doc<"messages"> }) {
   const idle = "text-muted hover:text-foreground";
 
   return (
-    <div className="flex items-center gap-0.5 opacity-70 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
+    <div className="mt-2 flex items-center gap-0.5 opacity-70 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
       <button onClick={copy} aria-label="Copy answer" className={`${base} ${idle}`}>
         {copied ? (
           <Check className="h-3.5 w-3.5 text-accent-2" />
@@ -278,7 +278,7 @@ export function MessageBubble({ message }: { message: Doc<"messages"> }) {
   );
 
   return (
-    <div className="msg-in group flex justify-start">
+    <div className="msg-in group flex flex-col items-start">
       <div className="max-w-[90%] rounded-2xl rounded-bl-sm border border-border bg-surface px-4 py-3">
         <div className="prose-chat text-sm leading-relaxed">
           <ReactMarkdown
@@ -323,13 +323,11 @@ export function MessageBubble({ message }: { message: Doc<"messages"> }) {
           />
         )}
 
-        <div className="mt-2 flex items-center justify-between gap-2">
-          <MessageActions message={message} />
-          <span className="shrink-0 text-[11px] text-subtle">
-            {timeOfDay(message._creationTime)}
-          </span>
-        </div>
+        <MessageActions message={message} />
       </div>
+      <span className="mt-1 ml-1 text-[11px] text-subtle">
+        {timeOfDay(message._creationTime)}
+      </span>
     </div>
   );
 }
