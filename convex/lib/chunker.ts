@@ -65,8 +65,20 @@ export function chunkMarkdown(markdown: string): DraftChunk[] {
   for (const line of lines) {
     const pm = line.match(PAGE_MARKER);
     if (pm) {
-      page = Number(pm[1]);
-      current.page ??= page;
+      const newPage = Number(pm[1]);
+      // A section that spans a page break must not stamp its page-2 content with
+      // page 1 (that misattributes citations). Once a section already has
+      // content on one page, a new page starts a fresh chunk with the SAME
+      // breadcrumb but the correct page.
+      const hasContent = current.lines.some((l) => l.trim());
+      if (hasContent && current.page !== undefined && current.page !== newPage) {
+        flush();
+        page = newPage;
+        current = buildSection();
+      } else {
+        page = newPage;
+        current.page ??= page;
+      }
       continue;
     }
     const h1m = line.match(/^#\s+(.+?)\s*$/);
