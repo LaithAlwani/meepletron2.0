@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import {
   query,
   action,
+  mutation,
   internalQuery,
   internalMutation,
   internalAction,
@@ -11,6 +12,7 @@ import { generateObject } from "ai";
 import { z } from "zod";
 import { CHAT_MODEL } from "./rag";
 import { embedQuery } from "./lib/embedding";
+import { requireAdmin } from "./lib/auth";
 
 const NO_THINK = {
   google: { thinkingConfig: { thinkingBudget: 0 } },
@@ -118,6 +120,34 @@ export const replaceComponents = internalMutation({
         gameId,
         item: c.item,
         count: c.count,
+        order: o++,
+      });
+    }
+  },
+});
+
+/** Admin: manually save a game's component list (edits the AI's output). */
+export const adminSaveComponents = mutation({
+  args: {
+    gameId: v.id("games"),
+    components: v.array(v.object({ item: v.string(), count: v.number() })),
+  },
+  handler: async (ctx, { gameId, components }) => {
+    await requireAdmin(ctx);
+    for (const c of await ctx.db
+      .query("gameComponents")
+      .withIndex("by_game", (q) => q.eq("gameId", gameId))
+      .collect()) {
+      await ctx.db.delete("gameComponents", c._id);
+    }
+    let o = 0;
+    for (const c of components) {
+      const item = c.item.trim();
+      if (!item) continue;
+      await ctx.db.insert("gameComponents", {
+        gameId,
+        item,
+        count: Math.max(1, Math.round(c.count || 1)),
         order: o++,
       });
     }

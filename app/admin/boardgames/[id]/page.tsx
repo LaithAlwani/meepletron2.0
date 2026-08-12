@@ -8,6 +8,7 @@ import type { Id } from "@/convex/_generated/dataModel";
 import { GameForm } from "@/components/admin/GameForm";
 import { CoverUploader } from "@/components/admin/CoverUploader";
 import { RulebookManager } from "@/components/admin/RulebookManager";
+import { ComponentsEditor } from "@/components/admin/ComponentsEditor";
 
 export default function EditGamePage({
   params,
@@ -64,6 +65,13 @@ export default function EditGamePage({
 
       <section>
         <RulebookManager gameId={gameId} rulebooks={game.rulebooks} />
+      </section>
+
+      <section>
+        <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-muted">
+          In the box
+        </h3>
+        <ComponentsEditor gameId={gameId} />
       </section>
     </div>
   );
