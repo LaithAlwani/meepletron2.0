@@ -232,7 +232,11 @@ function parseFullItem(block: string) {
   const year = strVal(/<yearpublished value="([^"]*)"/);
   const age = strVal(/<minage value="(\d+)"/);
   const descMatch = block.match(/<description>([\s\S]*?)<\/description>/);
+  const image =
+    block.match(/<image>([^<]+)<\/image>/)?.[1] ??
+    block.match(/<thumbnail>([^<]+)<\/thumbnail>/)?.[1];
   return {
+    imageUrl: image ? decodeEntities(image).trim() : undefined,
     title:
       strVal(/<name type="primary"[^>]*value="([^"]*)"/) ??
       strVal(/<name[^>]*value="([^"]*)"/),

@@ -2,13 +2,14 @@
 
 import { use } from "react";
 import Link from "next/link";
-import { useQuery, useMutation } from "convex/react";
+import { useQuery, useMutation, useAction } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { GameForm } from "@/components/admin/GameForm";
 import { CoverUploader } from "@/components/admin/CoverUploader";
 import { RulebookManager } from "@/components/admin/RulebookManager";
 import { ComponentsEditor } from "@/components/admin/ComponentsEditor";
+import { useToast } from "@/components/ui/Toast";
 
 export default function EditGamePage({
   params,
@@ -19,6 +20,8 @@ export default function EditGamePage({
   const gameId = id as Id<"games">;
   const game = useQuery(api.games.getById, { gameId });
   const updateGame = useMutation(api.games.updateGame);
+  const setCoverFromUrl = useAction(api.images.setGameCoverFromUrl);
+  const toast = useToast();
 
   if (game === undefined) {
     return <p className="text-muted">Loading…</p>;
@@ -59,6 +62,14 @@ export default function EditGamePage({
           submitLabel="Save changes"
           onSubmit={async (values) => {
             await updateGame({ gameId, ...values });
+          }}
+          onBggImage={async (url) => {
+            try {
+              await setCoverFromUrl({ gameId, url });
+              toast("Cover imported from BGG", "success");
+            } catch {
+              toast("Couldn't import the BGG cover", "error");
+            }
           }}
         />
       </section>

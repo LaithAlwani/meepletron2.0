@@ -139,7 +139,11 @@ export default function NewGamePage() {
         )}
       </section>
 
-      <GameForm submitLabel="Create game" onSubmit={handleSubmit} />
+      <GameForm
+        submitLabel="Create game"
+        onSubmit={handleSubmit}
+        onBggImage={(url) => setCoverUrl(url)}
+      />
     </div>
   );
 }

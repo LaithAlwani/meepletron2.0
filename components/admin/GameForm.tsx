@@ -73,10 +73,13 @@ export function GameForm({
   initial,
   submitLabel,
   onSubmit,
+  onBggImage,
 }: {
   initial?: GameFormInitial;
   submitLabel: string;
   onSubmit: (values: GameFormValues) => Promise<void>;
+  // Called with BGG's cover URL when filling — the page compresses + stores it.
+  onBggImage?: (url: string) => void | Promise<void>;
 }) {
   const baseGames = useQuery(api.games.list);
   const [saving, setSaving] = useState(false);
@@ -133,6 +136,7 @@ export function GameForm({
       if (d.gameMechanics?.length) setGameMechanics(csv(d.gameMechanics));
       if (d.bggId) setBggId(d.bggId);
       if (d.bgg) setBggStats(d.bgg);
+      if (d.imageUrl && onBggImage) await onBggImage(d.imageUrl);
     } catch (err) {
       setError(friendlyError(err, "Couldn't fetch from BGG."));
     } finally {
