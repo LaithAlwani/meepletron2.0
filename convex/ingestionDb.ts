@@ -508,7 +508,7 @@ export const updateDraftChunk = mutation({
     if (Object.keys(patch).length > 0) {
       await ctx.db.patch("draftChunks", draftChunkId, patch);
       const draft = await ctx.db.get("migrationDrafts", chunk.draftId);
-      if (draft?.status === "parsed") {
+      if (draft?.status === "parsed" || draft?.status === "committed") {
         await ctx.db.patch("migrationDrafts", chunk.draftId, {
           status: "reviewing",
         });
@@ -568,7 +568,7 @@ export const insertDraftChunk = mutation({
       accepted: true,
       edited: true,
     });
-    if (draft.status === "parsed") {
+    if (draft.status === "parsed" || draft.status === "committed") {
       await ctx.db.patch("migrationDrafts", draft._id, { status: "reviewing" });
     }
     return id;
