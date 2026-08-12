@@ -144,6 +144,9 @@ function Sources({
 }) {
   const open = annotations.find((a) => a.n === openN) ?? null;
   const cardRef = useRef<HTMLDivElement>(null);
+  // When an answer draws on more than one manual (a game + its expansions),
+  // label each chip with its source so you can tell which manual it's from.
+  const multiSource = new Set(annotations.map((a) => a.bgTitle)).size > 1;
 
   // Bring the passage into view when opened (e.g. from an inline [n] tap).
   useEffect(() => {
@@ -187,7 +190,15 @@ function Sources({
               >
                 {ann.n}
               </span>
-              <span className="truncate">{sourceLabel(ann)}</span>
+              <span className="truncate">
+                {multiSource && (
+                  <span className="font-semibold text-foreground">
+                    {ann.bgTitle}
+                    {" · "}
+                  </span>
+                )}
+                {sourceLabel(ann)}
+              </span>
             </button>
           );
         })}

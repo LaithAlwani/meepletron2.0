@@ -211,12 +211,12 @@ export const processBatch = internalAction({
 export const finalizeParse = internalAction({
   args: { draftId: v.id("migrationDrafts") },
   handler: async (ctx, { draftId }): Promise<void> => {
-    const markdowns = await ctx.runQuery(
+    const { markdowns, gameTitle } = await ctx.runQuery(
       internal.ingestionDb.getBatchesMarkdown,
       { draftId },
     );
     const stitched = markdowns.join("\n\n");
-    const chunks = chunkMarkdown(stitched);
+    const chunks = chunkMarkdown(stitched, gameTitle);
 
     for (let i = 0; i < chunks.length; i += CHUNK_INSERT_BATCH) {
       await ctx.runMutation(internal.ingestionDb.saveDraftChunks, {

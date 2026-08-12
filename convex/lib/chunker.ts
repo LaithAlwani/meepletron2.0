@@ -35,7 +35,26 @@ function isVariantHeading(h: string): boolean {
   return /\b(variant|solo|advanced|expert|optional)\b/i.test(h);
 }
 
-export function chunkMarkdown(markdown: string): DraftChunk[] {
+const normCrumb = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "");
+
+/**
+ * Is this leading crumb the document/game title? Exact normalized match, or one
+ * is a prefix of the other (≥4 chars) to catch "Carcassonne" vs "Carcassonne
+ * Big Box". The game name carries no retrieval/citation value inside its own
+ * manual (the source game is tracked separately), so we strip it.
+ */
+function crumbIsTitle(leadN: string, titleN: string): boolean {
+  if (!leadN || !titleN) return false;
+  if (leadN === titleN) return true;
+  const [short, long] =
+    leadN.length <= titleN.length ? [leadN, titleN] : [titleN, leadN];
+  return short.length >= 4 && long.startsWith(short);
+}
+
+export function chunkMarkdown(
+  markdown: string,
+  gameTitle?: string,
+): DraftChunk[] {
   const lines = markdown.split("\n");
   const sections: Section[] = [];
 
@@ -109,12 +128,34 @@ export function chunkMarkdown(markdown: string): DraftChunk[] {
   }
   flush();
 
+  // Decide whether to drop the leading breadcrumb crumb. Two signals: it matches
+  // the game title, or a single leading crumb is shared by every section (a
+  // document-title wrapper). Either way it's noise inside this manual.
+  const titleN = gameTitle ? normCrumb(gameTitle) : "";
+  const leads = sections
+    .map((s) => s.breadcrumb.split(" > ")[0])
+    .filter(Boolean);
+  const sharedLeadN =
+    leads.length > 0 && new Set(leads.map(normCrumb)).size === 1
+      ? normCrumb(leads[0])
+      : null;
+  const effectiveBreadcrumb = (bc: string): string => {
+    const parts = bc.split(" > ").filter(Boolean);
+    if (parts.length === 0) return bc;
+    const leadN = normCrumb(parts[0]);
+    if (crumbIsTitle(leadN, titleN) || (sharedLeadN && leadN === sharedLeadN)) {
+      return parts.slice(1).join(" > ");
+    }
+    return bc;
+  };
+
   const out: DraftChunk[] = [];
   const seen = new Set<string>();
 
   for (const section of sections) {
     const text = section.lines.join("\n").trim();
     if (!text) continue;
+    const breadcrumb = effectiveBreadcrumb(section.breadcrumb);
 
     const chunkType = section.isLegend
       ? "legend"
@@ -136,13 +177,13 @@ export function chunkMarkdown(markdown: string): DraftChunk[] {
       seen.add(norm);
 
       out.push({
-        breadcrumb: section.breadcrumb,
+        breadcrumb,
         page: section.page,
         chunkType,
         scope: section.scope,
         variantName: section.variantName,
         text: piece,
-        flags: qualityFlags(piece, section.breadcrumb, chunkType),
+        flags: qualityFlags(piece, breadcrumb, chunkType),
       });
     }
   }

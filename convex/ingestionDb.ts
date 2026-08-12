@@ -216,13 +216,15 @@ export const markStalledIfNoProgress = internalMutation({
 export const getBatchesMarkdown = internalQuery({
   args: { draftId: v.id("migrationDrafts") },
   handler: async (ctx, { draftId }) => {
+    const draft = await ctx.db.get("migrationDrafts", draftId);
     const batches = await ctx.db
       .query("draftBatches")
       .withIndex("by_draft", (q) => q.eq("draftId", draftId))
       .take(1000);
-    return batches
-      .sort((a, b) => a.index - b.index)
-      .map((b) => b.markdown);
+    return {
+      gameTitle: draft?.gameTitle ?? "",
+      markdowns: batches.sort((a, b) => a.index - b.index).map((b) => b.markdown),
+    };
   },
 });
 
