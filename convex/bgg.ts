@@ -1,12 +1,10 @@
 import { v, ConvexError } from "convex/values";
 import {
   action,
-  internalAction,
   internalMutation,
   internalQuery,
 } from "./_generated/server";
 import { internal } from "./_generated/api";
-import type { Id } from "./_generated/dataModel";
 
 /** Backfill BoardGameGeek ids from the original import (slug → bgg_id). */
 export const setBggIds = internalMutation({
@@ -26,30 +24,6 @@ export const setBggIds = internalMutation({
       }
     }
     return n;
-  },
-});
-
-/** Games that have a bggId but no cached stats yet. */
-export const nextToFetch = internalQuery({
-  args: { limit: v.number() },
-  handler: async (ctx, { limit }) => {
-    const games = await ctx.db.query("games").take(2000);
-    const out: { gameId: Id<"games">; bggId: string }[] = [];
-    for (const g of games) {
-      if (g.bggId && !g.bgg) {
-        out.push({ gameId: g._id, bggId: g.bggId });
-        if (out.length >= limit) break;
-      }
-    }
-    return out;
-  },
-});
-
-export const countRemaining = internalQuery({
-  args: {},
-  handler: async (ctx) => {
-    const games = await ctx.db.query("games").take(2000);
-    return games.filter((g) => g.bggId && !g.bgg).length;
   },
 });
 
@@ -120,87 +94,6 @@ function parseItem(block: string) {
     playerPoll: playerPoll.length ? playerPoll : undefined,
   };
 }
-
-/**
- * Fetch BGG stats for a batch of games (comma-separated ids, `stats=1`), parse
- * the XML, and cache them. Self-reschedules with a delay to respect BGG's rate
- * limits until every game with a bggId has stats.
- */
-export const pullStats = internalAction({
-  args: { limit: v.optional(v.number()), continue: v.optional(v.boolean()) },
-  handler: async (
-    ctx,
-    { limit, continue: keepGoing },
-  ): Promise<{ processed: number; remaining: number }> => {
-    const batchSize = Math.min(limit ?? 15, 20);
-    const batch = await ctx.runQuery(internal.bgg.nextToFetch, {
-      limit: batchSize,
-    });
-    if (batch.length === 0) return { processed: 0, remaining: 0 };
-
-    const ids = batch.map((b) => b.bggId).join(",");
-    let processed = 0;
-    // BGG requires a registered app's bearer token since late 2025.
-    const token = process.env.BGG_API_TOKEN;
-    try {
-      const res = await fetch(
-        `https://boardgamegeek.com/xmlapi2/thing?id=${ids}&stats=1`,
-        {
-          headers: {
-            "User-Agent": "Meepletron/1.0 (board game rules assistant)",
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          },
-        },
-      );
-      if (res.ok) {
-        const xml = await res.text();
-        const byId = new Map<string, string>();
-        for (const part of xml.split(/<item /).slice(1)) {
-          const block = "<item " + part.split("</item>")[0];
-          const idm = block.match(/id="(\d+)"/);
-          if (idm) byId.set(idm[1], block);
-        }
-        for (const b of batch) {
-          const block = byId.get(b.bggId);
-          const parsed = block ? parseItem(block) : {};
-          await ctx.runMutation(internal.bgg.setBggStats, {
-            gameId: b.gameId,
-            bgg: { ...parsed, fetchedAt: Date.now() },
-          });
-          processed++;
-        }
-      }
-    } catch {
-      // Transient network/BGG error — leave this batch unfetched to retry.
-    }
-
-    const remaining = await ctx.runQuery(internal.bgg.countRemaining, {});
-    if (keepGoing && processed > 0 && remaining > 0) {
-      await ctx.scheduler.runAfter(2500, internal.bgg.pullStats, {
-        limit,
-        continue: true,
-      });
-    }
-    return { processed, remaining };
-  },
-});
-
-/** Admin trigger to start the BGG stats pull. */
-export const adminPull = action({
-  args: {},
-  handler: async (ctx): Promise<{ processed: number; remaining: number }> => {
-    await ctx.runQuery(internal.users.ensureAdmin, {});
-    if (!process.env.BGG_API_TOKEN) {
-      throw new ConvexError(
-        "BGG_API_TOKEN is not set. Register an app at boardgamegeek.com to get a bearer token, then run: npx convex env set BGG_API_TOKEN <token> --prod",
-      );
-    }
-    return await ctx.runAction(internal.bgg.pullStats, {
-      limit: 15,
-      continue: true,
-    });
-  },
-});
 
 /** Decode the HTML entities BGG uses in names/descriptions. */
 function decodeEntities(s: string): string {
