@@ -201,3 +201,93 @@ export const adminPull = action({
     });
   },
 });
+
+/** Decode the HTML entities BGG uses in names/descriptions. */
+function decodeEntities(s: string): string {
+  return s
+    .replace(/&#x([0-9a-fA-F]+);/g, (_, h) => String.fromCodePoint(parseInt(h, 16)))
+    .replace(/&#(\d+);/g, (_, d) => String.fromCodePoint(Number(d)))
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'");
+}
+
+/** Parse the full editable metadata from a BGG /thing item block. */
+function parseFullItem(block: string) {
+  const pos = (n?: number) => (n && n > 0 ? n : undefined);
+  const strVal = (re: RegExp) => {
+    const m = block.match(re);
+    return m ? decodeEntities(m[1]).trim() : undefined;
+  };
+  const links = (type: string) => {
+    const out: string[] = [];
+    const re = new RegExp(`<link type="${type}"[^>]*value="([^"]*)"`, "g");
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(block))) out.push(decodeEntities(m[1]).trim());
+    return out;
+  };
+  const playing = num(/<playingtime value="(\d+)"/, block);
+  const year = strVal(/<yearpublished value="([^"]*)"/);
+  const age = strVal(/<minage value="(\d+)"/);
+  const descMatch = block.match(/<description>([\s\S]*?)<\/description>/);
+  return {
+    title:
+      strVal(/<name type="primary"[^>]*value="([^"]*)"/) ??
+      strVal(/<name[^>]*value="([^"]*)"/),
+    year: year && year !== "0" ? year : undefined,
+    minPlayers: pos(num(/<minplayers value="(\d+)"/, block)),
+    maxPlayers: pos(num(/<maxplayers value="(\d+)"/, block)),
+    minPlayTime: pos(num(/<minplaytime value="(\d+)"/, block) ?? playing),
+    maxPlayTime: pos(num(/<maxplaytime value="(\d+)"/, block) ?? playing),
+    minAge: age && age !== "0" ? age : undefined,
+    description: descMatch
+      ? decodeEntities(descMatch[1]).replace(/\n{3,}/g, "\n\n").trim() ||
+        undefined
+      : undefined,
+    designers: links("boardgamedesigner"),
+    artists: links("boardgameartist"),
+    publishers: links("boardgamepublisher"),
+    categories: links("boardgamecategory"),
+    gameMechanics: links("boardgamemechanic"),
+  };
+}
+
+/**
+ * Admin: fetch a game's metadata + stats from BGG by id, to prefill the game
+ * form. Returns the parsed fields (does not save) plus the stats object.
+ */
+export const fetchGameInfo = action({
+  args: { bggId: v.string() },
+  handler: async (ctx, { bggId }) => {
+    await ctx.runQuery(internal.users.ensureAdmin, {});
+    const id = bggId.trim();
+    if (!/^\d+$/.test(id)) throw new ConvexError("Enter a numeric BGG id.");
+    const token = process.env.BGG_API_TOKEN;
+    if (!token) {
+      throw new ConvexError(
+        "BGG_API_TOKEN is not set. Set it with: npx convex env set BGG_API_TOKEN <token> --prod",
+      );
+    }
+    const res = await fetch(
+      `https://boardgamegeek.com/xmlapi2/thing?id=${id}&stats=1`,
+      {
+        headers: {
+          "User-Agent": "Meepletron/1.0 (board game rules assistant)",
+          Authorization: `Bearer ${token}`,
+        },
+      },
+    );
+    if (!res.ok) throw new ConvexError(`BGG request failed (${res.status}).`);
+    const xml = await res.text();
+    const itemMatch = xml.match(/<item [\s\S]*?<\/item>/);
+    if (!itemMatch) throw new ConvexError("No game found for that BGG id.");
+    const block = itemMatch[0];
+    return {
+      ...parseFullItem(block),
+      bggId: id,
+      bgg: { ...parseItem(block), fetchedAt: Date.now() },
+    };
+  },
+});

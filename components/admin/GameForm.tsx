@@ -1,10 +1,24 @@
 "use client";
 
 import { useState } from "react";
-import { useQuery } from "convex/react";
+import { useQuery, useAction } from "convex/react";
+import { Download } from "lucide-react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { friendlyError } from "@/lib/friendlyError";
+
+type BggStats = {
+  rating?: number;
+  ratingCount?: number;
+  weight?: number;
+  playerPoll?: {
+    count: number;
+    best: number;
+    recommended: number;
+    notRecommended: number;
+  }[];
+  fetchedAt?: number;
+};
 
 export type GameFormValues = {
   title: string;
@@ -22,6 +36,8 @@ export type GameFormValues = {
   publishers: string[];
   categories: string[];
   gameMechanics: string[];
+  bggId?: string;
+  bgg?: BggStats;
 };
 
 export type GameFormInitial = Partial<GameFormValues> & { title?: string };
@@ -91,6 +107,38 @@ export function GameForm({
   const [gameMechanics, setGameMechanics] = useState(
     csv(initial?.gameMechanics),
   );
+  const [bggId, setBggId] = useState(initial?.bggId ?? "");
+  const [bggStats, setBggStats] = useState<BggStats | undefined>(initial?.bgg);
+  const [filling, setFilling] = useState(false);
+
+  const fetchInfo = useAction(api.bgg.fetchGameInfo);
+
+  async function handleFill() {
+    setError(null);
+    setFilling(true);
+    try {
+      const d = await fetchInfo({ bggId });
+      if (d.title) setTitle(d.title);
+      if (d.year) setYear(d.year);
+      if (d.minPlayers != null) setMinPlayers(String(d.minPlayers));
+      if (d.maxPlayers != null) setMaxPlayers(String(d.maxPlayers));
+      if (d.minPlayTime != null) setMinPlayTime(String(d.minPlayTime));
+      if (d.maxPlayTime != null) setMaxPlayTime(String(d.maxPlayTime));
+      if (d.minAge) setMinAge(d.minAge);
+      if (d.description) setDescription(d.description);
+      if (d.designers?.length) setDesigners(csv(d.designers));
+      if (d.artists?.length) setArtists(csv(d.artists));
+      if (d.publishers?.length) setPublishers(csv(d.publishers));
+      if (d.categories?.length) setCategories(csv(d.categories));
+      if (d.gameMechanics?.length) setGameMechanics(csv(d.gameMechanics));
+      if (d.bggId) setBggId(d.bggId);
+      if (d.bgg) setBggStats(d.bgg);
+    } catch (err) {
+      setError(friendlyError(err, "Couldn't fetch from BGG."));
+    } finally {
+      setFilling(false);
+    }
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -118,6 +166,8 @@ export function GameForm({
         publishers: parseCsv(publishers),
         categories: parseCsv(categories),
         gameMechanics: parseCsv(gameMechanics),
+        bggId: bggId.trim() || undefined,
+        bgg: bggStats,
       });
     } catch (err) {
       setError(friendlyError(err, "Something went wrong. Please try again."));
@@ -128,6 +178,31 @@ export function GameForm({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
+      <div className="rounded-lg border border-border bg-surface-2 p-3">
+        <span className="mb-1 block text-sm font-medium">BoardGameGeek</span>
+        <div className="flex gap-2">
+          <input
+            value={bggId}
+            onChange={(e) => setBggId(e.target.value)}
+            placeholder="BGG id (e.g. 13)"
+            inputMode="numeric"
+            className={inputClass}
+          />
+          <button
+            type="button"
+            onClick={handleFill}
+            disabled={filling || !bggId.trim()}
+            className="flex shrink-0 items-center gap-1.5 rounded-lg border border-border bg-surface px-3 py-2 text-sm font-medium transition-colors hover:bg-surface-2 disabled:opacity-50"
+          >
+            <Download className="h-4 w-4" />
+            {filling ? "Fetching…" : "Fill from BGG"}
+          </button>
+        </div>
+        <p className="mt-1 text-xs text-muted">
+          Fills the fields below plus rating, weight, and the player-count poll.
+        </p>
+      </div>
+
       <Field label="Title">
         <input
           value={title}

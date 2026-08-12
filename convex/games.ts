@@ -369,6 +369,23 @@ export const adminList = query({
   },
 });
 
+const bggStatsValidator = v.object({
+  rating: v.optional(v.number()),
+  ratingCount: v.optional(v.number()),
+  weight: v.optional(v.number()),
+  playerPoll: v.optional(
+    v.array(
+      v.object({
+        count: v.number(),
+        best: v.number(),
+        recommended: v.number(),
+        notRecommended: v.number(),
+      }),
+    ),
+  ),
+  fetchedAt: v.optional(v.number()),
+});
+
 const metadataFields = {
   year: v.optional(v.string()),
   minPlayers: v.optional(v.number()),
@@ -382,6 +399,8 @@ const metadataFields = {
   publishers: v.optional(v.array(v.string())),
   categories: v.optional(v.array(v.string())),
   gameMechanics: v.optional(v.array(v.string())),
+  bggId: v.optional(v.string()),
+  bgg: v.optional(bggStatsValidator),
 };
 
 export const createGame = mutation({
@@ -416,6 +435,8 @@ export const createGame = mutation({
       publishers: args.publishers ?? [],
       categories: args.categories ?? [],
       gameMechanics: args.gameMechanics ?? [],
+      bggId: args.bggId,
+      bgg: args.bgg,
       searchText: buildSearchText({
         title,
         designers: args.designers,
