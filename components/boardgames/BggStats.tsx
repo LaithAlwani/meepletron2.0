@@ -18,6 +18,25 @@ export function BggStats({ bgg }: { bgg?: Bgg }) {
     return null;
   }
 
+  // The poll stores vote COUNTS per player count. BGG's convention: the count(s)
+  // with the most "Best" votes are "Best"; a count is "Recommended" when
+  // best + recommended outweigh not-recommended; otherwise it's not recommended.
+  const poll = (bgg.playerPoll ?? []).filter(
+    (p) => p.best + p.recommended + p.notRecommended > 0,
+  );
+  const maxBest = Math.max(0, ...poll.map((p) => p.best));
+  const verdictOf = (p: { best: number; recommended: number; notRecommended: number }) =>
+    p.best === maxBest && maxBest > 0
+      ? "best"
+      : p.best + p.recommended > p.notRecommended
+        ? "rec"
+        : "not";
+  const VERDICT = {
+    best: { label: "Best", cls: "border-accent bg-accent/10 text-foreground" },
+    rec: { label: "Good", cls: "border-border bg-surface text-foreground" },
+    not: { label: "Not ideal", cls: "border-border bg-surface-2 text-subtle" },
+  } as const;
+
   return (
     <section className="animate-in mb-8">
       <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted">
@@ -69,32 +88,22 @@ export function BggStats({ bgg }: { bgg?: Bgg }) {
         )}
       </div>
 
-      {bgg.playerPoll && bgg.playerPoll.length > 0 && (
+      {poll.length > 0 && (
         <div className="mt-3">
-          <p className="mb-2 text-xs text-muted">Community player-count poll</p>
+          <p className="mb-2 text-xs text-muted">
+            How many players plays best — BGG community poll
+          </p>
           <div className="flex flex-wrap gap-2">
-            {bgg.playerPoll.map((p) => {
-              const votes = p.best + p.recommended + p.notRecommended;
-              const rec = votes
-                ? Math.round(((p.best + p.recommended) / votes) * 100)
-                : 0;
-              const isBest =
-                p.best > 0 &&
-                p.best >= p.recommended &&
-                p.best >= p.notRecommended;
+            {poll.map((p) => {
+              const v = VERDICT[verdictOf(p)];
               return (
                 <div
                   key={p.count}
-                  className={`rounded-xl border px-3 py-2 text-center ${
-                    isBest
-                      ? "border-accent bg-accent/10"
-                      : "border-border bg-surface"
-                  }`}
+                  title={`${p.count} player${p.count === 1 ? "" : "s"} — Best ${p.best} · Recommended ${p.recommended} · Not recommended ${p.notRecommended}`}
+                  className={`min-w-14 rounded-xl border px-3 py-2 text-center ${v.cls}`}
                 >
-                  <div className="text-sm font-bold text-foreground">
-                    {p.count}
-                  </div>
-                  <div className="text-[10px] text-muted">{rec}% rec</div>
+                  <div className="text-sm font-bold">{p.count}</div>
+                  <div className="text-[10px] font-medium">{v.label}</div>
                 </div>
               );
             })}

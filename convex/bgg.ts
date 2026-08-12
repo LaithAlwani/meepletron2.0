@@ -258,6 +258,57 @@ function parseFullItem(block: string) {
   };
 }
 
+const REFRESH_TTL_MS = 7 * 24 * 60 * 60 * 1000; // ratings barely move — weekly is plenty
+
+export const refreshTarget = internalQuery({
+  args: { gameId: v.id("games") },
+  handler: async (ctx, { gameId }) => {
+    const g = await ctx.db.get("games", gameId);
+    if (!g) return null;
+    return { bggId: g.bggId ?? null, fetchedAt: g.bgg?.fetchedAt ?? null };
+  },
+});
+
+/**
+ * Lazy, TTL-gated refresh of one game's BGG stats — fired when its detail page
+ * is viewed and the cache is stale. No-op when fresh, when the game has no
+ * bggId, or when the token isn't configured. A failed fetch leaves the cached
+ * value untouched (the DB is always the read source).
+ */
+export const refreshOne = action({
+  args: { gameId: v.id("games") },
+  handler: async (ctx, { gameId }): Promise<void> => {
+    const token = process.env.BGG_API_TOKEN;
+    if (!token) return;
+    const target = await ctx.runQuery(internal.bgg.refreshTarget, { gameId });
+    if (!target || !target.bggId) return;
+    if (target.fetchedAt && Date.now() - target.fetchedAt < REFRESH_TTL_MS) {
+      return;
+    }
+    try {
+      const res = await fetch(
+        `https://boardgamegeek.com/xmlapi2/thing?id=${target.bggId}&stats=1`,
+        {
+          headers: {
+            "User-Agent": "Meepletron/1.0 (board game rules assistant)",
+            Authorization: `Bearer ${token}`,
+          },
+        },
+      );
+      if (!res.ok) return;
+      const xml = await res.text();
+      const block = xml.match(/<item [\s\S]*?<\/item>/)?.[0];
+      if (!block) return;
+      await ctx.runMutation(internal.bgg.setBggStats, {
+        gameId,
+        bgg: { ...parseItem(block), fetchedAt: Date.now() },
+      });
+    } catch {
+      // Leave the cached stats as-is.
+    }
+  },
+});
+
 /**
  * Admin: fetch a game's metadata + stats from BGG by id, to prefill the game
  * form. Returns the parsed fields (does not save) plus the stats object.
