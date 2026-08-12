@@ -227,15 +227,43 @@ function Sources({
   );
 }
 
+// Lowercase words that legitimately follow a citation ("[1] and [2]", "[3] or")
+// — these don't signal a quantity, so a bracket before one is still a citation.
+const CITATION_FOLLOWERS = new Set([
+  "and",
+  "or",
+  "but",
+  "so",
+  "then",
+  "as",
+  "for",
+  "to",
+  "of",
+  "in",
+  "on",
+  "at",
+  "by",
+  "with",
+  "the",
+  "a",
+  "an",
+]);
+
 /**
  * Rewrites inline `[n]` citation markers into markdown links (`[n](#cite-n)`)
  * so they can be rendered as interactive references — but only for markers that
  * actually have a matching source, so stray brackets are left untouched.
+ *
+ * Guard: a bracketed number that hugs a following content word is a quantity,
+ * not a citation (e.g. the model wrote "[3] coins" for "3 coins"). Render it as
+ * a plain number so it isn't confused with a source pill.
  */
 export function linkifyCitations(content: string, validNs: Set<number>): string {
-  return content.replace(/\[(\d+)\]/g, (whole, digits) =>
-    validNs.has(Number(digits)) ? `[${digits}](#cite-${digits})` : whole,
-  );
+  return content.replace(/\[(\d+)\]/g, (whole, digits, offset: number, str: string) => {
+    const next = str.slice(offset + whole.length).match(/^\s*([a-z]+)/);
+    if (next && !CITATION_FOLLOWERS.has(next[1])) return digits;
+    return validNs.has(Number(digits)) ? `[${digits}](#cite-${digits})` : whole;
+  });
 }
 
 /**
