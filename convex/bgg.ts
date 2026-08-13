@@ -31,10 +31,12 @@ const bggValidator = v.object({
   rating: v.optional(v.number()),
   ratingCount: v.optional(v.number()),
   weight: v.optional(v.number()),
+  pollVotes: v.optional(v.number()),
   playerPoll: v.optional(
     v.array(
       v.object({
         count: v.number(),
+        plus: v.optional(v.boolean()),
         best: v.number(),
         recommended: v.number(),
         notRecommended: v.number(),
@@ -65,8 +67,13 @@ function parseItem(block: string) {
   const pollMatch = block.match(
     /<poll name="suggested_numplayers"[\s\S]*?<\/poll>/,
   );
+  // Total number of poll voters (each votes across one or more player counts).
+  const pollVotes = pollMatch
+    ? num(/totalvotes="(\d+)"/, pollMatch[0])
+    : undefined;
   const playerPoll: {
     count: number;
+    plus?: boolean;
     best: number;
     recommended: number;
     notRecommended: number;
@@ -75,10 +82,14 @@ function parseItem(block: string) {
     const re = /<results numplayers="([^"]+)">([\s\S]*?)<\/results>/g;
     let m: RegExpExecArray | null;
     while ((m = re.exec(pollMatch[0]))) {
-      if (!/^\d+$/.test(m[1])) continue; // skip "N+" buckets
+      // Buckets are "1".."N" and a trailing "N+" (e.g. "6+"); keep both, skip
+      // anything non-numeric. "6+" is stored as { count: 6, plus: true }.
+      const bucket = m[1].match(/^(\d+)(\+)?$/);
+      if (!bucket) continue;
       const inner = m[2];
       playerPoll.push({
-        count: Number(m[1]),
+        count: Number(bucket[1]),
+        ...(bucket[2] ? { plus: true } : {}),
         best: num(/value="Best" numvotes="(\d+)"/, inner) ?? 0,
         recommended: num(/value="Recommended" numvotes="(\d+)"/, inner) ?? 0,
         notRecommended:
@@ -91,6 +102,7 @@ function parseItem(block: string) {
     rating,
     ratingCount,
     weight,
+    pollVotes,
     playerPoll: playerPoll.length ? playerPoll : undefined,
   };
 }

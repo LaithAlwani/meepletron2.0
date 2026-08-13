@@ -93,10 +93,12 @@ export default defineSchema({
         rating: v.optional(v.number()),
         ratingCount: v.optional(v.number()),
         weight: v.optional(v.number()),
+        pollVotes: v.optional(v.number()),
         playerPoll: v.optional(
           v.array(
             v.object({
               count: v.number(),
+              plus: v.optional(v.boolean()),
               best: v.number(),
               recommended: v.number(),
               notRecommended: v.number(),
