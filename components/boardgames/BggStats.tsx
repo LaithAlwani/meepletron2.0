@@ -76,7 +76,7 @@ export function BggStats({ bgg }: { bgg?: Bgg }) {
       <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted">
         Ratings &amp; weight
       </h2>
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 lg:items-start">
         {bgg.rating != null && (
           <div className="rounded-2xl border border-border bg-surface p-4">
             <div className="flex items-baseline gap-1.5">
@@ -120,84 +120,80 @@ export function BggStats({ bgg }: { bgg?: Bgg }) {
             </div>
           </div>
         )}
-      </div>
 
-      {withVerdict.length > 0 && (
-        <div className="mt-4 rounded-2xl border border-border bg-surface p-4">
-          <div className="mb-2 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
-            <p className="text-sm font-semibold text-foreground">
-              How many players is best
-            </p>
-            {bgg.pollVotes != null && (
-              <p className="text-xs text-muted">
-                {bgg.pollVotes.toLocaleString()} community votes
+        {withVerdict.length > 0 && (
+          <div className="rounded-2xl border border-border bg-surface p-4 sm:col-span-2 lg:col-span-1">
+            <div className="mb-1 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
+              <p className="text-sm font-semibold text-foreground">
+                Best player count
+              </p>
+              {bgg.pollVotes != null && (
+                <p className="text-xs text-muted">
+                  {bgg.pollVotes.toLocaleString()} votes
+                </p>
+              )}
+            </div>
+
+            {(bestLabel || recLabel) && (
+              <p className="mb-2.5 text-xs text-muted">
+                {bestLabel && (
+                  <span className="font-semibold text-foreground">
+                    Best with {bestLabel}
+                  </span>
+                )}
+                {bestLabel && recLabel && recLabel !== bestLabel && " · "}
+                {recLabel !== bestLabel && recLabel && (
+                  <>Recommended {recLabel}</>
+                )}
+                {lowVotes && <span className="text-subtle"> · few votes</span>}
               </p>
             )}
-          </div>
 
-          {(bestLabel || recLabel) && (
-            <p className="mb-3 text-sm text-muted">
-              {bestLabel && (
-                <span className="font-semibold text-foreground">
-                  Best with {bestLabel}
-                </span>
-              )}
-              {bestLabel && recLabel && recLabel !== bestLabel && " · "}
-              {recLabel !== bestLabel && recLabel && <>Recommended {recLabel}</>}
-              {lowVotes && (
-                <span className="text-subtle">
-                  {" "}
-                  · few votes, take with a grain of salt
-                </span>
-              )}
-            </p>
-          )}
-
-          <div className="space-y-1.5">
-            {withVerdict.map((p) => {
-              const total = p.best + p.recommended + p.notRecommended;
-              const pct = (n: number) => `${(n / total) * 100}%`;
-              return (
-                <div key={countLabel(p)} className="flex items-center gap-3">
-                  <div
-                    className={`w-8 shrink-0 text-right text-sm tabular-nums ${
-                      p.verdict === "best"
-                        ? "font-bold text-accent"
-                        : "font-medium text-foreground"
-                    }`}
-                  >
-                    {countLabel(p)}
-                  </div>
-                  <div
-                    className="flex h-3 flex-1 overflow-hidden rounded-full bg-surface-2"
-                    title={`${countLabel(p)} player${p.count === 1 && !p.plus ? "" : "s"} — Best ${p.best} · Recommended ${p.recommended} · Not recommended ${p.notRecommended}`}
-                  >
-                    <div className="bg-accent" style={{ width: pct(p.best) }} />
+            <div className="space-y-1">
+              {withVerdict.map((p) => {
+                const total = p.best + p.recommended + p.notRecommended;
+                const pct = (n: number) => `${(n / total) * 100}%`;
+                return (
+                  <div key={countLabel(p)} className="flex items-center gap-2">
                     <div
-                      className="bg-accent/40"
-                      style={{ width: pct(p.recommended) }}
-                    />
-                    {/* Remaining track = Not recommended */}
+                      className={`w-6 shrink-0 text-right text-xs tabular-nums ${
+                        p.verdict === "best"
+                          ? "font-bold text-accent"
+                          : "font-medium text-foreground"
+                      }`}
+                    >
+                      {countLabel(p)}
+                    </div>
+                    <div
+                      className="flex h-2.5 flex-1 overflow-hidden rounded-full bg-surface-2"
+                      title={`${countLabel(p)} player${p.count === 1 && !p.plus ? "" : "s"} — Best ${p.best} · Recommended ${p.recommended} · Not recommended ${p.notRecommended}`}
+                    >
+                      <div className="bg-accent" style={{ width: pct(p.best) }} />
+                      <div
+                        className="bg-accent/40"
+                        style={{ width: pct(p.recommended) }}
+                      />
+                      {/* Remaining track = Not recommended */}
+                    </div>
                   </div>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
 
-          <div className="mt-2.5 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-muted">
-            <span className="flex items-center gap-1">
-              <span className="h-2 w-2 rounded-full bg-accent" /> Best
-            </span>
-            <span className="flex items-center gap-1">
-              <span className="h-2 w-2 rounded-full bg-accent/40" /> Recommended
-            </span>
-            <span className="flex items-center gap-1">
-              <span className="h-2 w-2 rounded-full bg-surface-2" /> Not
-              recommended
-            </span>
+            <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-muted">
+              <span className="flex items-center gap-1">
+                <span className="h-2 w-2 rounded-full bg-accent" /> Best
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="h-2 w-2 rounded-full bg-accent/40" /> Rec.
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="h-2 w-2 rounded-full bg-surface-2" /> Not rec.
+              </span>
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </section>
   );
 }
