@@ -71,128 +71,159 @@ export function BggStats({ bgg }: { bgg?: Bgg }) {
   );
   const lowVotes = bgg.pollVotes != null && bgg.pollVotes < 10;
 
+  const hasLeft = bgg.rating != null || bgg.weight != null;
+  const hasPoll = withVerdict.length > 0;
+  const twoCol = hasLeft && hasPoll;
+
   return (
     <section className="animate-in mb-8">
       <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted">
         Ratings &amp; weight
       </h2>
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 lg:items-start">
-        {bgg.rating != null && (
-          <div className="rounded-2xl border border-border bg-surface p-4">
-            <div className="flex items-baseline gap-1.5">
-              <span className="text-4xl font-extrabold text-foreground">
-                {bgg.rating.toFixed(1)}
-              </span>
-              <span className="text-xs text-muted">/ 10</span>
-            </div>
-            <div className="mt-1 text-xs text-muted">
-              BGG rating
-              {bgg.ratingCount != null
-                ? ` · ${bgg.ratingCount.toLocaleString()} ratings`
-                : ""}
-            </div>
-            <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-surface-2">
-              <div
-                className="h-full rounded-full bg-accent"
-                style={{ width: `${Math.min(100, bgg.rating * 10)}%` }}
-              />
-            </div>
-          </div>
-        )}
-        {bgg.weight != null && (
-          <div className="rounded-2xl border border-border bg-surface p-4">
-            <div className="flex items-baseline gap-1.5">
-              <span className="text-4xl font-extrabold text-foreground">
-                {bgg.weight.toFixed(1)}
-              </span>
-              <span className="text-xs text-muted">/ 5</span>
-            </div>
-            <div className="mt-1 text-xs text-muted">Complexity / weight</div>
-            <div className="mt-2 flex gap-1">
-              {[1, 2, 3, 4, 5].map((i) => (
+      <div className="rounded-2xl border border-border bg-surface p-4 sm:p-5">
+        <div
+          className={`grid gap-5 ${twoCol ? "lg:grid-cols-2 lg:gap-6" : ""}`}
+        >
+          {/* Rating + weight, stacked */}
+          {hasLeft && (
+            <div className="space-y-4">
+              {bgg.rating != null && (
+                <div>
+                  <div className="flex items-baseline gap-1.5">
+                    <span className="text-4xl font-extrabold text-foreground">
+                      {bgg.rating.toFixed(1)}
+                    </span>
+                    <span className="text-xs text-muted">/ 10</span>
+                  </div>
+                  <div className="mt-1 text-xs text-muted">
+                    BGG rating
+                    {bgg.ratingCount != null
+                      ? ` · ${bgg.ratingCount.toLocaleString()} ratings`
+                      : ""}
+                  </div>
+                  <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-surface-2">
+                    <div
+                      className="h-full rounded-full bg-accent"
+                      style={{ width: `${Math.min(100, bgg.rating * 10)}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+              {bgg.weight != null && (
                 <div
-                  key={i}
-                  className={`h-1.5 flex-1 rounded-full ${
-                    i <= Math.round(bgg.weight!) ? "bg-accent" : "bg-surface-2"
-                  }`}
-                />
-              ))}
-            </div>
-          </div>
-        )}
-
-        {withVerdict.length > 0 && (
-          <div className="rounded-2xl border border-border bg-surface p-4 sm:col-span-2 lg:col-span-1">
-            <div className="mb-1 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
-              <p className="text-sm font-semibold text-foreground">
-                Best player count
-              </p>
-              {bgg.pollVotes != null && (
-                <p className="text-xs text-muted">
-                  {bgg.pollVotes.toLocaleString()} votes
-                </p>
+                  className={
+                    bgg.rating != null ? "border-t border-border-muted pt-4" : ""
+                  }
+                >
+                  <div className="flex items-baseline gap-1.5">
+                    <span className="text-4xl font-extrabold text-foreground">
+                      {bgg.weight.toFixed(1)}
+                    </span>
+                    <span className="text-xs text-muted">/ 5</span>
+                  </div>
+                  <div className="mt-1 text-xs text-muted">
+                    Complexity / weight
+                  </div>
+                  <div className="mt-2 flex gap-1">
+                    {[1, 2, 3, 4, 5].map((i) => (
+                      <div
+                        key={i}
+                        className={`h-1.5 flex-1 rounded-full ${
+                          i <= Math.round(bgg.weight!)
+                            ? "bg-accent"
+                            : "bg-surface-2"
+                        }`}
+                      />
+                    ))}
+                  </div>
+                </div>
               )}
             </div>
+          )}
 
-            {(bestLabel || recLabel) && (
-              <p className="mb-2.5 text-xs text-muted">
-                {bestLabel && (
-                  <span className="font-semibold text-foreground">
-                    Best with {bestLabel}
-                  </span>
+          {/* Best player count */}
+          {hasPoll && (
+            <div
+              className={
+                twoCol
+                  ? "border-t border-border pt-5 lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0"
+                  : ""
+              }
+            >
+              <div className="mb-1 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
+                <p className="text-sm font-semibold text-foreground">
+                  Best player count
+                </p>
+                {bgg.pollVotes != null && (
+                  <p className="text-xs text-muted">
+                    {bgg.pollVotes.toLocaleString()} votes
+                  </p>
                 )}
-                {bestLabel && recLabel && recLabel !== bestLabel && " · "}
-                {recLabel !== bestLabel && recLabel && (
-                  <>Recommended {recLabel}</>
-                )}
-                {lowVotes && <span className="text-subtle"> · few votes</span>}
-              </p>
-            )}
+              </div>
 
-            <div className="space-y-1">
-              {withVerdict.map((p) => {
-                const total = p.best + p.recommended + p.notRecommended;
-                const pct = (n: number) => `${(n / total) * 100}%`;
-                return (
-                  <div key={countLabel(p)} className="flex items-center gap-2">
-                    <div
-                      className={`w-6 shrink-0 text-right text-xs tabular-nums ${
-                        p.verdict === "best"
-                          ? "font-bold text-accent"
-                          : "font-medium text-foreground"
-                      }`}
-                    >
-                      {countLabel(p)}
-                    </div>
-                    <div
-                      className="flex h-2.5 flex-1 overflow-hidden rounded-full bg-surface-2"
-                      title={`${countLabel(p)} player${p.count === 1 && !p.plus ? "" : "s"} — Best ${p.best} · Recommended ${p.recommended} · Not recommended ${p.notRecommended}`}
-                    >
-                      <div className="bg-accent" style={{ width: pct(p.best) }} />
+              {(bestLabel || recLabel) && (
+                <p className="mb-2.5 text-xs text-muted">
+                  {bestLabel && (
+                    <span className="font-semibold text-foreground">
+                      Best with {bestLabel}
+                    </span>
+                  )}
+                  {bestLabel && recLabel && recLabel !== bestLabel && " · "}
+                  {recLabel !== bestLabel && recLabel && (
+                    <>Recommended {recLabel}</>
+                  )}
+                  {lowVotes && <span className="text-subtle"> · few votes</span>}
+                </p>
+              )}
+
+              <div className="space-y-1">
+                {withVerdict.map((p) => {
+                  const total = p.best + p.recommended + p.notRecommended;
+                  const pct = (n: number) => `${(n / total) * 100}%`;
+                  return (
+                    <div key={countLabel(p)} className="flex items-center gap-2">
                       <div
-                        className="bg-accent/40"
-                        style={{ width: pct(p.recommended) }}
-                      />
-                      {/* Remaining track = Not recommended */}
+                        className={`w-6 shrink-0 text-right text-xs tabular-nums ${
+                          p.verdict === "best"
+                            ? "font-bold text-accent"
+                            : "font-medium text-foreground"
+                        }`}
+                      >
+                        {countLabel(p)}
+                      </div>
+                      <div
+                        className="flex h-2.5 flex-1 overflow-hidden rounded-full bg-surface-2"
+                        title={`${countLabel(p)} player${p.count === 1 && !p.plus ? "" : "s"} — Best ${p.best} · Recommended ${p.recommended} · Not recommended ${p.notRecommended}`}
+                      >
+                        <div
+                          className="bg-accent"
+                          style={{ width: pct(p.best) }}
+                        />
+                        <div
+                          className="bg-accent/40"
+                          style={{ width: pct(p.recommended) }}
+                        />
+                        {/* Remaining track = Not recommended */}
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
-            </div>
+                  );
+                })}
+              </div>
 
-            <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-muted">
-              <span className="flex items-center gap-1">
-                <span className="h-2 w-2 rounded-full bg-accent" /> Best
-              </span>
-              <span className="flex items-center gap-1">
-                <span className="h-2 w-2 rounded-full bg-accent/40" /> Rec.
-              </span>
-              <span className="flex items-center gap-1">
-                <span className="h-2 w-2 rounded-full bg-surface-2" /> Not rec.
-              </span>
+              <div className="mt-2.5 flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-muted">
+                <span className="flex items-center gap-1">
+                  <span className="h-2 w-2 rounded-full bg-accent" /> Best
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="h-2 w-2 rounded-full bg-accent/40" /> Rec.
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="h-2 w-2 rounded-full bg-surface-2" /> Not rec.
+                </span>
+              </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
     </section>
   );
