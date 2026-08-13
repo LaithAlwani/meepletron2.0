@@ -9,8 +9,8 @@ import { useToast } from "@/components/ui/Toast";
 
 type Row = { id: number; label: string; detail: string };
 
-const inputClass =
-  "w-full rounded-md border border-border bg-background px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-ring";
+const inputBase =
+  "rounded-md border border-border bg-background px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-ring";
 
 /** Admin editor for a game's "Rules refresher" list (fix the AI's output). */
 export function RemindersEditor({ gameId }: { gameId: Id<"games"> }) {
@@ -79,27 +79,29 @@ export function RemindersEditor({ gameId }: { gameId: Id<"games"> }) {
           </p>
         )}
         {rows.map((r) => (
-          <div key={r.id} className="flex items-start gap-2">
-            <input
-              value={r.label}
-              onChange={(e) => update(r.id, { label: e.target.value })}
-              placeholder="Label (e.g. Starting money)"
-              className={`${inputClass} w-44 shrink-0 font-medium`}
-            />
+          <div key={r.id} className="space-y-2 rounded-lg border border-border p-3">
+            <div className="flex items-center gap-2">
+              <input
+                value={r.label}
+                onChange={(e) => update(r.id, { label: e.target.value })}
+                placeholder="Label (e.g. Starting money)"
+                className={`${inputBase} flex-1 font-semibold`}
+              />
+              <button
+                onClick={() => remove(r.id)}
+                aria-label="Remove reminder"
+                className="shrink-0 rounded-md p-2 text-subtle transition-colors hover:bg-surface-2 hover:text-red-600"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+            </div>
             <textarea
               value={r.detail}
               onChange={(e) => update(r.id, { detail: e.target.value })}
               placeholder="The specific rule…"
               rows={2}
-              className={`${inputClass} flex-1 resize-y`}
+              className={`${inputBase} w-full resize-y`}
             />
-            <button
-              onClick={() => remove(r.id)}
-              aria-label="Remove"
-              className="mt-1 rounded-md p-2 text-subtle transition-colors hover:bg-surface-2 hover:text-red-600"
-            >
-              <Trash2 className="h-4 w-4" />
-            </button>
           </div>
         ))}
       </div>

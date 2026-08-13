@@ -14,8 +14,8 @@ type Row = {
   answer: string;
 };
 
-const inputClass =
-  "w-full rounded-md border border-border bg-background px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-ring";
+const inputBase =
+  "rounded-md border border-border bg-background px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-ring";
 
 /**
  * Admin editor for a game's FAQ (fix the AI's output). Editing an answer clears
@@ -105,7 +105,7 @@ export function FaqEditor({ gameId }: { gameId: Id<"games"> }) {
                 value={r.question}
                 onChange={(e) => update(r.id, { question: e.target.value })}
                 placeholder="Question"
-                className={`${inputClass} flex-1 font-semibold`}
+                className={`${inputBase} flex-1 font-semibold`}
               />
               <button
                 onClick={() => remove(r.id)}
@@ -120,7 +120,7 @@ export function FaqEditor({ gameId }: { gameId: Id<"games"> }) {
               onChange={(e) => update(r.id, { answer: e.target.value })}
               placeholder="Answer"
               rows={3}
-              className={`${inputClass} resize-y`}
+              className={`${inputBase} w-full resize-y`}
             />
           </div>
         ))}
