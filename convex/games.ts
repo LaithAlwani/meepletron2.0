@@ -6,6 +6,7 @@ import { requireAdmin } from "./lib/auth";
 import { slugify } from "./lib/slug";
 import { buildSearchText } from "./lib/gameSearch";
 import { recomputeChatReady } from "./lib/chatReady";
+import { bggStatsValidator } from "./lib/bggStats";
 
 /** Resolve a game's storage ids into signed URLs for the client. */
 async function withMedia(ctx: QueryCtx, game: Doc<"games">) {
@@ -367,23 +368,6 @@ export const adminList = query({
       }),
     );
   },
-});
-
-const bggStatsValidator = v.object({
-  rating: v.optional(v.number()),
-  ratingCount: v.optional(v.number()),
-  weight: v.optional(v.number()),
-  playerPoll: v.optional(
-    v.array(
-      v.object({
-        count: v.number(),
-        best: v.number(),
-        recommended: v.number(),
-        notRecommended: v.number(),
-      }),
-    ),
-  ),
-  fetchedAt: v.optional(v.number()),
 });
 
 const metadataFields = {

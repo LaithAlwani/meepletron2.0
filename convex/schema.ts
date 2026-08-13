@@ -2,6 +2,7 @@ import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 import { authTables } from "@convex-dev/auth/server";
 import { annotationValidator } from "./lib/annotations";
+import { bggStatsValidator } from "./lib/bggStats";
 
 /**
  * Meepletron 2.0 data model — everything lives in Convex.
@@ -88,26 +89,7 @@ export default defineSchema({
     chatReady: v.optional(v.boolean()),
     // BoardGameGeek id (from the original import) + cached BGG stats.
     bggId: v.optional(v.string()),
-    bgg: v.optional(
-      v.object({
-        rating: v.optional(v.number()),
-        ratingCount: v.optional(v.number()),
-        weight: v.optional(v.number()),
-        pollVotes: v.optional(v.number()),
-        playerPoll: v.optional(
-          v.array(
-            v.object({
-              count: v.number(),
-              plus: v.optional(v.boolean()),
-              best: v.number(),
-              recommended: v.number(),
-              notRecommended: v.number(),
-            }),
-          ),
-        ),
-        fetchedAt: v.optional(v.number()),
-      }),
-    ),
+    bgg: v.optional(bggStatsValidator),
   })
     .index("by_slug", ["slug"])
     .index("by_isExpansion", ["isExpansion"])

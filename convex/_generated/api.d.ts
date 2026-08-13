@@ -27,6 +27,7 @@ import type * as ingestion from "../ingestion.js";
 import type * as ingestionDb from "../ingestionDb.js";
 import type * as lib_annotations from "../lib/annotations.js";
 import type * as lib_auth from "../lib/auth.js";
+import type * as lib_bggStats from "../lib/bggStats.js";
 import type * as lib_chatReady from "../lib/chatReady.js";
 import type * as lib_chunker from "../lib/chunker.js";
 import type * as lib_embedding from "../lib/embedding.js";
@@ -75,6 +76,7 @@ declare const fullApi: ApiFromModules<{
   ingestionDb: typeof ingestionDb;
   "lib/annotations": typeof lib_annotations;
   "lib/auth": typeof lib_auth;
+  "lib/bggStats": typeof lib_bggStats;
   "lib/chatReady": typeof lib_chatReady;
   "lib/chunker": typeof lib_chunker;
   "lib/embedding": typeof lib_embedding;

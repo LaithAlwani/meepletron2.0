@@ -1,53 +1,10 @@
 import { v, ConvexError } from "convex/values";
-import {
-  action,
-  internalMutation,
-  internalQuery,
-} from "./_generated/server";
+import { action, internalMutation, internalQuery } from "./_generated/server";
 import { internal } from "./_generated/api";
-
-/** Backfill BoardGameGeek ids from the original import (slug → bgg_id). */
-export const setBggIds = internalMutation({
-  args: {
-    entries: v.array(v.object({ slug: v.string(), bggId: v.string() })),
-  },
-  handler: async (ctx, { entries }) => {
-    let n = 0;
-    for (const e of entries) {
-      const g = await ctx.db
-        .query("games")
-        .withIndex("by_slug", (q) => q.eq("slug", e.slug))
-        .first();
-      if (g) {
-        await ctx.db.patch("games", g._id, { bggId: e.bggId });
-        n++;
-      }
-    }
-    return n;
-  },
-});
-
-const bggValidator = v.object({
-  rating: v.optional(v.number()),
-  ratingCount: v.optional(v.number()),
-  weight: v.optional(v.number()),
-  pollVotes: v.optional(v.number()),
-  playerPoll: v.optional(
-    v.array(
-      v.object({
-        count: v.number(),
-        plus: v.optional(v.boolean()),
-        best: v.number(),
-        recommended: v.number(),
-        notRecommended: v.number(),
-      }),
-    ),
-  ),
-  fetchedAt: v.optional(v.number()),
-});
+import { bggStatsValidator } from "./lib/bggStats";
 
 export const setBggStats = internalMutation({
-  args: { gameId: v.id("games"), bgg: bggValidator },
+  args: { gameId: v.id("games"), bgg: bggStatsValidator },
   handler: async (ctx, { gameId, bgg }) => {
     await ctx.db.patch("games", gameId, { bgg });
   },

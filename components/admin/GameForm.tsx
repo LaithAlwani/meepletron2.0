@@ -11,8 +11,10 @@ type BggStats = {
   rating?: number;
   ratingCount?: number;
   weight?: number;
+  pollVotes?: number;
   playerPoll?: {
     count: number;
+    plus?: boolean;
     best: number;
     recommended: number;
     notRecommended: number;
