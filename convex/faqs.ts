@@ -8,7 +8,8 @@ import {
   internalAction,
 } from "./_generated/server";
 import { internal } from "./_generated/api";
-import { getCurrentUser, requireUser } from "./lib/auth";
+import type { Id } from "./_generated/dataModel";
+import { getCurrentUser, requireUser, requireAdmin } from "./lib/auth";
 import { generateText } from "ai";
 import { CHAT_MODEL, buildAnswer, type Annotation } from "./rag";
 import { annotationValidator } from "./lib/annotations";
@@ -125,6 +126,63 @@ export const adminRegenerate = action({
   handler: async (ctx, { gameId }): Promise<{ generated: number }> => {
     await ctx.runQuery(internal.users.ensureAdmin, {});
     return await ctx.runAction(internal.faqs.generateForGame, { gameId });
+  },
+});
+
+/**
+ * Admin: manually save a game's FAQ (edit the AI's output). Patches existing
+ * rows (keeping their votes; clearing citations only when the answer text
+ * changed, since the old citations would no longer match), inserts new ones, and
+ * deletes any that were removed.
+ */
+export const adminSaveFaqs = mutation({
+  args: {
+    gameId: v.id("games"),
+    faqs: v.array(
+      v.object({
+        id: v.optional(v.id("gameFaqs")),
+        question: v.string(),
+        answer: v.string(),
+      }),
+    ),
+  },
+  handler: async (ctx, { gameId, faqs }) => {
+    await requireAdmin(ctx);
+    const existing = await ctx.db
+      .query("gameFaqs")
+      .withIndex("by_game", (q) => q.eq("gameId", gameId))
+      .collect();
+    const byId = new Map(existing.map((f) => [f._id, f]));
+    const kept = new Set<Id<"gameFaqs">>();
+    let order = 0;
+    for (const item of faqs) {
+      const question = item.question.trim();
+      const answer = item.answer.trim();
+      if (!question || !answer) continue;
+      const prev = item.id ? byId.get(item.id) : undefined;
+      if (prev) {
+        kept.add(prev._id);
+        await ctx.db.patch("gameFaqs", prev._id, {
+          question,
+          answer,
+          annotations: answer === prev.answer ? prev.annotations : [],
+          order: order++,
+        });
+      } else {
+        await ctx.db.insert("gameFaqs", {
+          gameId,
+          question,
+          answer,
+          annotations: [],
+          order: order++,
+          helpful: 0,
+          notHelpful: 0,
+        });
+      }
+    }
+    for (const f of existing) {
+      if (!kept.has(f._id)) await ctx.db.delete("gameFaqs", f._id);
+    }
   },
 });
 

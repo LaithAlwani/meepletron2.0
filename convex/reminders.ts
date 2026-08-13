@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import {
   query,
   action,
+  mutation,
   internalMutation,
   internalAction,
 } from "./_generated/server";
@@ -10,6 +11,7 @@ import { generateObject } from "ai";
 import { z } from "zod";
 import { CHAT_MODEL } from "./rag";
 import { embedQuery } from "./lib/embedding";
+import { requireAdmin } from "./lib/auth";
 
 /**
  * Generate a per-game "rules refresher": the easily-forgotten, nitty-gritty
@@ -115,6 +117,30 @@ export const adminRegenerate = action({
   handler: async (ctx, { gameId }): Promise<{ reminders: number }> => {
     await ctx.runQuery(internal.users.ensureAdmin, {});
     return await ctx.runAction(internal.reminders.generateForGame, { gameId });
+  },
+});
+
+/** Admin: manually save a game's rules-refresher list (edit the AI's output). */
+export const adminSaveReminders = mutation({
+  args: {
+    gameId: v.id("games"),
+    reminders: v.array(v.object({ label: v.string(), detail: v.string() })),
+  },
+  handler: async (ctx, { gameId, reminders }) => {
+    await requireAdmin(ctx);
+    for (const r of await ctx.db
+      .query("gameReminders")
+      .withIndex("by_game", (q) => q.eq("gameId", gameId))
+      .collect()) {
+      await ctx.db.delete("gameReminders", r._id);
+    }
+    let o = 0;
+    for (const r of reminders) {
+      const label = r.label.trim();
+      const detail = r.detail.trim();
+      if (!label || !detail) continue;
+      await ctx.db.insert("gameReminders", { gameId, label, detail, order: o++ });
+    }
   },
 });
 

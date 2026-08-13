@@ -9,6 +9,8 @@ import { GameForm } from "@/components/admin/GameForm";
 import { CoverUploader } from "@/components/admin/CoverUploader";
 import { RulebookManager } from "@/components/admin/RulebookManager";
 import { ComponentsEditor } from "@/components/admin/ComponentsEditor";
+import { FaqEditor } from "@/components/admin/FaqEditor";
+import { RemindersEditor } from "@/components/admin/RemindersEditor";
 import { useToast } from "@/components/ui/Toast";
 
 export default function EditGamePage({
@@ -83,6 +85,20 @@ export default function EditGamePage({
           In the box
         </h3>
         <ComponentsEditor gameId={gameId} />
+      </section>
+
+      <section>
+        <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-muted">
+          Common questions (FAQ)
+        </h3>
+        <FaqEditor gameId={gameId} />
+      </section>
+
+      <section>
+        <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-muted">
+          Rules refresher
+        </h3>
+        <RemindersEditor gameId={gameId} />
       </section>
     </div>
   );

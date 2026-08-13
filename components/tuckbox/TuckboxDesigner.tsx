@@ -53,7 +53,7 @@ const DEFAULT_CONFIG_IN: TuckboxConfig = {
   stackThickness: 0.79,
   tolerance: 0.039,
   materialThickness: 0.012,
-  paperSize: "A4",
+  paperSize: "Letter", // inches → US default paper
   orientation: "portrait",
 };
 const DEFAULT_CARD_THICKNESS_IN = 0.0126;
