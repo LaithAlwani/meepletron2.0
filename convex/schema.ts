@@ -160,7 +160,7 @@ export default defineSchema({
     .index("by_game", ["gameId"])
     .vectorIndex("by_embedding", {
       vectorField: "embedding",
-      dimensions: 768, // Google text-embedding-004
+      dimensions: 768, // gemini-embedding-001 @ 768 dims (see lib/embedding.ts)
       filterFields: ["rulebookId", "chunkType"],
     }),
 
