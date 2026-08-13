@@ -42,6 +42,22 @@ const DEFAULT_CONFIG_MM: TuckboxConfig = {
   paperSize: "A4",
   orientation: "portrait",
 };
+const DEFAULT_CARD_THICKNESS_MM = 0.32;
+
+// Default is inches (values = the mm defaults converted, matching setUnit's
+// rounding so the "Standard 63×88" preset still reads as active).
+const DEFAULT_CONFIG_IN: TuckboxConfig = {
+  unit: "in",
+  cardWidth: 2.48,
+  cardHeight: 3.46,
+  stackThickness: 0.79,
+  tolerance: 0.039,
+  materialThickness: 0.012,
+  paperSize: "A4",
+  orientation: "portrait",
+};
+const DEFAULT_CARD_THICKNESS_IN = 0.0126;
+const UNIT_STORAGE_KEY = "tuckbox-unit";
 
 const FACE_KEYS: FaceKey[] = [
   "front",
@@ -115,9 +131,9 @@ export function TuckboxDesigner({
 }: {
   initialBoardgame?: InitialBoardgame;
 }) {
-  const [config, setConfig] = useState<TuckboxConfig>(DEFAULT_CONFIG_MM);
+  const [config, setConfig] = useState<TuckboxConfig>(DEFAULT_CONFIG_IN);
   const [cardCount, setCardCount] = useState(60);
-  const [cardThickness, setCardThickness] = useState(0.32);
+  const [cardThickness, setCardThickness] = useState(DEFAULT_CARD_THICKNESS_IN);
   const [assets, setAssets] = useState<FaceAssets>({});
   const [imageMode, setImageMode] = useState<"per-face" | "wrap">("per-face");
   const [wrapAsset, setWrapAsset] = useState<FaceImageData | undefined>(
@@ -214,6 +230,34 @@ export function TuckboxDesigner({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialBoardgame?.imageUrl]);
 
+  // Restore the user's preferred unit (default: inches). The initial state is
+  // the inches default, so we only switch when they last chose mm. Runs once,
+  // client-only; doesn't mark the design edited.
+  useEffect(() => {
+    if (localStorage.getItem(UNIT_STORAGE_KEY) === "mm") {
+      setConfig(DEFAULT_CONFIG_MM);
+      setCardThickness(DEFAULT_CARD_THICKNESS_MM);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Full-view tool: on desktop the tool fills the viewport and its panels scroll
+  // internally, so the page itself must never scroll. Pixel-perfect height math
+  // is brittle, so also pin the body's overflow (desktop only — mobile stacks
+  // and needs to scroll). Restored on unmount / when narrowing to mobile.
+  useEffect(() => {
+    const mq = window.matchMedia("(min-width: 1024px)");
+    const apply = () => {
+      document.body.style.overflow = mq.matches ? "hidden" : "";
+    };
+    apply();
+    mq.addEventListener("change", apply);
+    return () => {
+      mq.removeEventListener("change", apply);
+      document.body.style.overflow = "";
+    };
+  }, []);
+
   function updateConfig<K extends keyof TuckboxConfig>(
     key: K,
     value: TuckboxConfig[K],
@@ -225,6 +269,11 @@ export function TuckboxDesigner({
   function setUnit(unit: Unit) {
     if (unit === config.unit) return;
     touch();
+    try {
+      localStorage.setItem(UNIT_STORAGE_KEY, unit);
+    } catch {
+      /* private mode / storage disabled — non-fatal */
+    }
     if (unit === "in") {
       setConfig({
         unit: "in",
@@ -598,9 +647,12 @@ export function TuckboxDesigner({
   function newBox() {
     setBoxId(null);
     setBoxName("Untitled box");
-    setConfig(DEFAULT_CONFIG_MM);
+    const mm =
+      typeof window !== "undefined" &&
+      localStorage.getItem(UNIT_STORAGE_KEY) === "mm";
+    setConfig(mm ? DEFAULT_CONFIG_MM : DEFAULT_CONFIG_IN);
+    setCardThickness(mm ? DEFAULT_CARD_THICKNESS_MM : DEFAULT_CARD_THICKNESS_IN);
     setCardCount(60);
-    setCardThickness(0.32);
     setImageMode("per-face");
     setAssets({});
     setWrapAsset(undefined);
@@ -618,10 +670,88 @@ export function TuckboxDesigner({
   )} × ${layout.pageHeight.toFixed(1)} ${layout.unit}`;
 
   return (
-    <div className="flex flex-col lg:h-[calc(100dvh-60px)] lg:overflow-hidden">
+    <div className="flex flex-col lg:h-[calc(100dvh-64px)] lg:overflow-hidden">
       {/* Body: sidebar (controls) + main (preview) */}
       <div className="flex flex-1 flex-col overflow-hidden lg:min-h-0 lg:flex-row">
         <aside className="themed-scroll order-2 w-full divide-y divide-border overflow-y-auto border-t border-border lg:order-1 lg:w-[360px] lg:shrink-0 lg:border-r lg:border-t-0">
+          {/* Box name, autosave, preview tabs, and box actions */}
+          <div className="space-y-2.5 p-4">
+            <input
+              value={boxName}
+              onChange={(e) => {
+                touch();
+                setBoxName(e.target.value);
+              }}
+              placeholder="Untitled box"
+              aria-label="Box name"
+              className="w-full rounded-md border border-border bg-surface px-2.5 py-2 text-sm font-semibold text-foreground outline-none focus:ring-2 focus:ring-ring"
+            />
+
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex gap-1">
+                {(
+                  [
+                    ["flat", "Flat net"],
+                    ["assembled", "3D box"],
+                  ] as const
+                ).map(([value, tabLabel]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => setPreviewTab(value)}
+                    className={`rounded-lg px-2.5 py-1 text-xs font-bold uppercase tracking-wide transition-colors ${
+                      previewTab === value
+                        ? "bg-accent/10 text-accent"
+                        : "text-muted hover:bg-surface-2 hover:text-foreground"
+                    }`}
+                  >
+                    {tabLabel}
+                  </button>
+                ))}
+              </div>
+              {signedIn ? (
+                <span className="flex items-center gap-1 whitespace-nowrap text-xs text-subtle">
+                  {saveState === "saving" ? (
+                    "Saving…"
+                  ) : saveState === "saved" ? (
+                    <>
+                      <Check className="h-3.5 w-3.5 text-accent-2" /> Saved
+                    </>
+                  ) : saveState === "error" ? (
+                    <span className="text-red-500">Save failed</span>
+                  ) : (
+                    "Autosaves"
+                  )}
+                </span>
+              ) : (
+                <Link
+                  href="/auth"
+                  className="whitespace-nowrap text-xs text-muted underline hover:text-foreground"
+                >
+                  Sign in to save
+                </Link>
+              )}
+            </div>
+
+            <div className="flex gap-2">
+              {signedIn && (
+                <button
+                  onClick={() => setMyBoxesOpen(true)}
+                  className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-semibold text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
+                >
+                  <FolderOpen className="h-4 w-4" />
+                  My boxes
+                </button>
+              )}
+              <Link
+                href="/boardgames"
+                className="flex flex-1 items-center justify-center rounded-lg border border-border px-3 py-1.5 text-xs font-semibold text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
+              >
+                Open from a game
+              </Link>
+            </div>
+          </div>
+
           {/* 01 — Card size */}
           <NumSection
             n="01"
@@ -700,6 +830,39 @@ export function TuckboxDesigner({
                 { value: "wrap", label: "Wrap around" },
               ]}
             />
+
+            {/* Pick which face to edit — filled dot = has artwork. */}
+            <div className="grid grid-cols-3 gap-1.5">
+              {FACE_KEYS.map((face) => {
+                const active = faceForEditor === face;
+                const filled = faceHasArt(face);
+                return (
+                  <button
+                    key={face}
+                    type="button"
+                    onClick={() => setSelectedFace(face)}
+                    className={`flex items-center gap-1.5 rounded-lg border px-2 py-1.5 text-xs font-semibold transition-colors ${
+                      active
+                        ? "border-accent bg-accent text-accent-foreground"
+                        : "border-border text-muted hover:bg-surface-2 hover:text-foreground"
+                    }`}
+                  >
+                    <span
+                      className={`h-1.5 w-1.5 shrink-0 rounded-full ${
+                        filled
+                          ? active
+                            ? "bg-accent-foreground"
+                            : "bg-accent"
+                          : active
+                            ? "bg-accent-foreground/40"
+                            : "bg-border"
+                      }`}
+                    />
+                    <span className="truncate">{FACE_SHORT[face]}</span>
+                  </button>
+                );
+              })}
+            </div>
 
             <div className="flex items-baseline justify-between gap-2">
               <h3 className="font-display text-lg font-bold text-foreground">
@@ -830,79 +993,6 @@ export function TuckboxDesigner({
 
         {/* Preview */}
         <main className="order-1 flex min-h-0 flex-1 flex-col lg:order-2">
-          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-3 py-2 sm:px-4">
-            <div className="flex shrink-0 gap-1">
-              {(
-                [
-                  ["flat", "Flat net"],
-                  ["assembled", "3D box"],
-                ] as const
-              ).map(([value, tabLabel]) => (
-                <button
-                  key={value}
-                  type="button"
-                  onClick={() => setPreviewTab(value)}
-                  className={`rounded-lg px-3 py-1.5 text-xs font-bold uppercase tracking-wide transition-colors ${
-                    previewTab === value
-                      ? "bg-accent/10 text-accent"
-                      : "text-muted hover:bg-surface-2 hover:text-foreground"
-                  }`}
-                >
-                  {tabLabel}
-                </button>
-              ))}
-            </div>
-            <div className="flex min-w-0 flex-1 flex-wrap items-center justify-end gap-2">
-              <input
-                value={boxName}
-                onChange={(e) => {
-                  touch();
-                  setBoxName(e.target.value);
-                }}
-                placeholder="Untitled box"
-                aria-label="Box name"
-                className="min-w-0 flex-1 rounded-md border border-border bg-surface px-2.5 py-1.5 text-sm font-semibold text-foreground outline-none focus:ring-2 focus:ring-ring sm:w-52 sm:flex-none"
-              />
-              {signedIn ? (
-                <span className="hidden items-center gap-1 whitespace-nowrap text-xs text-subtle sm:flex">
-                  {saveState === "saving" ? (
-                    "Saving…"
-                  ) : saveState === "saved" ? (
-                    <>
-                      <Check className="h-3.5 w-3.5 text-accent-2" /> Saved
-                    </>
-                  ) : saveState === "error" ? (
-                    <span className="text-red-500">Save failed</span>
-                  ) : (
-                    "Autosaves"
-                  )}
-                </span>
-              ) : (
-                <Link
-                  href="/auth"
-                  className="hidden whitespace-nowrap text-xs text-muted underline hover:text-foreground sm:inline"
-                >
-                  Sign in to save
-                </Link>
-              )}
-              {signedIn && (
-                <button
-                  onClick={() => setMyBoxesOpen(true)}
-                  className="flex shrink-0 items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-semibold text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
-                >
-                  <FolderOpen className="h-4 w-4" />
-                  <span className="hidden sm:inline">My boxes</span>
-                </button>
-              )}
-              <Link
-                href="/boardgames"
-                className="hidden shrink-0 rounded-lg border border-border px-3 py-1.5 text-xs font-semibold text-muted transition-colors hover:bg-surface-2 hover:text-foreground sm:inline"
-              >
-                Open from a game
-              </Link>
-            </div>
-          </div>
-
           <div className="min-h-[340px] flex-1 overflow-auto p-3 lg:min-h-0">
             {previewTab === "assembled" ? (
               <AssembledBoxPreview
@@ -921,24 +1011,6 @@ export function TuckboxDesigner({
                 onWrapTransform={updateWrapTransform}
               />
             )}
-          </div>
-
-          {/* Faces bar */}
-          <div className="flex items-center gap-3 border-t border-border px-4 py-3">
-            <span className="shrink-0 text-[11px] font-bold uppercase tracking-wide text-subtle">
-              Faces
-            </span>
-            <div className="hscroll flex gap-2 overflow-x-auto">
-              {FACE_KEYS.map((face) => (
-                <FaceChip
-                  key={face}
-                  label={FACE_SHORT[face]}
-                  active={faceForEditor === face}
-                  filled={faceHasArt(face)}
-                  onClick={() => setSelectedFace(face)}
-                />
-              ))}
-            </div>
           </div>
         </main>
       </div>
@@ -1024,43 +1096,6 @@ function PresetButton({
       }`}
     >
       {children}
-    </button>
-  );
-}
-
-function FaceChip({
-  label,
-  active,
-  filled,
-  onClick,
-}: {
-  label: string;
-  active: boolean;
-  filled: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`flex shrink-0 items-center gap-2 rounded-lg border px-3 py-2 text-sm font-semibold transition-colors ${
-        active
-          ? "border-accent bg-accent text-accent-foreground"
-          : "border-border text-muted hover:bg-surface-2 hover:text-foreground"
-      }`}
-    >
-      <span
-        className={`h-3 w-3 rounded-[3px] border ${
-          filled
-            ? active
-              ? "border-accent-foreground bg-accent-foreground"
-              : "border-accent bg-accent"
-            : active
-              ? "border-accent-foreground/70"
-              : "border-current"
-        }`}
-      />
-      {label}
     </button>
   );
 }

@@ -108,11 +108,11 @@ export function FlatNetPreview({
   }
 
   return (
-    <div className="w-full h-full flex items-center justify-center bg-surface-2 rounded-lg p-4">
+    <div className="flex h-full w-full items-center justify-center rounded-lg bg-surface-2 p-4">
       <svg
         viewBox={`0 0 ${pageWidth} ${pageHeight}`}
-        className="max-w-full max-h-full touch-none"
-        style={{ aspectRatio: `${pageWidth} / ${pageHeight}` }}
+        preserveAspectRatio="xMidYMid meet"
+        className="h-full w-full touch-none"
         onClick={(event) => {
           if (event.target === event.currentTarget) onSelectFace(null);
         }}
