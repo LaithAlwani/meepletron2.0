@@ -6,6 +6,7 @@ import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
 import { BottomNav } from "@/components/BottomNav";
 import { PreferencesEffects } from "@/components/PreferencesEffects";
+import { SITE_URL } from "@/lib/site";
 
 // Display face — characterful, warm-modern (headings, wordmark).
 const bricolage = Bricolage_Grotesque({
@@ -29,6 +30,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL(SITE_URL),
   title: {
     default: "Meepletron — Ask your board game rules",
     template: "%s · Meepletron",

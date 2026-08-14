@@ -22,6 +22,7 @@ export function BottomNav() {
   const hidden =
     pathname === "/" ||
     pathname === "/auth" ||
+    pathname === "/who-goes-first" ||
     /^\/boardgames\/[^/]+\/chat/.test(pathname);
   if (hidden) return null;
 

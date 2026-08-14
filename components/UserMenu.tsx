@@ -2,7 +2,14 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { User, Scissors, Settings, Shield, type LucideIcon } from "lucide-react";
+import {
+  User,
+  Scissors,
+  Settings,
+  Shield,
+  Hand,
+  type LucideIcon,
+} from "lucide-react";
 import { cn } from "@/lib/cn";
 import { ThemeMenu } from "@/components/ThemeToggle";
 
@@ -41,9 +48,11 @@ export function UserMenu({
     icon: LucideIcon;
     bottomNav?: boolean;
     headerNav?: boolean;
+    touchOnly?: boolean;
   }[] = [
     { href: "/profile", label: "Profile", icon: User, bottomNav: true },
     { href: "/tuckbox", label: "Tuckbox", icon: Scissors, headerNav: true },
+    { href: "/who-goes-first", label: "First Player", icon: Hand, touchOnly: true },
     { href: "/settings", label: "Settings", icon: Settings },
     ...(isAdmin
       ? [{ href: "/admin", label: "Admin", icon: Shield as LucideIcon }]
@@ -71,11 +80,13 @@ export function UserMenu({
                 onClick={() => setOpen(false)}
                 className={cn(
                   "items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-medium text-muted transition-colors hover:bg-surface-2 hover:text-foreground",
-                  it.bottomNav
-                    ? "hidden sm:flex"
-                    : it.headerNav
-                      ? "flex sm:hidden"
-                      : "flex",
+                  it.touchOnly
+                    ? "hidden pointer-coarse:flex" // touch devices only (phones + tablets)
+                    : it.bottomNav
+                      ? "hidden sm:flex"
+                      : it.headerNav
+                        ? "flex sm:hidden"
+                        : "flex",
                 )}
               >
                 <Icon className="h-4 w-4 shrink-0" />
