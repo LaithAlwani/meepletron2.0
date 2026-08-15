@@ -19,6 +19,17 @@ const TIME_OPTIONS: { value: TimeFilter; label: string }[] = [
 ];
 const EMPTY_FILTERS: Filters = { players: null, time: null, hasExpansions: false };
 
+// Persisted per browser tab so returning from a detail page lands you back where
+// you were — same filters/search, same number of pages loaded, same scroll.
+const SCROLL_KEY = "boardgames-list-state";
+type SavedListState = {
+  term: string;
+  debounced: string;
+  filters: Filters;
+  count: number;
+  scrollY: number;
+};
+
 function FilterChip({
   active,
   onClick,
@@ -52,6 +63,14 @@ export default function BoardgamesPage() {
   const [debounced, setDebounced] = useState("");
   const searching = debounced.length >= 2;
 
+  // When set (on return from a detail page), the list loads pages until it has
+  // `count` items again, then scrolls back to `scrollY`.
+  const [restoreTarget, setRestoreTarget] = useState<{
+    scrollY: number;
+    count: number;
+  } | null>(null);
+  const restoredRef = useRef(false);
+
   // Debounce the search so the query only fires 1s after typing stops.
   useEffect(() => {
     const t = setTimeout(() => setDebounced(term.trim()), 1000);
@@ -60,6 +79,26 @@ export default function BoardgamesPage() {
 
   useEffect(() => {
     if (localStorage.getItem("boardgames-view") === "list") setView("list");
+  }, []);
+
+  // On mount, replay the list state saved when we last left (e.g. to open a game
+  // detail page): restore filters/search, then queue the scroll restore.
+  useEffect(() => {
+    if (restoredRef.current) return;
+    restoredRef.current = true;
+    try {
+      const raw = sessionStorage.getItem(SCROLL_KEY);
+      if (!raw) return;
+      const s = JSON.parse(raw) as SavedListState;
+      if (typeof s.term === "string") setTerm(s.term);
+      if (typeof s.debounced === "string") setDebounced(s.debounced);
+      if (s.filters) setFilters(s.filters);
+      if (s.count > 0 && s.scrollY > 0) {
+        setRestoreTarget({ scrollY: s.scrollY, count: s.count });
+      }
+    } catch {
+      /* ignore malformed state */
+    }
   }, []);
 
   function toggleView() {
@@ -125,6 +164,49 @@ export default function BoardgamesPage() {
     io.observe(el);
     return () => io.disconnect();
   }, [status, loadMore]);
+
+  // Drive the scroll restore: keep loading pages until we're back to the saved
+  // item count (the grid's fixed aspect ratios make its height deterministic, so
+  // once the items render the page is tall enough), then jump to the saved Y.
+  useEffect(() => {
+    if (!restoreTarget) return;
+    if (results.length < restoreTarget.count && status === "CanLoadMore") {
+      loadMore(24);
+      return;
+    }
+    // Still fetching the pages we asked for — wait for the next render.
+    if (status === "LoadingFirstPage" || status === "LoadingMore") return;
+    const y = restoreTarget.scrollY;
+    requestAnimationFrame(() => window.scrollTo(0, y));
+    setRestoreTarget(null);
+  }, [restoreTarget, results.length, status, loadMore]);
+
+  // Snapshot the list state whenever we navigate away (the component unmounts on
+  // a client-side route change), so a later return can replay it.
+  const saveRef = useRef<SavedListState>({
+    term,
+    debounced,
+    filters,
+    count: results.length,
+    scrollY: 0,
+  });
+  saveRef.current = { term, debounced, filters, count: results.length, scrollY: 0 };
+  useEffect(() => {
+    return () => {
+      // Don't clobber a good snapshot with an empty one (e.g. StrictMode's
+      // dev-only mount/unmount cycle before the first page has loaded).
+      if (saveRef.current.count === 0) return;
+      try {
+        sessionStorage.setItem(
+          SCROLL_KEY,
+          JSON.stringify({ ...saveRef.current, scrollY: window.scrollY }),
+        );
+      } catch {
+        /* storage unavailable — nothing to restore, no harm */
+      }
+    };
+  }, []);
+
   const activeFilterCount =
     (filters.players ? 1 : 0) + (filters.time ? 1 : 0) + (filters.hasExpansions ? 1 : 0);
 
