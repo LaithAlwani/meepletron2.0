@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Smartphone } from "lucide-react";
+import { ArrowLeft, Smartphone, Users } from "lucide-react";
 import { useCoarsePointer } from "@/lib/useCoarsePointer";
 
 const COUNTDOWN_MS = 3000;
@@ -26,7 +26,7 @@ const COLORS = [
 const R = 46;
 const CIRC = 2 * Math.PI * R;
 
-type Touch = { id: number; x: number; y: number; color: string; n: number };
+type Touch = { id: number; x: number; y: number; color: string };
 type Phase = "idle" | "counting" | "winner";
 
 export function WhoGoesFirst() {
@@ -35,6 +35,9 @@ export function WhoGoesFirst() {
 
   const [touches, setTouches] = useState<Touch[]>([]);
   const [winner, setWinner] = useState<Touch | null>(null);
+  // The winner's 1-based position among the fingers that were down when chosen,
+  // so it's always within [1, playerCount] (never a running touch tally).
+  const [winnerNo, setWinnerNo] = useState(0);
   const phase: Phase = winner
     ? "winner"
     : touches.length >= MIN_PLAYERS
@@ -43,7 +46,6 @@ export function WhoGoesFirst() {
 
   const touchesRef = useRef<Touch[]>([]);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const seqRef = useRef(0); // player-number sequence, reset when the mat clears
 
   const clearTimer = useCallback(() => {
     if (timerRef.current) {
@@ -69,8 +71,9 @@ export function WhoGoesFirst() {
   const pickWinner = useCallback(() => {
     const list = touchesRef.current;
     if (list.length < MIN_PLAYERS) return;
-    const chosen = list[Math.floor(Math.random() * list.length)];
-    setWinner(chosen);
+    const idx = Math.floor(Math.random() * list.length);
+    setWinner(list[idx]);
+    setWinnerNo(idx + 1); // position among the fingers currently down
     if (typeof navigator !== "undefined" && "vibrate" in navigator) {
       navigator.vibrate?.([40, 40, 120]);
     }
@@ -89,9 +92,9 @@ export function WhoGoesFirst() {
   }, [touches.length, winner, pickWinner, clearTimer]);
 
   const reset = useCallback(() => {
-    seqRef.current = 0;
     setTouches([]);
     setWinner(null);
+    setWinnerNo(0);
   }, []);
 
   const addTouch = useCallback(
@@ -105,13 +108,12 @@ export function WhoGoesFirst() {
       const id = e.pointerId;
       const x = e.clientX;
       const y = e.clientY;
-      const n = ++seqRef.current;
       setTouches((prev) => {
         if (prev.some((t) => t.id === id)) return prev;
         const used = new Set(prev.map((t) => t.color));
         const color =
           COLORS.find((c) => !used.has(c)) ?? COLORS[prev.length % COLORS.length];
-        return [...prev, { id, x, y, color, n }];
+        return [...prev, { id, x, y, color }];
       });
     },
     [phase, reset],
@@ -172,26 +174,30 @@ export function WhoGoesFirst() {
     >
       <style>{`@keyframes wgf-ring { from { stroke-dashoffset: 0 } to { stroke-dashoffset: ${CIRC} } }`}</style>
 
-      {/* Back button */}
-      <div className="absolute left-3 top-[calc(env(safe-area-inset-top)+0.75rem)] z-30">
+      {/* Top bar: back · title · live player count */}
+      <header className="absolute inset-x-0 top-0 z-30 flex items-center justify-between gap-2 px-3 pt-[calc(env(safe-area-inset-top)+0.75rem)]">
         <BackButton
           onClick={() =>
             window.history.length > 1 ? router.back() : router.push("/boardgames")
           }
-          onFlood={!!flooded}
+          onFlood={flooded}
         />
-      </div>
+        <h1
+          className={`font-display text-base font-bold sm:text-lg ${
+            flooded ? "text-white" : "text-foreground"
+          }`}
+        >
+          Who Goes First?
+        </h1>
+        <CountPill n={touches.length} onFlood={flooded} />
+      </header>
 
-      {/* Heading + instructions (also the crawlable SEO content) */}
-      {phase !== "winner" && (
-        <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex flex-col items-center px-6 pt-[calc(env(safe-area-inset-top)+4.5rem)] text-center">
-          <h1 className="font-display text-3xl font-bold text-foreground sm:text-4xl">
-            Who Goes First?
-          </h1>
-          <p className="mt-2 max-w-xs text-sm text-muted">
-            {touches.length < MIN_PLAYERS
-              ? "Everyone place a finger on the screen."
-              : "Hold still — choosing in a moment…"}
+      {/* Centered instruction while waiting for players (crawlable copy). */}
+      {phase === "idle" && (
+        <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center px-6 text-center">
+          <p className="max-w-xs text-sm text-muted">
+            Everyone place a finger on the screen — one player is chosen after 3
+            seconds.
           </p>
         </div>
       )}
@@ -249,10 +255,10 @@ export function WhoGoesFirst() {
             className="flex h-28 w-28 items-center justify-center rounded-full bg-white/25 text-5xl font-black shadow-xl backdrop-blur"
             aria-hidden
           >
-            {winner!.n}
+            {winnerNo}
           </div>
           <h2 className="font-display text-4xl font-black drop-shadow-sm">
-            Player {winner!.n} goes first!
+            Player {winnerNo} goes first!
           </h2>
           <p className="text-white/90">Tap anywhere to play again.</p>
         </div>
@@ -281,5 +287,21 @@ function BackButton({
       <ArrowLeft className="h-[18px] w-[18px]" />
       Back
     </button>
+  );
+}
+
+function CountPill({ n, onFlood }: { n: number; onFlood: boolean }) {
+  return (
+    <div
+      aria-label={`${n} ${n === 1 ? "player" : "players"}`}
+      className={
+        onFlood
+          ? "flex items-center gap-1.5 rounded-xl bg-white/20 px-3 py-2 text-sm font-semibold text-white backdrop-blur"
+          : "flex items-center gap-1.5 rounded-xl bg-surface/80 px-3 py-2 text-sm font-semibold text-muted backdrop-blur"
+      }
+    >
+      <Users className="h-[18px] w-[18px]" />
+      <span className="tabular-nums">{n}</span>
+    </div>
   );
 }
