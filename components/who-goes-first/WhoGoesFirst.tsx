@@ -24,10 +24,14 @@ const COLORS = [
   "#84cc16", // lime
 ];
 
-// Countdown ring geometry. The ring sits clearly outside the dot + its glow so
-// it stays readable (it's the finger's own color, which the glow would swallow).
-const R = 66;
-const SVG = 148; // 2*R + stroke + padding
+// Countdown ring geometry, derived from the dot so the gap stays explicit.
+// The ring still clears the dot's glow (which reaches ~48px) — it just hugs it
+// closely now instead of floating well outside it.
+const DOT = 70; // dot diameter in px, mirrors the h/w-[4.375rem] below
+const RING_W = 9; // ring stroke width
+const GAP = 13.25; // dot edge -> ring inner edge (half the original 26.5)
+const R = DOT / 2 + GAP + RING_W / 2; // 52.75 (ring centerline)
+const SVG = 2 * R + RING_W + 7; // 121.5 — ring box + stroke + padding
 const MID = SVG / 2;
 const CIRC = 2 * Math.PI * R;
 
@@ -238,7 +242,7 @@ export function WhoGoesFirst() {
                 fill="none"
                 stroke={t.color}
                 strokeOpacity={0.25}
-                strokeWidth="9"
+                strokeWidth={RING_W}
               />
               {/* depleting countdown ring (restarts each round via the key) */}
               {phase === "counting" && (
@@ -249,7 +253,7 @@ export function WhoGoesFirst() {
                   r={R}
                   fill="none"
                   stroke={t.color}
-                  strokeWidth="9"
+                  strokeWidth={RING_W}
                   strokeLinecap="round"
                   strokeDasharray={CIRC}
                   transform={`rotate(-90 ${MID} ${MID})`}
