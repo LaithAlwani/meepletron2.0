@@ -7,6 +7,8 @@ import { useCoarsePointer } from "@/lib/useCoarsePointer";
 
 const COUNTDOWN_MS = 3000;
 const MIN_PLAYERS = 2;
+// How long the winner's color takes to paint across the screen.
+const FLOOD_MS = 2000;
 
 // Vivid, well-separated colors, assigned to fingers in touch order.
 const COLORS = [
@@ -38,9 +40,6 @@ export function WhoGoesFirst() {
 
   const [touches, setTouches] = useState<Touch[]>([]);
   const [winner, setWinner] = useState<Touch | null>(null);
-  // The winner's 1-based position among the fingers that were down when chosen,
-  // so it's always within [1, playerCount] (never a running touch tally).
-  const [winnerNo, setWinnerNo] = useState(0);
   // True once the winner's color has spread across the screen — the top bar
   // flips to white only then, so it isn't white on the still-light background.
   const [revealed, setRevealed] = useState(false);
@@ -68,7 +67,7 @@ export function WhoGoesFirst() {
   // Flip the top bar to white once the color reveal has covered the screen.
   useEffect(() => {
     if (!winner) return;
-    const id = setTimeout(() => setRevealed(true), 1300);
+    const id = setTimeout(() => setRevealed(true), 1750);
     return () => clearTimeout(id);
   }, [winner]);
 
@@ -86,7 +85,6 @@ export function WhoGoesFirst() {
     if (list.length < MIN_PLAYERS) return;
     const idx = Math.floor(Math.random() * list.length);
     setWinner(list[idx]);
-    setWinnerNo(idx + 1); // position among the fingers currently down
     if (typeof navigator !== "undefined" && "vibrate" in navigator) {
       navigator.vibrate?.([40, 40, 120]);
     }
@@ -107,7 +105,6 @@ export function WhoGoesFirst() {
   const reset = useCallback(() => {
     setTouches([]);
     setWinner(null);
-    setWinnerNo(0);
     setRevealed(false);
   }, []);
 
@@ -282,27 +279,21 @@ export function WhoGoesFirst() {
             top: winner!.y,
             backgroundColor: winner!.color,
             transform: "translate(-50%, -50%) scale(0.01)",
-            animation: "wgf-flood 1500ms ease-out forwards",
+            animation: `wgf-flood ${FLOOD_MS}ms ease-out forwards`,
           }}
         />
       )}
 
-      {/* Winner overlay — fades in once the color has spread a bit. */}
+      {/* Winner overlay — the flooded color IS the result, so all this adds is
+          the prompt to start over. Fades in once the color has spread a bit. */}
       {flooded && (
         <div
-          className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-4 px-6 text-center text-white"
-          style={{ animation: "wgf-fade 500ms ease-out 900ms both" }}
+          className="absolute inset-0 z-20 flex flex-col items-center justify-center px-6 text-center text-white"
+          style={{ animation: "wgf-fade 500ms ease-out 1200ms both" }}
         >
-          <div
-            className="flex h-28 w-28 items-center justify-center rounded-full bg-white/25 text-5xl font-black shadow-xl backdrop-blur"
-            aria-hidden
-          >
-            {winnerNo}
-          </div>
-          <h2 className="font-display text-4xl font-black drop-shadow-sm">
-            Player {winnerNo} goes first!
-          </h2>
-          <p className="text-white/90">Tap anywhere to play again.</p>
+          <p className="font-display text-2xl font-bold drop-shadow-sm">
+            Tap anywhere to restart
+          </p>
         </div>
       )}
     </main>
