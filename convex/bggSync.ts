@@ -46,11 +46,11 @@ const SWEEP_BATCH = 500;
 /** A job with no heartbeat for this long is considered dead. */
 const STALL_MS = 10 * 60 * 1000;
 /**
- * Master switch for stub enrichment. Paused (false) while the expansion-aware
- * rewrite is in progress so the cron / post-sync kick can't run the old logic.
- * `as boolean` keeps the code below reachable for the type checker.
+ * Master switch for stub enrichment. When on, a sync's import phase is followed
+ * by the enrichment phase (fill each stub with BGG metadata + a cover, narrating
+ * progress). `as boolean` keeps both branches reachable for the type checker.
  */
-const ENRICH_ENABLED = false as boolean;
+const ENRICH_ENABLED = true as boolean;
 /** Stub games enriched per sweep pass — the ceiling on BGG /thing traffic. */
 const ENRICH_BATCH = 12;
 /** Gap between /thing fetches within a pass, so a batch isn't a burst. */
