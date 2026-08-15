@@ -77,7 +77,10 @@ function CollectionBody() {
 
   const job = jobs?.find((j) => j.kind === "collection");
   const syncing =
-    job && ["queued", "waiting", "running", "sweeping"].includes(job.status);
+    job &&
+    ["queued", "waiting", "running", "sweeping", "enriching"].includes(
+      job.status,
+    );
 
   if (account === undefined) return <RowSkeleton />;
 

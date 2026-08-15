@@ -61,8 +61,12 @@ export function parseItem(block: string) {
   };
 }
 
-/** Decode the HTML entities BGG uses in names/descriptions. */
-function decodeEntities(s: string): string {
+/**
+ * Decode the HTML entities BGG uses in names/descriptions. BGG double-encodes in
+ * the collection API (`&amp;#039;`), so after the XML parser turns that into the
+ * literal `&#039;` this second pass is what actually yields `'`.
+ */
+export function decodeEntities(s: string): string {
   return s
     .replace(/&#x([0-9a-fA-F]+);/g, (_, h) => String.fromCodePoint(parseInt(h, 16)))
     .replace(/&#(\d+);/g, (_, d) => String.fromCodePoint(Number(d)))

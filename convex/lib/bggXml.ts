@@ -4,6 +4,7 @@ import type {
   bggCollectionItemValidator,
   bggPlayItemValidator,
 } from "./bggSyncTypes";
+import { decodeEntities } from "./bggThing";
 
 /**
  * BGG XML parsing for the sync pipeline.
@@ -43,22 +44,30 @@ const parser = new XMLParser({
 /* eslint-disable @typescript-eslint/no-explicit-any */
 type Node = any;
 
-/** Text content of an element, whether or not it also carries attributes. */
+/**
+ * Text content of an element, whether or not it also carries attributes. HTML
+ * entities are decoded here so titles/comments are stored clean (BGG sends e.g.
+ * `World&amp;#039;s Fair` → `World's Fair`, never a literal `&#039;`).
+ */
 function text(node: Node): string | undefined {
-  if (node === undefined || node === null) return undefined;
-  if (typeof node === "string") return node.trim() || undefined;
-  if (typeof node === "object" && "#text" in node) {
-    const t = String(node["#text"]).trim();
-    return t || undefined;
-  }
-  return undefined;
+  const raw =
+    typeof node === "string"
+      ? node
+      : node && typeof node === "object" && "#text" in node
+        ? String(node["#text"])
+        : undefined;
+  if (raw === undefined) return undefined;
+  const t = decodeEntities(raw).trim();
+  return t || undefined;
 }
 
 function attr(node: Node, name: string): string | undefined {
   if (!node || typeof node !== "object") return undefined;
   const raw = node[`@_${name}`];
   if (raw === undefined || raw === null) return undefined;
-  const s = String(raw).trim();
+  // Decode entities so attribute-borne text (e.g. play player names) is clean;
+  // harmless for numeric/enum attributes, which carry no entities.
+  const s = decodeEntities(String(raw)).trim();
   return s || undefined;
 }
 

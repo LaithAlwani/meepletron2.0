@@ -89,6 +89,9 @@ export const bggSyncStatusValidator = v.union(
   v.literal("waiting"),
   v.literal("running"),
   v.literal("sweeping"),
+  // Filling imported stub games with full metadata + covers from BGG, one at a
+  // time — the slow, per-game phase the progress UI narrates.
+  v.literal("enriching"),
   v.literal("done"),
   v.literal("error"),
   v.literal("canceled"),

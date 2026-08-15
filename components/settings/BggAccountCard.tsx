@@ -34,8 +34,10 @@ export function BggAccountCard() {
   const [busy, setBusy] = useState(false);
 
   const job = jobs?.find((j) => j.kind === "collection");
-  const running =
+  const importing =
     job && ["queued", "waiting", "running", "sweeping"].includes(job.status);
+  const enriching = job?.status === "enriching";
+  const running = importing || enriching;
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -161,7 +163,7 @@ export function BggAccountCard() {
         </p>
       )}
 
-      {running && (
+      {importing && (
         <div className="space-y-1.5">
           <div className="flex items-center justify-between gap-2 text-xs text-muted">
             <span className="flex min-w-0 items-center gap-1.5">
@@ -204,6 +206,38 @@ export function BggAccountCard() {
                   {job.recentTitles.slice(-3).reverse().join(", ")}
                 </span>
               ) : null}
+            </p>
+          )}
+        </div>
+      )}
+
+      {enriching && (
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between gap-2 text-xs text-muted">
+            <span className="flex min-w-0 items-center gap-1.5">
+              <RefreshCw className="h-3.5 w-3.5 shrink-0 animate-spin" />
+              Adding games to your library…
+            </span>
+            <span className="shrink-0 tabular-nums">
+              {job.enrichProcessed ?? 0}
+              {job.enrichTotal != null ? ` / ${job.enrichTotal}` : ""}
+            </span>
+          </div>
+
+          {job.enrichTotal ? (
+            <div className="h-1.5 overflow-hidden rounded-full bg-surface-2">
+              <div
+                className="h-full rounded-full bg-accent transition-all"
+                style={{
+                  width: `${Math.min(100, Math.round(((job.enrichProcessed ?? 0) / job.enrichTotal) * 100))}%`,
+                }}
+              />
+            </div>
+          ) : null}
+
+          {job.currentTitle && (
+            <p className="truncate text-[11px] text-subtle">
+              Now importing: {job.currentTitle}
             </p>
           )}
         </div>

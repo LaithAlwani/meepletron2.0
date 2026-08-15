@@ -262,6 +262,9 @@ export const myJobs = query({
       total: j.total,
       created: j.created,
       recentTitles: j.recentTitles,
+      enrichTotal: j.enrichTotal,
+      enrichProcessed: j.enrichProcessed,
+      currentTitle: j.currentTitle,
       page: j.page,
       totalPages: j.totalPages,
       error: j.error,
@@ -369,7 +372,13 @@ async function resetJob(
 }
 
 /** Statuses that mean "a run is under way" — the in-flight lock. */
-const IN_FLIGHT = ["queued", "waiting", "running", "sweeping"] as const;
+const IN_FLIGHT = [
+  "queued",
+  "waiting",
+  "running",
+  "sweeping",
+  "enriching",
+] as const;
 
 function isInFlight(status: string): boolean {
   return (IN_FLIGHT as readonly string[]).includes(status);
@@ -637,12 +646,8 @@ export const sweepCollection = internalMutation({
       return;
     }
 
+    // Import + sweep are done — the collection is ready to browse right away.
     const now = Date.now();
-    await ctx.db.patch("bggSyncJobs", jobId, {
-      status: "done",
-      finishedAt: now,
-      updatedAt: now,
-    });
     const account = await ctx.db.get("bggAccounts", job.accountId);
     if (account) {
       await ctx.db.patch("bggAccounts", job.accountId, {
@@ -650,9 +655,162 @@ export const sweepCollection = internalMutation({
         collectionCount: job.processed,
       });
     }
-    // Kick off enrichment of any stubs this sync created — fills them into full
-    // catalogue entries with covers. Self-draining, so one nudge is enough.
-    await ctx.scheduler.runAfter(0, internal.bggSync.enrichStubs, {});
+
+    // Enrichment is the slow, per-game phase (BGG /thing + cover per stub). Gate
+    // it behind the switch so it only runs when enabled; otherwise finish here.
+    if (!ENRICH_ENABLED) {
+      await ctx.db.patch("bggSyncJobs", jobId, {
+        status: "done",
+        finishedAt: now,
+        updatedAt: now,
+      });
+      return;
+    }
+
+    const enrichTotal = await countUserStubs(ctx, job.userId);
+    if (enrichTotal === 0) {
+      await ctx.db.patch("bggSyncJobs", jobId, {
+        status: "done",
+        finishedAt: now,
+        updatedAt: now,
+      });
+      return;
+    }
+    await ctx.db.patch("bggSyncJobs", jobId, {
+      status: "enriching",
+      enrichTotal,
+      enrichProcessed: 0,
+      currentTitle: undefined,
+      updatedAt: now,
+    });
+    await ctx.scheduler.runAfter(0, internal.bggSync.runJobEnrichment, { jobId });
+  },
+});
+
+/** How long a failed enrichment attempt backs off before it's retried. */
+const ENRICH_RETRY_TTL_MS = 6 * 60 * 60 * 1000;
+
+/** Count the user's collection games that are still unfilled stubs. */
+async function countUserStubs(
+  ctx: MutationCtx,
+  userId: Id<"users">,
+): Promise<number> {
+  const rows = await ctx.db
+    .query("bggCollection")
+    .withIndex("by_user_and_sort_title", (q) => q.eq("userId", userId))
+    .take(5000);
+  let n = 0;
+  for (const r of rows) {
+    if (!r.gameId) continue;
+    const g = await ctx.db.get("games", r.gameId);
+    if (g && g.isStub) n++;
+  }
+  return n;
+}
+
+/**
+ * The user's next collection game that still needs enriching — a stub not
+ * attempted within the retry window (so a failure backs off instead of looping).
+ * Alphabetical, which makes the narrated titles march in order.
+ */
+export const nextUserStub = internalQuery({
+  args: { userId: v.id("users") },
+  handler: async (ctx, { userId }) => {
+    const now = Date.now();
+    const rows = await ctx.db
+      .query("bggCollection")
+      .withIndex("by_user_and_sort_title", (q) => q.eq("userId", userId))
+      .take(5000);
+    for (const r of rows) {
+      if (!r.gameId) continue;
+      const g = await ctx.db.get("games", r.gameId);
+      if (
+        g &&
+        g.isStub &&
+        !!g.bggId &&
+        now - (g.bggCheckedAt ?? 0) >= ENRICH_RETRY_TTL_MS
+      ) {
+        return { gameId: g._id, bggId: g.bggId, title: g.title };
+      }
+    }
+    return null;
+  },
+});
+
+/** Narrate the game currently being enriched (heartbeat too). */
+export const setEnrichCurrent = internalMutation({
+  args: { jobId: v.id("bggSyncJobs"), title: v.string() },
+  handler: async (ctx, { jobId, title }) => {
+    const job = await ctx.db.get("bggSyncJobs", jobId);
+    if (!job || job.status !== "enriching") return;
+    await ctx.db.patch("bggSyncJobs", jobId, {
+      currentTitle: title,
+      updatedAt: Date.now(),
+    });
+  },
+});
+
+/** One game handled — advance the enrichment counter. */
+export const bumpEnrichProcessed = internalMutation({
+  args: { jobId: v.id("bggSyncJobs") },
+  handler: async (ctx, { jobId }) => {
+    const job = await ctx.db.get("bggSyncJobs", jobId);
+    if (!job || job.status !== "enriching") return;
+    await ctx.db.patch("bggSyncJobs", jobId, {
+      enrichProcessed: (job.enrichProcessed ?? 0) + 1,
+      updatedAt: Date.now(),
+    });
+  },
+});
+
+/** No stubs left — the sync (import + enrichment) is fully done. */
+export const finishEnrichment = internalMutation({
+  args: { jobId: v.id("bggSyncJobs") },
+  handler: async (ctx, { jobId }) => {
+    const job = await ctx.db.get("bggSyncJobs", jobId);
+    if (!job || job.status !== "enriching") return;
+    const now = Date.now();
+    await ctx.db.patch("bggSyncJobs", jobId, {
+      status: "done",
+      currentTitle: undefined,
+      finishedAt: now,
+      updatedAt: now,
+    });
+  },
+});
+
+/**
+ * Enrichment driver: fills the user's collection stubs one at a time, narrating
+ * the current title + count on the job, then reschedules itself with a stagger
+ * so BoardGameGeek isn't hammered. Enriching an expansion also pulls in + fills
+ * its base game (see images.enrichSyncedGame).
+ */
+export const runJobEnrichment = internalAction({
+  args: { jobId: v.id("bggSyncJobs") },
+  handler: async (ctx, { jobId }): Promise<void> => {
+    const job = await ctx.runQuery(internal.bggSync.getJob, { jobId });
+    if (!job || job.status !== "enriching") return; // canceled / gone / done
+    const next = await ctx.runQuery(internal.bggSync.nextUserStub, {
+      userId: job.userId,
+    });
+    if (!next) {
+      await ctx.runMutation(internal.bggSync.finishEnrichment, { jobId });
+      return;
+    }
+    await ctx.runMutation(internal.bggSync.setEnrichCurrent, {
+      jobId,
+      title: next.title,
+    });
+    await ctx.runAction(internal.images.enrichSyncedGame, {
+      gameId: next.gameId,
+      bggId: next.bggId,
+    });
+    await ctx.runMutation(internal.bggSync.bumpEnrichProcessed, { jobId });
+    await ctx.scheduler.runAfter(
+      ENRICH_STAGGER_MS,
+      internal.bggSync.runJobEnrichment,
+      { jobId },
+    );
   },
 });
 

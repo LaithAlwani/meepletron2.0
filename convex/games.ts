@@ -81,7 +81,7 @@ export const searchPaginated = query({
     const result = await ctx.db
       .query("games")
       .withSearchIndex("search_text", (q) =>
-        q.search("searchText", trimmed).eq("isExpansion", false),
+        q.search("searchText", trimmed).eq("isExpansion", false).eq("isStub", false),
       )
       .paginate(paginationOpts);
     return {
@@ -102,11 +102,13 @@ export const browsePaginated = query({
     hasExpansions: v.optional(v.boolean()),
   },
   handler: async (ctx, { paginationOpts, players, time, hasExpansions }) => {
-    // Every base game reaches the library, whether or not it has an ingested
-    // rulebook — including BGG-synced stubs.
+    // Enriched base games only — unenriched BGG stubs are hidden until the sync
+    // has filled them in (isStub flips false), so the library never shows blanks.
     const base = ctx.db
       .query("games")
-      .withIndex("by_isExpansion", (q) => q.eq("isExpansion", false))
+      .withIndex("by_isStub_and_isExpansion", (q) =>
+        q.eq("isStub", false).eq("isExpansion", false),
+      )
       .order("desc");
 
     const needsFilter = players != null || time != null || hasExpansions;
@@ -161,7 +163,9 @@ export const browseCount = query({
   handler: async (ctx, { players, time, hasExpansions }) => {
     const base = ctx.db
       .query("games")
-      .withIndex("by_isExpansion", (q) => q.eq("isExpansion", false));
+      .withIndex("by_isStub_and_isExpansion", (q) =>
+        q.eq("isStub", false).eq("isExpansion", false),
+      );
 
     const needsFilter = players != null || time != null || hasExpansions;
     const q = needsFilter
