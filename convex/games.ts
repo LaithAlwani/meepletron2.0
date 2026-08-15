@@ -603,8 +603,14 @@ export const applyStubEnrichment = internalMutation({
     bgg: v.optional(bggStatsValidator),
     imageId: v.optional(v.id("_storage")),
     thumbnailId: v.optional(v.id("_storage")),
+    // Set from the authoritative /thing item type + its inbound base-game link.
+    isExpansion: v.optional(v.boolean()),
+    parentId: v.optional(v.id("games")),
   },
-  handler: async (ctx, { gameId, meta, bgg, imageId, thumbnailId }) => {
+  handler: async (
+    ctx,
+    { gameId, meta, bgg, imageId, thumbnailId, isExpansion, parentId },
+  ) => {
     const game = await ctx.db.get("games", gameId);
     if (!game || !game.isStub) {
       // Drop blobs stored speculatively before we knew we'd skip.
@@ -646,7 +652,48 @@ export const applyStubEnrichment = internalMutation({
       patch.imageId = imageId;
       patch.thumbnailId = thumbnailId ?? imageId;
     }
+    if (isExpansion !== undefined) patch.isExpansion = isExpansion;
+    if (parentId) {
+      patch.parentId = parentId;
+      const parent = await ctx.db.get("games", parentId);
+      if (parent && !parent.hasExpansions) {
+        await ctx.db.patch("games", parentId, { hasExpansions: true });
+      }
+    }
     await ctx.db.patch("games", gameId, patch);
+  },
+});
+
+/**
+ * Find the game for a BGG id, creating a bare stub when we don't have it. Used
+ * to guarantee an expansion's base game exists before we link to it (the base
+ * may not be in the user's collection). Returns whether it created the row so
+ * the caller can schedule the new stub's own enrichment.
+ */
+export const ensureStubForBgg = internalMutation({
+  args: { bggId: v.string(), title: v.string() },
+  handler: async (
+    ctx,
+    { bggId, title },
+  ): Promise<{ gameId: Id<"games">; created: boolean }> => {
+    const existing = await ctx.db
+      .query("games")
+      .withIndex("by_bgg_id", (q) => q.eq("bggId", bggId))
+      .first();
+    if (existing) return { gameId: existing._id, created: false };
+    const gameId = await ctx.db.insert("games", {
+      title,
+      slug: await slugifyUnique(ctx, title),
+      isExpansion: false,
+      isStub: true,
+      bggId,
+      designers: [],
+      artists: [],
+      publishers: [],
+      categories: [],
+      gameMechanics: [],
+    });
+    return { gameId, created: true };
   },
 });
 

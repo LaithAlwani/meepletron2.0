@@ -45,6 +45,12 @@ const IMPORT_BATCH = 100;
 const SWEEP_BATCH = 500;
 /** A job with no heartbeat for this long is considered dead. */
 const STALL_MS = 10 * 60 * 1000;
+/**
+ * Master switch for stub enrichment. Paused (false) while the expansion-aware
+ * rewrite is in progress so the cron / post-sync kick can't run the old logic.
+ * `as boolean` keeps the code below reachable for the type checker.
+ */
+const ENRICH_ENABLED = false as boolean;
 /** Stub games enriched per sweep pass — the ceiling on BGG /thing traffic. */
 const ENRICH_BATCH = 12;
 /** Gap between /thing fetches within a pass, so a batch isn't a burst. */
@@ -660,6 +666,7 @@ export const sweepCollection = internalMutation({
 export const enrichStubs = internalAction({
   args: {},
   handler: async (ctx): Promise<void> => {
+    if (!ENRICH_ENABLED) return;
     if (!process.env.BGG_API_TOKEN) return;
     const targets = await ctx.runQuery(internal.games.dueForEnrich, {
       limit: ENRICH_BATCH,
@@ -680,6 +687,29 @@ export const enrichStubs = internalAction({
         {},
       );
     }
+  },
+});
+
+/**
+ * Test helper: create-or-find a game for a single BGG id and enrich it, running
+ * the same pipeline a real sync uses (metadata, cover, and — for an expansion —
+ * fetching + linking its base game). Lets the expansion logic be exercised on a
+ * couple of ids instead of a whole 238-game collection.
+ *
+ *   npx convex run bggSync:testEnrichByBgg '{"bggId":"266524"}'
+ *
+ * (266524 = "Wingspan: European Expansion"; its base, Wingspan 266192, is
+ * created and linked automatically if absent.)
+ */
+export const testEnrichByBgg = internalAction({
+  args: { bggId: v.string() },
+  handler: async (ctx, { bggId }): Promise<{ gameId: Id<"games"> }> => {
+    const { gameId } = await ctx.runMutation(internal.games.ensureStubForBgg, {
+      bggId,
+      title: `BGG ${bggId}`,
+    });
+    await ctx.runAction(internal.images.enrichSyncedGame, { gameId, bggId });
+    return { gameId };
   },
 });
 

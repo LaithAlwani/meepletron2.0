@@ -116,3 +116,31 @@ export function parseFullItem(block: string) {
     gameMechanics: links("boardgamemechanic"),
   };
 }
+
+/** The item's BGG subtype, e.g. "boardgame" or "boardgameexpansion". */
+export function parseItemType(block: string): string | undefined {
+  return block.match(/<item[^>]*\btype="([^"]+)"/)?.[1];
+}
+
+/**
+ * The base game(s) an expansion expands. On an expansion's /thing response the
+ * base games are the `boardgameexpansion` links marked `inbound="true"` (an
+ * outbound link on a base game points the other way, at its expansions). Usually
+ * one; a few expansions target several base games.
+ */
+export function parseExpansionParents(
+  block: string,
+): { bggId: string; name: string }[] {
+  const out: { bggId: string; name: string }[] = [];
+  const re = /<link type="boardgameexpansion"[^>]*>/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(block))) {
+    const tag = m[0];
+    if (!/\binbound="true"/.test(tag)) continue;
+    const id = tag.match(/\bid="(\d+)"/)?.[1];
+    if (!id) continue;
+    const name = tag.match(/\bvalue="([^"]*)"/)?.[1];
+    out.push({ bggId: id, name: name ? decodeEntities(name).trim() : `BGG ${id}` });
+  }
+  return out;
+}

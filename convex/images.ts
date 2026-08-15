@@ -5,7 +5,12 @@ import { action, internalAction } from "./_generated/server";
 import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { PhotonImage, resize, SamplingFilter } from "@cf-wasm/photon/node";
-import { parseItem, parseFullItem } from "./lib/bggThing";
+import {
+  parseItem,
+  parseFullItem,
+  parseItemType,
+  parseExpansionParents,
+} from "./lib/bggThing";
 
 const MAX_WIDTH = 800;
 const THUMB_WIDTH = 256;
@@ -174,6 +179,29 @@ export const enrichSyncedGame = internalAction({
     // Strip imageUrl — it's fetched here, not a `games` field.
     const { imageUrl, ...meta } = parseFullItem(block);
     const bgg = { ...parseItem(block), fetchedAt: Date.now() };
+    const isExpansion = parseItemType(block) === "boardgameexpansion";
+
+    // If this is an expansion, make sure its base game exists and link to it.
+    // The base may not be in the user's collection, so create + enrich it.
+    let parentId: Id<"games"> | undefined;
+    if (isExpansion) {
+      const parents = parseExpansionParents(block);
+      if (parents.length > 0) {
+        const base = parents[0];
+        const { gameId: pid, created } = await ctx.runMutation(
+          internal.games.ensureStubForBgg,
+          { bggId: base.bggId, title: base.name },
+        );
+        parentId = pid;
+        if (created) {
+          await ctx.scheduler.runAfter(0, internal.images.enrichSyncedGame, {
+            gameId: pid,
+            bggId: base.bggId,
+          });
+        }
+      }
+    }
+
     const cover = imageUrl ? await fetchAndStoreCover(ctx, imageUrl) : {};
 
     await ctx.runMutation(internal.games.applyStubEnrichment, {
@@ -182,6 +210,8 @@ export const enrichSyncedGame = internalAction({
       bgg,
       imageId: cover.imageId,
       thumbnailId: cover.thumbnailId,
+      isExpansion,
+      parentId,
     });
   },
 });
