@@ -65,7 +65,7 @@ export function WhoGoesFirst() {
   // Flip the top bar to white once the color reveal has covered the screen.
   useEffect(() => {
     if (!winner) return;
-    const id = setTimeout(() => setRevealed(true), 950);
+    const id = setTimeout(() => setRevealed(true), 1300);
     return () => clearTimeout(id);
   }, [winner]);
 
@@ -254,12 +254,12 @@ export function WhoGoesFirst() {
                 />
               )}
             </svg>
-            {/* solid center dot (1.5×) with a colored glow */}
+            {/* solid center dot (1.25×) with a colored glow */}
             <span
-              className="absolute left-1/2 top-1/2 h-[5.25rem] w-[5.25rem] -translate-x-1/2 -translate-y-1/2 rounded-full"
+              className="absolute left-1/2 top-1/2 h-[4.375rem] w-[4.375rem] -translate-x-1/2 -translate-y-1/2 rounded-full"
               style={{
                 backgroundColor: t.color,
-                boxShadow: `0 0 32px 10px ${t.color}`,
+                boxShadow: `0 0 24px 10px ${t.color}`,
               }}
             />
           </div>
@@ -274,7 +274,7 @@ export function WhoGoesFirst() {
             top: winner!.y,
             backgroundColor: winner!.color,
             transform: "translate(-50%, -50%) scale(0.01)",
-            animation: "wgf-flood 1100ms ease-out forwards",
+            animation: "wgf-flood 1500ms ease-out forwards",
           }}
         />
       )}
@@ -283,7 +283,7 @@ export function WhoGoesFirst() {
       {flooded && (
         <div
           className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-4 px-6 text-center text-white"
-          style={{ animation: "wgf-fade 500ms ease-out 650ms both" }}
+          style={{ animation: "wgf-fade 500ms ease-out 900ms both" }}
         >
           <div
             className="flex h-28 w-28 items-center justify-center rounded-full bg-white/25 text-5xl font-black shadow-xl backdrop-blur"
