@@ -53,7 +53,7 @@ function rangeLabel(entries: PollEntry[]): string {
 }
 
 const pillCls =
-  "inline-flex items-center gap-2 rounded-xl border border-border bg-surface px-3 py-1.5 shadow-sm";
+  "inline-flex w-full items-center gap-2 rounded-xl border border-border bg-surface px-3 py-1.5 shadow-sm sm:w-auto";
 
 /** A fact pill: an accent icon, a bold primary value, and an optional small
  *  secondary line underneath. Single-line pills center in the row's height. */
@@ -191,7 +191,7 @@ function PlayersPill({
   return (
     <span
       ref={ref}
-      className="relative inline-flex"
+      className="relative inline-flex w-full sm:w-auto"
       onMouseEnter={() => hasPoll && setOpen(true)}
       onMouseLeave={() => setOpen(false)}
     >
@@ -254,7 +254,7 @@ export function GameFacts({
   if (!players && !playTime && weight == null && !ageMain) return null;
 
   return (
-    <div className="mt-4 flex flex-wrap items-stretch gap-2">
+    <div className="mt-4 grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-stretch">
       {players && (
         <PlayersPill
           players={players}
