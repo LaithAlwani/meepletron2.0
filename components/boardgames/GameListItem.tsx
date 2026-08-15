@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Star } from "lucide-react";
 import type { GameWithMedia } from "@/convex/games";
 import { formatPlayTime } from "@/lib/format";
 import { FavoriteToggle } from "./FavoriteToggle";
@@ -39,6 +40,15 @@ export function GameListItem({ game }: { game: GameWithMedia }) {
           {stats && <p className="mt-0.5 text-xs text-muted">{stats}</p>}
         </div>
       </Link>
+      {game.bgg?.rating != null && (
+        <span
+          className="inline-flex shrink-0 items-center gap-0.5 rounded-lg bg-accent px-1.5 py-0.5 text-xs font-bold text-accent-foreground"
+          title={`BoardGameGeek average ${game.bgg.rating.toFixed(1)} / 10`}
+        >
+          <Star className="h-3 w-3 fill-current" />
+          {game.bgg.rating.toFixed(1)}
+        </span>
+      )}
       <FavoriteToggle
         gameId={game._id}
         size="sm"
