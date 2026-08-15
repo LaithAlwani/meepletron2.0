@@ -401,7 +401,7 @@ export default function GameDetailPage({
                   </Link>
                 ) : (
                   <span className="inline-flex items-center rounded-xl border border-border bg-surface-2 px-4 py-2.5 text-sm text-muted">
-                    No rulebook ingested yet
+                    No rulebook
                   </span>
                 )}
                 <Link
