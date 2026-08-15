@@ -667,20 +667,24 @@ export const applyStubEnrichment = internalMutation({
 /**
  * Find the game for a BGG id, creating a bare stub when we don't have it. Used
  * to guarantee an expansion's base game exists before we link to it (the base
- * may not be in the user's collection). Returns whether it created the row so
- * the caller can schedule the new stub's own enrichment.
+ * may not be in the user's collection). Returns whether the base still needs
+ * enriching — true for a freshly-created stub *and* for one that already existed
+ * but hasn't been filled yet — so the caller can (re)schedule its enrichment.
  */
 export const ensureStubForBgg = internalMutation({
   args: { bggId: v.string(), title: v.string() },
   handler: async (
     ctx,
     { bggId, title },
-  ): Promise<{ gameId: Id<"games">; created: boolean }> => {
+  ): Promise<{ gameId: Id<"games">; needsEnrich: boolean }> => {
     const existing = await ctx.db
       .query("games")
       .withIndex("by_bgg_id", (q) => q.eq("bggId", bggId))
       .first();
-    if (existing) return { gameId: existing._id, created: false };
+    if (existing) {
+      // Enrich it too if it's still an unfilled stub; leave curated games alone.
+      return { gameId: existing._id, needsEnrich: existing.isStub === true };
+    }
     const gameId = await ctx.db.insert("games", {
       title,
       slug: await slugifyUnique(ctx, title),
@@ -693,7 +697,7 @@ export const ensureStubForBgg = internalMutation({
       categories: [],
       gameMechanics: [],
     });
-    return { gameId, created: true };
+    return { gameId, needsEnrich: true };
   },
 });
 

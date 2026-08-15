@@ -188,12 +188,13 @@ export const enrichSyncedGame = internalAction({
       const parents = parseExpansionParents(block);
       if (parents.length > 0) {
         const base = parents[0];
-        const { gameId: pid, created } = await ctx.runMutation(
+        const { gameId: pid, needsEnrich } = await ctx.runMutation(
           internal.games.ensureStubForBgg,
           { bggId: base.bggId, title: base.name },
         );
         parentId = pid;
-        if (created) {
+        // Fill the base too when it's new or still an unfilled stub.
+        if (needsEnrich) {
           await ctx.scheduler.runAfter(0, internal.images.enrichSyncedGame, {
             gameId: pid,
             bggId: base.bggId,
