@@ -352,6 +352,10 @@ async function resetJob(
     total: undefined,
     created: 0,
     recentTitles: [],
+    enrichQueue: undefined,
+    enrichTotal: undefined,
+    enrichProcessed: undefined,
+    currentTitle: undefined,
     attempts: 0,
     minDate: undefined,
     updatedAt: now,
@@ -667,8 +671,17 @@ export const sweepCollection = internalMutation({
       return;
     }
 
-    const enrichTotal = await countUserStubs(ctx, job.userId);
-    if (enrichTotal === 0) {
+    // Build the queue from the collection rows only (small — no game docs), so
+    // enrichment start stays cheap even for a big collection. The driver checks
+    // each game's stub state one at a time as it walks the queue.
+    const rows = await ctx.db
+      .query("bggCollection")
+      .withIndex("by_user_and_sort_title", (q) => q.eq("userId", job.userId))
+      .take(5000);
+    const queue = rows
+      .map((r) => r.gameId)
+      .filter((id): id is Id<"games"> => id != null);
+    if (queue.length === 0) {
       await ctx.db.patch("bggSyncJobs", jobId, {
         status: "done",
         finishedAt: now,
@@ -678,7 +691,8 @@ export const sweepCollection = internalMutation({
     }
     await ctx.db.patch("bggSyncJobs", jobId, {
       status: "enriching",
-      enrichTotal,
+      enrichQueue: queue,
+      enrichTotal: queue.length,
       enrichProcessed: 0,
       currentTitle: undefined,
       updatedAt: now,
@@ -690,50 +704,18 @@ export const sweepCollection = internalMutation({
 /** How long a failed enrichment attempt backs off before it's retried. */
 const ENRICH_RETRY_TTL_MS = 6 * 60 * 60 * 1000;
 
-/** Count the user's collection games that are still unfilled stubs. */
-async function countUserStubs(
-  ctx: MutationCtx,
-  userId: Id<"users">,
-): Promise<number> {
-  const rows = await ctx.db
-    .query("bggCollection")
-    .withIndex("by_user_and_sort_title", (q) => q.eq("userId", userId))
-    .take(5000);
-  let n = 0;
-  for (const r of rows) {
-    if (!r.gameId) continue;
-    const g = await ctx.db.get("games", r.gameId);
-    if (g && g.isStub) n++;
-  }
-  return n;
-}
-
-/**
- * The user's next collection game that still needs enriching — a stub not
- * attempted within the retry window (so a failure backs off instead of looping).
- * Alphabetical, which makes the narrated titles march in order.
- */
-export const nextUserStub = internalQuery({
-  args: { userId: v.id("users") },
-  handler: async (ctx, { userId }) => {
-    const now = Date.now();
-    const rows = await ctx.db
-      .query("bggCollection")
-      .withIndex("by_user_and_sort_title", (q) => q.eq("userId", userId))
-      .take(5000);
-    for (const r of rows) {
-      if (!r.gameId) continue;
-      const g = await ctx.db.get("games", r.gameId);
-      if (
-        g &&
-        g.isStub &&
-        !!g.bggId &&
-        now - (g.bggCheckedAt ?? 0) >= ENRICH_RETRY_TTL_MS
-      ) {
-        return { gameId: g._id, bggId: g.bggId, title: g.title };
-      }
-    }
-    return null;
+/** One game's enrichment-relevant fields — a single-doc read, bounded. */
+export const getEnrichTarget = internalQuery({
+  args: { gameId: v.id("games") },
+  handler: async (ctx, { gameId }) => {
+    const g = await ctx.db.get("games", gameId);
+    if (!g) return null;
+    return {
+      isStub: g.isStub === true,
+      bggId: g.bggId ?? null,
+      title: g.title,
+      bggCheckedAt: g.bggCheckedAt ?? null,
+    };
   },
 });
 
@@ -780,37 +762,63 @@ export const finishEnrichment = internalMutation({
 });
 
 /**
- * Enrichment driver: fills the user's collection stubs one at a time, narrating
- * the current title + count on the job, then reschedules itself with a stagger
- * so BoardGameGeek isn't hammered. Enriching an expansion also pulls in + fills
- * its base game (see images.enrichSyncedGame).
+ * Enrichment driver: walks the job's queue by index (enrichProcessed), reading
+ * one game per step. Unfilled stubs are enriched (BGG /thing + cover, staggered);
+ * anything already filled is skipped instantly. The cursor advances before the
+ * BGG call and the call is wrapped, so a single failure can never break the
+ * reschedule chain — the whole run always drains to done. Enriching an expansion
+ * also pulls in + fills its base game (see images.enrichSyncedGame).
  */
 export const runJobEnrichment = internalAction({
   args: { jobId: v.id("bggSyncJobs") },
   handler: async (ctx, { jobId }): Promise<void> => {
     const job = await ctx.runQuery(internal.bggSync.getJob, { jobId });
     if (!job || job.status !== "enriching") return; // canceled / gone / done
-    const next = await ctx.runQuery(internal.bggSync.nextUserStub, {
-      userId: job.userId,
-    });
-    if (!next) {
+
+    const queue = job.enrichQueue ?? [];
+    const idx = job.enrichProcessed ?? 0;
+    if (idx >= queue.length) {
       await ctx.runMutation(internal.bggSync.finishEnrichment, { jobId });
       return;
     }
-    await ctx.runMutation(internal.bggSync.setEnrichCurrent, {
-      jobId,
-      title: next.title,
+
+    const gameId = queue[idx];
+    const target = await ctx.runQuery(internal.bggSync.getEnrichTarget, {
+      gameId,
     });
-    await ctx.runAction(internal.images.enrichSyncedGame, {
-      gameId: next.gameId,
-      bggId: next.bggId,
-    });
+    // Advance the cursor first — a bad entry is skipped, never re-looped.
     await ctx.runMutation(internal.bggSync.bumpEnrichProcessed, { jobId });
-    await ctx.scheduler.runAfter(
-      ENRICH_STAGGER_MS,
-      internal.bggSync.runJobEnrichment,
-      { jobId },
-    );
+
+    const due =
+      target &&
+      target.isStub &&
+      !!target.bggId &&
+      Date.now() - (target.bggCheckedAt ?? 0) >= ENRICH_RETRY_TTL_MS;
+
+    if (due && target.bggId) {
+      await ctx.runMutation(internal.bggSync.setEnrichCurrent, {
+        jobId,
+        title: target.title,
+      });
+      try {
+        await ctx.runAction(internal.images.enrichSyncedGame, {
+          gameId,
+          bggId: target.bggId,
+        });
+      } catch {
+        // Leave it a stub for the backstop cron; the chain must go on.
+      }
+      await ctx.scheduler.runAfter(
+        ENRICH_STAGGER_MS,
+        internal.bggSync.runJobEnrichment,
+        { jobId },
+      );
+    } else {
+      // Already filled / not a stub — no BGG call, move straight on.
+      await ctx.scheduler.runAfter(0, internal.bggSync.runJobEnrichment, {
+        jobId,
+      });
+    }
   },
 });
 

@@ -448,8 +448,12 @@ export default defineSchema({
     created: v.optional(v.number()), // new (stub) games created this run
     recentTitles: v.optional(v.array(v.string())), // last few titles, for the progress detail
     // Enrichment phase progress (filling stubs with BGG metadata + covers).
-    enrichTotal: v.optional(v.number()), // stubs to fill when enrichment began
-    enrichProcessed: v.optional(v.number()), // stubs handled so far
+    // The queue is the collection's gameIds captured when enrichment began; the
+    // driver walks it by index (enrichProcessed) reading one game per step, so
+    // it never re-scans the whole collection (that blew the query read limit).
+    enrichQueue: v.optional(v.array(v.id("games"))),
+    enrichTotal: v.optional(v.number()), // queue length when enrichment began
+    enrichProcessed: v.optional(v.number()), // items handled so far (the cursor)
     currentTitle: v.optional(v.string()), // the game being enriched right now
     attempts: v.number(), // consecutive 202/transient failures; drives backoff
     mode: v.union(v.literal("incremental"), v.literal("full")),
