@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Users, Clock, Baby, Brain, UsersRound, Info } from "lucide-react";
+import { Users, Clock, Baby, Brain, Info } from "lucide-react";
 
 type PollEntry = {
   count: number;
@@ -53,26 +53,38 @@ function rangeLabel(entries: PollEntry[]): string {
 }
 
 const pillCls =
-  "inline-flex items-center gap-1.5 rounded-xl border border-border bg-surface px-3 py-1.5 text-sm font-semibold text-foreground shadow-sm";
+  "inline-flex items-center gap-2 rounded-xl border border-border bg-surface px-3 py-1.5 shadow-sm";
 
+/** A fact pill: an accent icon, a bold primary value, and an optional small
+ *  secondary line underneath. Single-line pills center in the row's height. */
 function Pill({
   icon,
+  main,
+  sub,
   title,
-  children,
+  trailing,
 }: {
   icon: React.ReactNode;
+  main: React.ReactNode;
+  sub?: React.ReactNode;
   title?: string;
-  children: React.ReactNode;
+  trailing?: React.ReactNode;
 }) {
   return (
     <span className={pillCls} title={title}>
-      <span className="text-accent">{icon}</span>
-      {children}
+      <span className="shrink-0 text-accent">{icon}</span>
+      <span className="flex flex-col justify-center leading-tight">
+        <span className="text-sm font-semibold text-foreground">{main}</span>
+        {sub != null && (
+          <span className="text-[11px] font-medium text-subtle">{sub}</span>
+        )}
+      </span>
+      {trailing}
     </span>
   );
 }
 
-/** The vote-breakdown panel that opens from the players pill. */
+/** The per-count vote breakdown that opens from the players pill. */
 function PollPopover({
   poll,
   pollVotes,
@@ -84,7 +96,7 @@ function PollPopover({
     <div className="absolute left-0 top-full z-30 mt-2 w-64 rounded-xl border border-border bg-surface p-3 text-left shadow-xl">
       <div className="mb-2 flex items-center justify-between">
         <p className="text-xs font-semibold text-foreground">
-          Best player count
+          Player-count votes
         </p>
         {pollVotes != null && (
           <p className="text-[10px] text-muted">
@@ -136,14 +148,16 @@ function PollPopover({
   );
 }
 
-/** Players pill: count range + "Best N", with the poll breakdown on the info tap. */
+/** Players pill: count on top, "Rec …· Best …" underneath, full poll on the info tap. */
 function PlayersPill({
   players,
+  recLabel,
   bestLabel,
   poll,
   pollVotes,
 }: {
   players: string;
+  recLabel: string;
   bestLabel: string;
   poll: Scored[];
   pollVotes?: number;
@@ -166,6 +180,14 @@ function PlayersPill({
     };
   }, [open]);
 
+  const sub = bestLabel
+    ? recLabel && recLabel !== bestLabel
+      ? `Rec ${recLabel} · Best ${bestLabel}`
+      : `Best ${bestLabel}`
+    : recLabel
+      ? `Rec ${recLabel}`
+      : undefined;
+
   return (
     <span
       ref={ref}
@@ -173,36 +195,31 @@ function PlayersPill({
       onMouseEnter={() => hasPoll && setOpen(true)}
       onMouseLeave={() => setOpen(false)}
     >
-      <span className={pillCls}>
-        <span className="text-accent">
-          <Users className="h-4 w-4" />
-        </span>
-        {players}
-        {bestLabel && (
-          <>
-            <span className="text-subtle">·</span>
-            <span className="text-accent">Best {bestLabel}</span>
-          </>
-        )}
-        {hasPoll && (
-          <button
-            type="button"
-            onClick={() => setOpen((o) => !o)}
-            aria-label="Player-count vote breakdown"
-            className="ml-0.5 text-subtle transition-colors hover:text-accent"
-          >
-            <Info className="h-3.5 w-3.5" />
-          </button>
-        )}
-      </span>
+      <Pill
+        icon={<Users className="h-4 w-4" />}
+        main={`${players} players`}
+        sub={sub}
+        trailing={
+          hasPoll ? (
+            <button
+              type="button"
+              onClick={() => setOpen((o) => !o)}
+              aria-label="Player-count vote breakdown"
+              className="-mr-0.5 self-start text-subtle transition-colors hover:text-accent"
+            >
+              <Info className="h-3.5 w-3.5" />
+            </button>
+          ) : undefined
+        }
+      />
       {open && hasPoll && <PollPopover poll={poll} pollVotes={pollVotes} />}
     </span>
   );
 }
 
 /**
- * The at-a-glance facts row: players (with the best-count poll), play time,
- * complexity (brain), publisher age, and the community-suggested age.
+ * The at-a-glance facts row: players (with recommended/best + the poll),
+ * play time, complexity (brain), and age (publisher on top, community below).
  */
 export function GameFacts({
   players,
@@ -220,40 +237,57 @@ export function GameFacts({
     .sort((a, b) => a.count - b.count)
     .map((p) => ({ ...p, verdict: verdictOf(p) }));
   const bestLabel = rangeLabel(poll.filter((p) => p.verdict === "best"));
+  const recLabel = rangeLabel(
+    poll.filter((p) => p.verdict === "best" || p.verdict === "rec"),
+  );
   const weight = bgg?.weight;
   const communityAge = bgg?.communityAge;
 
-  if (!players && !playTime && weight == null && !minAge && communityAge == null)
-    return null;
+  const ageMain = minAge
+    ? `Age ${minAge}+`
+    : communityAge != null
+      ? `Age ${communityAge}+`
+      : null;
+  const ageSub =
+    minAge && communityAge != null ? `Community ${communityAge}+` : undefined;
+
+  if (!players && !playTime && weight == null && !ageMain) return null;
 
   return (
-    <div className="mt-4 flex flex-wrap items-center gap-2">
+    <div className="mt-4 flex flex-wrap items-stretch gap-2">
       {players && (
         <PlayersPill
           players={players}
+          recLabel={recLabel}
           bestLabel={bestLabel}
           poll={poll}
           pollVotes={bgg?.pollVotes}
         />
       )}
-      {playTime && <Pill icon={<Clock className="h-4 w-4" />}>{playTime}</Pill>}
+      {playTime && (
+        <Pill icon={<Clock className="h-4 w-4" />} main={playTime} />
+      )}
       {weight != null && (
         <Pill
           icon={<Brain className="h-4 w-4" />}
           title={`Complexity ${weight.toFixed(1)} / 5 (BGG weight)`}
-        >
-          {weight.toFixed(1)}
-          <span className="font-normal text-subtle"> / 5</span>
-        </Pill>
+          main={
+            <>
+              {weight.toFixed(1)}
+              <span className="font-normal text-subtle"> / 5</span>
+            </>
+          }
+        />
       )}
-      {minAge && <Pill icon={<Baby className="h-4 w-4" />}>Age {minAge}+</Pill>}
-      {communityAge != null && (
+      {ageMain && (
         <Pill
-          icon={<UsersRound className="h-4 w-4" />}
-          title="Community-suggested minimum age"
-        >
-          Community {communityAge}+
-        </Pill>
+          icon={<Baby className="h-4 w-4" />}
+          main={ageMain}
+          sub={ageSub}
+          title={
+            ageSub ? "Publisher age · community-suggested age" : undefined
+          }
+        />
       )}
     </div>
   );
