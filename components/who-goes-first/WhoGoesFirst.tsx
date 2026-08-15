@@ -22,8 +22,11 @@ const COLORS = [
   "#84cc16", // lime
 ];
 
-// Countdown ring geometry.
-const R = 46;
+// Countdown ring geometry. The ring sits clearly outside the dot + its glow so
+// it stays readable (it's the finger's own color, which the glow would swallow).
+const R = 66;
+const SVG = 148; // 2*R + stroke + padding
+const MID = SVG / 2;
 const CIRC = 2 * Math.PI * R;
 
 type Touch = { id: number; x: number; y: number; color: string };
@@ -224,42 +227,47 @@ export function WhoGoesFirst() {
             className="pointer-events-none absolute z-20"
             style={{ left: t.x, top: t.y, transform: "translate(-50%, -50%)" }}
           >
-            <svg width="112" height="112" viewBox="0 0 112 112" className="block">
+            <svg
+              width={SVG}
+              height={SVG}
+              viewBox={`0 0 ${SVG} ${SVG}`}
+              className="block"
+            >
               {/* faint track */}
               <circle
-                cx="56"
-                cy="56"
+                cx={MID}
+                cy={MID}
                 r={R}
                 fill="none"
                 stroke={t.color}
-                strokeOpacity={0.2}
-                strokeWidth="6"
+                strokeOpacity={0.25}
+                strokeWidth="9"
               />
               {/* depleting countdown ring (restarts each round via the key) */}
               {phase === "counting" && (
                 <circle
                   key={touches.length}
-                  cx="56"
-                  cy="56"
+                  cx={MID}
+                  cy={MID}
                   r={R}
                   fill="none"
                   stroke={t.color}
-                  strokeWidth="6"
+                  strokeWidth="9"
                   strokeLinecap="round"
                   strokeDasharray={CIRC}
-                  transform="rotate(-90 56 56)"
+                  transform={`rotate(-90 ${MID} ${MID})`}
                   style={{
                     animation: `wgf-ring ${COUNTDOWN_MS}ms linear forwards`,
                   }}
                 />
               )}
             </svg>
-            {/* solid center dot (1.25×) with a colored glow */}
+            {/* solid center dot (1.25×) with a tighter colored glow */}
             <span
               className="absolute left-1/2 top-1/2 h-[4.375rem] w-[4.375rem] -translate-x-1/2 -translate-y-1/2 rounded-full"
               style={{
                 backgroundColor: t.color,
-                boxShadow: `0 0 24px 10px ${t.color}`,
+                boxShadow: `0 0 18px 4px ${t.color}`,
               }}
             />
           </div>
