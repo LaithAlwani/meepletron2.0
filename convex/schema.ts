@@ -445,6 +445,9 @@ export default defineSchema({
     page: v.number(),
     totalPages: v.optional(v.number()),
     processed: v.number(),
+    total: v.optional(v.number()), // total items to import (known once fetched)
+    created: v.optional(v.number()), // new (stub) games created this run
+    recentTitles: v.optional(v.array(v.string())), // last few titles, for the progress detail
     attempts: v.number(), // consecutive 202/transient failures; drives backoff
     mode: v.union(v.literal("incremental"), v.literal("full")),
     minDate: v.optional(v.string()),

@@ -162,12 +162,51 @@ export function BggAccountCard() {
       )}
 
       {running && (
-        <p className="flex items-center gap-1.5 text-xs text-muted">
-          <RefreshCw className="h-3.5 w-3.5 animate-spin" />
-          {job.status === "waiting"
-            ? "BoardGameGeek is preparing your collection…"
-            : `Syncing… ${job.processed} games`}
-        </p>
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between gap-2 text-xs text-muted">
+            <span className="flex min-w-0 items-center gap-1.5">
+              <RefreshCw className="h-3.5 w-3.5 shrink-0 animate-spin" />
+              {job.status === "waiting"
+                ? "Preparing your collection…"
+                : job.status === "sweeping"
+                  ? "Tidying up…"
+                  : "Copying your collection…"}
+            </span>
+            <span className="shrink-0 tabular-nums">
+              {job.total != null
+                ? `${job.processed} / ${job.total}`
+                : `${job.processed}`}
+            </span>
+          </div>
+
+          {job.total ? (
+            <div className="h-1.5 overflow-hidden rounded-full bg-surface-2">
+              <div
+                className="h-full rounded-full bg-accent transition-all"
+                style={{
+                  width: `${Math.min(100, Math.round((job.processed / job.total) * 100))}%`,
+                }}
+              />
+            </div>
+          ) : null}
+
+          {(job.created != null || job.recentTitles?.length) && (
+            <p className="truncate text-[11px] text-subtle">
+              {job.created != null && (
+                <span>
+                  {job.created} new · {Math.max(0, job.processed - job.created)}{" "}
+                  already in library
+                </span>
+              )}
+              {job.recentTitles?.length ? (
+                <span>
+                  {job.created != null ? " · " : ""}
+                  {job.recentTitles.slice(-3).reverse().join(", ")}
+                </span>
+              ) : null}
+            </p>
+          )}
+        </div>
       )}
       {job?.status === "error" && job.error && (
         <p className="text-xs text-red-500">{job.error}</p>

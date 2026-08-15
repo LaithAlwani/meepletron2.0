@@ -249,6 +249,9 @@ export const myJobs = query({
       kind: j.kind,
       status: j.status,
       processed: j.processed,
+      total: j.total,
+      created: j.created,
+      recentTitles: j.recentTitles,
       page: j.page,
       totalPages: j.totalPages,
       error: j.error,
@@ -335,6 +338,9 @@ async function resetJob(
     page: 1,
     totalPages: undefined,
     processed: 0,
+    total: undefined,
+    created: 0,
+    recentTitles: [],
     attempts: 0,
     minDate: undefined,
     updatedAt: now,
@@ -455,13 +461,14 @@ export const getJob = internalQuery({
 });
 
 export const markJobRunning = internalMutation({
-  args: { jobId: v.id("bggSyncJobs") },
-  handler: async (ctx, { jobId }) => {
+  args: { jobId: v.id("bggSyncJobs"), total: v.optional(v.number()) },
+  handler: async (ctx, { jobId, total }) => {
     const job = await ctx.db.get("bggSyncJobs", jobId);
     if (!job) return;
     await ctx.db.patch("bggSyncJobs", jobId, {
       status: "running",
       attempts: 0,
+      ...(total !== undefined ? { total } : {}),
       updatedAt: Date.now(),
     });
   },
@@ -512,14 +519,14 @@ export const failJob = internalMutation({
 async function linkOrCreateGame(
   ctx: MutationCtx,
   item: BggCollectionItem,
-): Promise<Id<"games">> {
+): Promise<{ gameId: Id<"games">; created: boolean }> {
   const existing = await ctx.db
     .query("games")
     .withIndex("by_bgg_id", (q) => q.eq("bggId", item.bggId))
     .first();
-  if (existing) return existing._id;
+  if (existing) return { gameId: existing._id, created: false };
 
-  return await ctx.db.insert("games", {
+  const gameId = await ctx.db.insert("games", {
     title: item.title,
     slug: await slugifyUnique(ctx, item.title),
     isExpansion: item.isExpansion,
@@ -535,6 +542,7 @@ async function linkOrCreateGame(
     // searchText deliberately left unset: a stub has nothing worth matching,
     // and this keeps it out of full-text search even before the isStub filter.
   });
+  return { gameId, created: true };
 }
 
 export const upsertCollectionItems = internalMutation({
@@ -548,8 +556,12 @@ export const upsertCollectionItems = internalMutation({
     // rather than writing rows nothing will ever clean up.
     if (!job || job.status === "canceled") return;
 
+    let createdCount = 0;
+    const titles: string[] = [];
     for (const item of items) {
-      const gameId = await linkOrCreateGame(ctx, item);
+      const { gameId, created } = await linkOrCreateGame(ctx, item);
+      if (created) createdCount++;
+      titles.push(item.title);
       const row = {
         ...item,
         userId: job.userId,
@@ -572,6 +584,9 @@ export const upsertCollectionItems = internalMutation({
 
     await ctx.db.patch("bggSyncJobs", jobId, {
       processed: job.processed + items.length,
+      created: (job.created ?? 0) + createdCount,
+      // A rolling window of the most recent titles — the UI shows what's copying.
+      recentTitles: [...(job.recentTitles ?? []), ...titles].slice(-8),
       updatedAt: Date.now(),
     });
   },
@@ -737,7 +752,10 @@ export const runCollection = internalAction({
       return;
     }
 
-    await ctx.runMutation(internal.bggSync.markJobRunning, { jobId });
+    await ctx.runMutation(internal.bggSync.markJobRunning, {
+      jobId,
+      total: parsed.items.length,
+    });
     for (let i = 0; i < parsed.items.length; i += IMPORT_BATCH) {
       await ctx.runMutation(internal.bggSync.upsertCollectionItems, {
         jobId,
