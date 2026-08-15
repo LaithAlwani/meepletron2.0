@@ -1,5 +1,6 @@
 import type { MutationCtx } from "../_generated/server";
 import type { Id } from "../_generated/dataModel";
+import { internal } from "../_generated/api";
 
 /**
  * Delete a user's Convex Auth rows (accounts, verification codes, sessions,
@@ -41,7 +42,10 @@ export async function deleteUserAndAuth(
   await ctx.db.delete("users", userId);
 }
 
-/** Delete a user's app data (favorites, chats, and each chat's messages). */
+/**
+ * Delete a user's app data (favorites, chats and their messages, and anything
+ * synced from BoardGameGeek).
+ */
 export async function deleteUserAppData(
   ctx: MutationCtx,
   userId: Id<"users">,
@@ -64,4 +68,24 @@ export async function deleteUserAppData(
     for (const m of messages) await ctx.db.delete("messages", m._id);
     await ctx.db.delete("chats", chat._id);
   }
+
+  // BGG link + job rows are at most a handful, so they go inline. Note the
+  // account row holds the sealed session cookie — it must not outlive the user.
+  const bggAccount = await ctx.db
+    .query("bggAccounts")
+    .withIndex("by_user", (q) => q.eq("userId", userId))
+    .unique();
+  if (bggAccount) await ctx.db.delete("bggAccounts", bggAccount._id);
+
+  const bggJobs = await ctx.db
+    .query("bggSyncJobs")
+    .withIndex("by_user_and_kind", (q) => q.eq("userId", userId))
+    .take(10);
+  for (const j of bggJobs) await ctx.db.delete("bggSyncJobs", j._id);
+
+  // The synced collection and plays can run to thousands of rows — far past a
+  // single transaction — so they cascade out of band. This is scheduled rather
+  // than awaited on purpose: `deleteUserAndAuth` removes the user row moments
+  // later, so the cascade keys off the raw id and never reads the user.
+  await ctx.scheduler.runAfter(0, internal.bggSync.purgeUserBggData, { userId });
 }

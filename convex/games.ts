@@ -2,8 +2,9 @@ import { v } from "convex/values";
 import { paginationOptsValidator } from "convex/server";
 import { query, mutation, type QueryCtx } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
+import { internal } from "./_generated/api";
 import { requireAdmin } from "./lib/auth";
-import { slugify } from "./lib/slug";
+import { slugify, slugifyUnique } from "./lib/slug";
 import { buildSearchText } from "./lib/gameSearch";
 import { recomputeChatReady } from "./lib/chatReady";
 import { bggStatsValidator } from "./lib/bggStats";
@@ -38,7 +39,9 @@ export const list = query({
   handler: async (ctx) => {
     const games = await ctx.db
       .query("games")
-      .withIndex("by_isExpansion", (q) => q.eq("isExpansion", false))
+      .withIndex("by_isStub_and_isExpansion", (q) =>
+        q.eq("isStub", false).eq("isExpansion", false),
+      )
       .take(200);
     return await Promise.all(games.map((g) => withMedia(ctx, g)));
   },
@@ -50,7 +53,9 @@ export const listPaginated = query({
   handler: async (ctx, { paginationOpts }) => {
     const result = await ctx.db
       .query("games")
-      .withIndex("by_isExpansion", (q) => q.eq("isExpansion", false))
+      .withIndex("by_isStub_and_isExpansion", (q) =>
+        q.eq("isStub", false).eq("isExpansion", false),
+      )
       .order("desc")
       .paginate(paginationOpts);
     return {
@@ -210,9 +215,13 @@ export const similarGames = query({
     const designers = new Set(base.designers.map(norm));
     if (cats.size === 0 && mechs.size === 0) return [];
 
+    // Stub games (auto-created by BGG collection sync) carry no categories or
+    // mechanics, so they'd score zero anyway — but they'd still eat the take().
     const candidates = await ctx.db
       .query("games")
-      .withIndex("by_isExpansion", (q) => q.eq("isExpansion", false))
+      .withIndex("by_isStub_and_isExpansion", (q) =>
+        q.eq("isStub", false).eq("isExpansion", false),
+      )
       .take(1000);
 
     const scored = candidates
@@ -341,10 +350,19 @@ export const chatSources = query({
  * page renders/searches/filters/pages this client-side.
  */
 export const adminList = query({
-  args: {},
-  handler: async (ctx) => {
+  args: { includeStubs: v.optional(v.boolean()) },
+  handler: async (ctx, { includeStubs }) => {
     await requireAdmin(ctx);
-    const games = await ctx.db.query("games").order("desc").take(1000);
+    // Stubs are excluded by default: they're created newest-first by collection
+    // sync, so including them would push every curated game out of the take().
+    // Pass includeStubs to find them and promote one by editing it.
+    const games = includeStubs
+      ? await ctx.db.query("games").order("desc").take(1000)
+      : await ctx.db
+          .query("games")
+          .withIndex("by_isStub_and_isExpansion", (q) => q.eq("isStub", false))
+          .order("desc")
+          .take(1000);
     return await Promise.all(
       games.map(async (g) => {
         const rulebooks = await ctx.db
@@ -359,6 +377,7 @@ export const adminList = query({
           title: g.title,
           slug: g.slug,
           isExpansion: g.isExpansion,
+          isStub: !!g.isStub,
           thumbnailUrl: g.thumbnailId
             ? await ctx.storage.getUrl(g.thumbnailId)
             : null,
@@ -402,10 +421,14 @@ export const createGame = mutation({
     if (args.isExpansion && args.parentId) {
       await ctx.db.patch("games", args.parentId, { hasExpansions: true });
     }
-    return await ctx.db.insert("games", {
+    const gameId = await ctx.db.insert("games", {
       title,
       slug: slugify(title),
       isExpansion: args.isExpansion,
+      // Explicit: the catalogue reads through by_isStub_and_isExpansion, and an
+      // absent field doesn't match `eq("isStub", false)` — a new game would be
+      // invisible in the library.
+      isStub: false,
       parentId: args.parentId,
       year: args.year,
       minPlayers: args.minPlayers,
@@ -429,6 +452,14 @@ export const createGame = mutation({
         gameMechanics: args.gameMechanics,
       }),
     });
+    // Adopt any collection rows already pointing at this BGG id.
+    if (args.bggId) {
+      await ctx.scheduler.runAfter(0, internal.bggSync.relinkGameToBggRows, {
+        gameId,
+        bggId: args.bggId,
+      });
+    }
+    return gameId;
   },
 });
 
@@ -449,8 +480,12 @@ export const updateGame = mutation({
       const title = rest.title.trim();
       if (!title) throw new Error("Title cannot be empty");
       patch.title = title;
-      patch.slug = slugify(title);
+      // Collision-safe: stub games created by collection sync mean duplicate
+      // titles are now routine, and by_slug lookups take the first match.
+      patch.slug = await slugifyUnique(ctx, title, gameId);
     }
+    // An admin editing a game is what promotes it out of stub state.
+    if (game.isStub) patch.isStub = false;
     patch.searchText = buildSearchText({
       title: (patch.title as string | undefined) ?? game.title,
       designers: rest.designers ?? game.designers,
@@ -459,6 +494,14 @@ export const updateGame = mutation({
       gameMechanics: rest.gameMechanics ?? game.gameMechanics,
     });
     await ctx.db.patch("games", gameId, patch);
+
+    // Newly-set BGG id: adopt the collection rows that were waiting for it.
+    if (rest.bggId && rest.bggId !== game.bggId) {
+      await ctx.scheduler.runAfter(0, internal.bggSync.relinkGameToBggRows, {
+        gameId,
+        bggId: rest.bggId,
+      });
+    }
   },
 });
 

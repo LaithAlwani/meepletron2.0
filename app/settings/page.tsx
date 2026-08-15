@@ -13,6 +13,7 @@ import {
   type FontSize,
   type Preferences,
 } from "@/lib/usePreferences";
+import { BggAccountCard } from "@/components/settings/BggAccountCard";
 
 export default function SettingsPage() {
   return (
@@ -59,6 +60,11 @@ function SettingsBody() {
 
   return (
     <div className="space-y-6">
+      {/* BoardGameGeek */}
+      <Section title="BoardGameGeek">
+        <BggAccountCard />
+      </Section>
+
       {/* Display */}
       <Section title="Display">
         <div className="px-4 py-3.5">

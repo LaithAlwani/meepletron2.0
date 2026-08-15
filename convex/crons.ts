@@ -36,4 +36,14 @@ crons.daily(
   {},
 );
 
+// Fail BGG sync jobs whose action died, so the UI stops showing a spinner that
+// will never resolve. (`crons.cron` rather than the `crons.daily` above — the
+// Convex guidelines allow only `interval`/`cron`; the existing four predate it.)
+crons.cron(
+  "fail stalled bgg sync jobs",
+  "*/15 * * * *",
+  internal.bggSync.failStalledJobs,
+  {},
+);
+
 export default crons;

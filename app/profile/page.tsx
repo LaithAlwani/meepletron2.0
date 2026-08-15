@@ -36,6 +36,12 @@ const EditIcon = (
 );
 
 const statIcon = "h-5 w-5";
+const StatCollectionIcon = (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={statIcon}>
+    <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+    <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+  </svg>
+);
 const StatChatsIcon = (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={statIcon}>
     <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
@@ -89,6 +95,8 @@ export default function ProfilePage() {
 function ProfileBody() {
   const me = useQuery(api.users.me);
   const stats = useQuery(api.users.myStats);
+  // null when no BGG account is linked — the card is simply omitted then.
+  const bgg = useQuery(api.bggSync.myAccount);
   const { signOut } = useAuthActions();
   const router = useRouter();
 
@@ -174,6 +182,15 @@ function ProfileBody() {
           color="green"
           icon={StatThumbIcon}
         />
+        {bgg && (
+          <StatCard
+            label="Games Owned"
+            value={bgg.collectionCount ?? 0}
+            sub={bgg.username}
+            color="blue"
+            icon={StatCollectionIcon}
+          />
+        )}
       </div>
 
       {/* Danger zone — permanent account deletion (real accounts only) */}

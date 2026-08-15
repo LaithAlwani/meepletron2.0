@@ -3,6 +3,13 @@ import { v } from "convex/values";
 import { authTables } from "@convex-dev/auth/server";
 import { annotationValidator } from "./lib/annotations";
 import { bggStatsValidator } from "./lib/bggStats";
+import {
+  bggAccountStatusValidator,
+  bggCollectionRowValidator,
+  bggPlayRowValidator,
+  bggSyncKindValidator,
+  bggSyncStatusValidator,
+} from "./lib/bggSyncTypes";
 
 /**
  * Meepletron 2.0 data model — everything lives in Convex.
@@ -90,14 +97,24 @@ export default defineSchema({
     // BoardGameGeek id (from the original import) + cached BGG stats.
     bggId: v.optional(v.string()),
     bgg: v.optional(bggStatsValidator),
+    // Auto-created by a user's BGG collection sync to hold a game we don't
+    // curate. Stubs carry a title/year/thumbnail and nothing else, and are
+    // excluded from every catalogue surface (browse, search, sitemap). Cleared
+    // when an admin edits the game, which promotes it to a real entry.
+    isStub: v.optional(v.boolean()),
   })
     .index("by_slug", ["slug"])
     .index("by_isExpansion", ["isExpansion"])
     .index("by_chat_ready", ["chatReady"])
     .index("by_parent", ["parentId"])
+    // Collection/plays rows link to games by BGG id; without this the match is
+    // a table scan per synced row.
+    .index("by_bgg_id", ["bggId"])
+    // The catalogue's real read path: non-stub base games / expansions.
+    .index("by_isStub_and_isExpansion", ["isStub", "isExpansion"])
     .searchIndex("search_text", {
       searchField: "searchText",
-      filterFields: ["isExpansion", "chatReady"],
+      filterFields: ["isExpansion", "chatReady", "isStub"],
     }),
 
   // A game can have several rulebooks (Base Rules, Solo Mode, ...). Each is the
@@ -381,4 +398,73 @@ export default defineSchema({
     email: v.string(),
     message: v.string(),
   }).index("by_email", ["email"]),
+
+  // --- BoardGameGeek account sync ---
+  // A user's linked BGG account. Deliberately its own table rather than fields
+  // on `users`: `users.me` returns the whole user document to the client, so
+  // nothing secret may live there, and sync churn would contend with every
+  // `me` subscription.
+  bggAccounts: defineTable({
+    userId: v.id("users"),
+    username: v.string(), // as typed, for display
+    usernameLower: v.string(), // lookup / dedupe key
+    // BGG session cookie, AES-GCM sealed with BGG_CRED_KEY. We exchange the
+    // user's password for this at link time and then discard the password —
+    // it is never stored, logged, or returned.
+    sessionCookie: v.optional(v.object({ ct: v.string(), iv: v.string() })),
+    cookieExpiresAt: v.optional(v.number()),
+    status: bggAccountStatusValidator,
+    // A classified reason ("bad_credentials", "rate_limited", …) — never a raw
+    // response body, which could echo credentials back into the database.
+    lastError: v.optional(v.string()),
+    linkedAt: v.number(),
+    collectionSyncedAt: v.optional(v.number()),
+    collectionCount: v.optional(v.number()),
+    playsSyncedAt: v.optional(v.number()),
+    playsCount: v.optional(v.number()),
+    playsSyncedThrough: v.optional(v.string()), // high-water mark, "YYYY-MM-DD"
+  })
+    .index("by_user", ["userId"])
+    .index("by_username_lower", ["usernameLower"]),
+
+  // Sync progress + cursor. Invariant: at most one row per (userId, kind), so
+  // `by_user_and_kind(...).unique()` doubles as the "already running?" lock and
+  // the table stays at ≤2 rows per user.
+  bggSyncJobs: defineTable({
+    userId: v.id("users"),
+    accountId: v.id("bggAccounts"),
+    username: v.string(), // snapshot: the job survives a relink mid-run
+    kind: bggSyncKindValidator,
+    status: bggSyncStatusValidator,
+    runStartedAt: v.number(), // the mark-and-sweep stamp for this run
+    page: v.number(),
+    totalPages: v.optional(v.number()),
+    processed: v.number(),
+    attempts: v.number(), // consecutive 202/transient failures; drives backoff
+    mode: v.union(v.literal("incremental"), v.literal("full")),
+    minDate: v.optional(v.string()),
+    updatedAt: v.number(), // watchdog heartbeat
+    finishedAt: v.optional(v.number()),
+    error: v.optional(v.string()),
+  })
+    .index("by_user_and_kind", ["userId", "kind"])
+    .index("by_status", ["status"]),
+
+  // One row per collection item. A child table, not an array on the user: a
+  // 1000-game collection would blow the 1MB document limit, and an embedded
+  // array would rewrite the whole document on every batch.
+  bggCollection: defineTable(bggCollectionRowValidator)
+    .index("by_user_and_bgg_id", ["userId", "bggId"]) // upsert key
+    .index("by_user_and_sort_title", ["userId", "sortTitle"]) // alphabetical page
+    .index("by_user_and_synced_at", ["userId", "syncedAt"]) // sweep stale rows
+    .index("by_user_and_game", ["userId", "gameId"])
+    // Cross-user: adopt every user's rows when an admin gives a game its BGG id.
+    .index("by_bgg_id", ["bggId"]),
+
+  // One row per logged play. Phase two — defined now so phase one's schema
+  // doesn't have to reshape later.
+  bggPlays: defineTable(bggPlayRowValidator)
+    .index("by_user_and_play_id", ["userId", "playId"]) // idempotent upsert key
+    .index("by_user_and_date", ["userId", "date"])
+    .index("by_user_and_bgg_id", ["userId", "bggId"]),
 });

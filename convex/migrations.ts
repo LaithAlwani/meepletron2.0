@@ -19,3 +19,25 @@ export const backfillHasExpansions = internalMutation({
     return { updated };
   },
 });
+
+/**
+ * One-off: set `isStub: false` on every existing game.
+ *
+ * Required before the catalogue can read through `by_isStub_and_isExpansion` —
+ * an index lookup on `isStub === false` does not match rows where the field is
+ * absent, so without this backfill the library would come back empty.
+ */
+export const backfillIsStub = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const all = await ctx.db.query("games").take(5000);
+    let updated = 0;
+    for (const g of all) {
+      if (g.isStub === undefined) {
+        await ctx.db.patch("games", g._id, { isStub: false });
+        updated++;
+      }
+    }
+    return { scanned: all.length, updated };
+  },
+});

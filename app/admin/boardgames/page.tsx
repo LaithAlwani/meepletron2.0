@@ -62,7 +62,7 @@ function usePersistentState<T>(key: string, initial: T): [T, (v: T) => void] {
 }
 
 export default function AdminGamesPage() {
-  const games = useQuery(api.games.adminList) as AdminGame[] | undefined;
+  const games = useQuery(api.games.adminList, {}) as AdminGame[] | undefined;
   const deleteGame = useMutation(api.games.deleteGame);
   const confirm = useConfirm();
   const toast = useToast();

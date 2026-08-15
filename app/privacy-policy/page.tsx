@@ -17,6 +17,13 @@ export default function PrivacyPolicyPage() {
           to you.
         </p>
         <p>
+          If you link a BoardGameGeek account, we fetch your collection from
+          BoardGameGeek and store it against your Meepletron account. We keep an
+          encrypted BoardGameGeek session token so we can sync again — we never
+          store your BoardGameGeek password. Unlinking, or deleting your
+          Meepletron account, removes the token and the synced collection.
+        </p>
+        <p>
           Questions? Reach out through the contact form on the home page.
         </p>
       </div>
