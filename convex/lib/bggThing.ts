@@ -52,12 +52,34 @@ export function parseItem(block: string) {
     }
   }
 
+  // Community-suggested player age: the age bucket that got the most votes
+  // (e.g. "12" from a poll where "12" leads). BGG's trailing bucket reads
+  // "21 and up" → parseInt gives 21.
+  const ageMatch = block.match(
+    /<poll name="suggested_playerage"[\s\S]*?<\/poll>/,
+  );
+  let communityAge: number | undefined;
+  if (ageMatch) {
+    const re = /<result value="([^"]+)" numvotes="(\d+)"/g;
+    let m: RegExpExecArray | null;
+    let bestVotes = 0;
+    while ((m = re.exec(ageMatch[0]))) {
+      const votes = Number(m[2]);
+      const age = parseInt(m[1], 10);
+      if (votes > bestVotes && Number.isFinite(age) && age > 0) {
+        bestVotes = votes;
+        communityAge = age;
+      }
+    }
+  }
+
   return {
     rating,
     ratingCount,
     weight,
     pollVotes,
     playerPoll: playerPoll.length ? playerPoll : undefined,
+    communityAge,
   };
 }
 

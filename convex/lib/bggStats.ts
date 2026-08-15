@@ -22,5 +22,7 @@ export const bggStatsValidator = v.object({
       }),
     ),
   ),
+  // Community-voted suggested minimum player age (mode of BGG's age poll).
+  communityAge: v.optional(v.number()),
   fetchedAt: v.optional(v.number()),
 });

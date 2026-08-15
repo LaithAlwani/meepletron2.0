@@ -4,9 +4,6 @@ import { use, useEffect, useState } from "react";
 import Link from "next/link";
 import { useQuery } from "convex/react";
 import {
-  Users,
-  Clock,
-  Baby,
   MessageCircle,
   Scissors,
   Puzzle,
@@ -16,6 +13,8 @@ import {
   FileText,
   Paperclip,
   X,
+  Bookmark,
+  Dices,
 } from "lucide-react";
 import { api } from "@/convex/_generated/api";
 import { formatPlayTime } from "@/lib/format";
@@ -24,13 +23,16 @@ import { BackgroundCover } from "@/components/boardgames/BackgroundCover";
 import { SimilarGames } from "@/components/boardgames/SimilarGames";
 import { InlineAsk } from "@/components/boardgames/InlineAsk";
 import { FaqAccordion } from "@/components/boardgames/FaqAccordion";
-import { BggStats } from "@/components/boardgames/BggStats";
+import { HexRating } from "@/components/boardgames/HexRating";
+import { GameFacts } from "@/components/boardgames/GameFacts";
+import { ShareButton } from "@/components/boardgames/ShareButton";
 import {
   ComponentsList,
   RemindersList,
 } from "@/components/boardgames/GameReference";
 import { ExpandableText } from "@/components/ui/ExpandableText";
 import { buttonClasses } from "@/components/ui/Button";
+import { useToast } from "@/components/ui/Toast";
 import { Die } from "@/components/ui/icons";
 
 function InfoSection({
@@ -102,21 +104,6 @@ function ExpandableInline({ items, max = 2 }: { items: string[]; max?: number })
         {expanded ? "show less" : `+${items.length - max} more`}
       </button>
     </p>
-  );
-}
-
-function FactChip({
-  icon,
-  children,
-}: {
-  icon: React.ReactNode;
-  children: React.ReactNode;
-}) {
-  return (
-    <span className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-surface px-3 py-1.5 text-sm font-semibold text-foreground shadow-sm">
-      <span className="text-accent">{icon}</span>
-      {children}
-    </span>
   );
 }
 
@@ -208,6 +195,7 @@ export default function GameDetailPage({
   const game = useQuery(api.games.getByHandle, { handle });
   const me = useQuery(api.users.me);
   const isAdmin = me?.role === "admin";
+  const toast = useToast();
 
   useEffect(() => {
     window.scrollTo(0, 0);
@@ -244,6 +232,8 @@ export default function GameDetailPage({
   }
 
   const gameId = game._id;
+  const actionCls =
+    "flex h-10 w-10 items-center justify-center rounded-xl border border-border bg-surface text-muted shadow-sm transition-colors hover:bg-surface-2 hover:text-foreground";
   const cover = game.imageUrl ?? game.thumbnailUrl ?? null;
   const playTime = formatPlayTime(game.minPlayTime, game.maxPlayTime);
   const players =
@@ -313,20 +303,6 @@ export default function GameDetailPage({
                     <Die className="h-14 w-14" />
                   </div>
                 )}
-                <FavoriteToggle
-                  gameId={gameId}
-                  className="absolute right-2 top-2 z-10 flex items-center justify-center rounded-full bg-background/80 p-2 text-muted shadow-md backdrop-blur transition-colors hover:bg-background hover:text-foreground"
-                />
-                {isAdmin && (
-                  <Link
-                    href={`/admin/boardgames/${gameId}`}
-                    aria-label="Edit game"
-                    title="Edit game"
-                    className="absolute bottom-2 right-2 z-10 rounded-full bg-background/80 p-2 text-muted shadow-md backdrop-blur transition-colors hover:bg-background hover:text-foreground"
-                  >
-                    <Pencil className="h-4 w-4" />
-                  </Link>
-                )}
               </div>
             </div>
 
@@ -344,37 +320,72 @@ export default function GameDetailPage({
                   Expansion of {game.parent.title}
                 </Link>
               )}
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                <h1 className="font-display text-3xl font-extrabold leading-tight tracking-tight sm:text-4xl">
-                  {game.title}
-                </h1>
-                {game.year && (
-                  <span className="rounded-full border border-border bg-surface-2 px-2.5 py-0.5 text-sm font-semibold text-muted">
-                    {game.year}
-                  </span>
+              <div className="flex items-start gap-3">
+                {game.bgg?.rating != null && (
+                  <HexRating
+                    value={game.bgg.rating}
+                    count={game.bgg.ratingCount}
+                  />
                 )}
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                    <h1 className="font-display text-3xl font-extrabold leading-tight tracking-tight sm:text-4xl">
+                      {game.title}
+                    </h1>
+                    {game.year && (
+                      <span className="rounded-full border border-border bg-surface-2 px-2.5 py-0.5 text-sm font-semibold text-muted">
+                        {game.year}
+                      </span>
+                    )}
+                  </div>
+                  {game.designers.length > 0 && (
+                    <p className="mt-1.5 text-sm text-muted">
+                      by {game.designers.join(", ")}
+                    </p>
+                  )}
+                </div>
               </div>
-              {game.designers.length > 0 && (
-                <p className="mt-1.5 text-sm text-muted">
-                  by {game.designers.join(", ")}
-                </p>
-              )}
 
-              <div className="mt-4 flex flex-wrap gap-2">
-                {players && (
-                  <FactChip icon={<Users className="h-4 w-4" />}>
-                    {players} players
-                  </FactChip>
-                )}
-                {playTime && (
-                  <FactChip icon={<Clock className="h-4 w-4" />}>{playTime}</FactChip>
-                )}
-                {game.minAge && (
-                  <FactChip icon={<Baby className="h-4 w-4" />}>
-                    Age {game.minAge}+
-                  </FactChip>
+              {/* Quick actions */}
+              <div className="mt-4 flex flex-wrap items-center gap-2">
+                <FavoriteToggle gameId={gameId} className={actionCls} />
+                <button
+                  type="button"
+                  onClick={() => toast("Collections are coming soon", "info")}
+                  aria-label="Add to collection"
+                  title="Add to collection (coming soon)"
+                  className={actionCls}
+                >
+                  <Bookmark className="h-4.5 w-4.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => toast("Play logging is coming soon", "info")}
+                  aria-label="Record a play"
+                  title="Record a play (coming soon)"
+                  className={actionCls}
+                >
+                  <Dices className="h-4.5 w-4.5" />
+                </button>
+                <ShareButton title={game.title} className={actionCls} />
+                {isAdmin && (
+                  <Link
+                    href={`/admin/boardgames/${gameId}`}
+                    aria-label="Edit game"
+                    title="Edit game"
+                    className={`${actionCls} sm:ml-auto`}
+                  >
+                    <Pencil className="h-4.5 w-4.5" />
+                  </Link>
                 )}
               </div>
+
+              <GameFacts
+                players={players}
+                playTime={playTime}
+                minAge={game.minAge}
+                bgg={game.bgg}
+              />
 
               {game.description && (
                 <div className="mt-4 max-w-2xl">
@@ -413,8 +424,6 @@ export default function GameDetailPage({
           baseSlug={game.parent ? game.parent.slug : game.slug}
           moduleId={game.parent ? game._id : undefined}
         />
-
-        <BggStats bgg={game.bgg} />
 
         <FaqAccordion gameId={gameId} />
 
