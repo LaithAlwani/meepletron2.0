@@ -90,9 +90,9 @@ export default defineSchema({
     searchText: v.optional(v.string()),
     // Denormalized: does this base game have ≥1 expansion? For the library filter.
     hasExpansions: v.optional(v.boolean()),
-    // Denormalized: does this base game's family (itself + expansions) have ≥1
-    // ingested rulebook? i.e. can a user actually chat with it. Maintained on
-    // ingest / un-ingest / delete. The library only shows chat-ready games.
+    // DEPRECATED, unused. The chat-ready gating is gone; this bare optional
+    // field lingers only so a prod schema push doesn't fail on docs that still
+    // carry it. Run migrations:clearChatReady against prod, then drop this line.
     chatReady: v.optional(v.boolean()),
     // BoardGameGeek id (from the original import) + cached BGG stats.
     bggId: v.optional(v.string()),
@@ -110,7 +110,6 @@ export default defineSchema({
   })
     .index("by_slug", ["slug"])
     .index("by_isExpansion", ["isExpansion"])
-    .index("by_chat_ready", ["chatReady"])
     .index("by_parent", ["parentId"])
     // Collection/plays rows link to games by BGG id; without this the match is
     // a table scan per synced row.
@@ -119,7 +118,7 @@ export default defineSchema({
     .index("by_isStub_and_isExpansion", ["isStub", "isExpansion"])
     .searchIndex("search_text", {
       searchField: "searchText",
-      filterFields: ["isExpansion", "chatReady", "isStub"],
+      filterFields: ["isExpansion", "isStub"],
     }),
 
   // A game can have several rulebooks (Base Rules, Solo Mode, ...). Each is the

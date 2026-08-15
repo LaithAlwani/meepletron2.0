@@ -147,10 +147,7 @@ function CollectionBody() {
             {results.map((row) => (
               <MediaRow
                 key={row._id}
-                // Only games we actually curate get a link — a stub has no
-                // rulebook and no page worth visiting, so it renders dimmed.
                 href={row.slug ? `/boardgames/${row.slug}` : undefined}
-                dimmed={!row.slug}
                 thumbUrl={row.thumbnailUrl}
                 title={row.title}
                 subtitle={
@@ -164,7 +161,7 @@ function CollectionBody() {
                 }
                 meta={row.userRating ? `★ ${row.userRating}` : undefined}
                 trailing={
-                  row.slug && row.chatReady ? (
+                  row.slug ? (
                     <Link
                       href={`/boardgames/${row.slug}/chat`}
                       className="flex shrink-0 items-center gap-1.5 rounded-xl border border-border px-3.5 py-2 text-xs font-semibold text-accent transition-colors hover:bg-surface-2"

@@ -1,7 +1,6 @@
 import { v } from "convex/values";
 import { mutation } from "./_generated/server";
 import { requireAdmin } from "./lib/auth";
-import { recomputeChatReady } from "./lib/chatReady";
 
 /**
  * Admin: attach an uploaded file to a game.
@@ -83,8 +82,5 @@ export const deleteRulebook = mutation({
 
     await ctx.storage.delete(rb.storageId);
     await ctx.db.delete("rulebooks", rulebookId);
-
-    // The family may no longer be chat-ready without this rulebook.
-    await recomputeChatReady(ctx, rb.gameId);
   },
 });

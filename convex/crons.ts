@@ -55,4 +55,14 @@ crons.cron(
   {},
 );
 
+// Backstop for stub enrichment: fill any BGG-synced stub games that a sync's
+// own self-draining sweep missed or that failed transiently (they back off via
+// bggCheckedAt and retry here). The sweep no-ops when nothing is due.
+crons.cron(
+  "enrich bgg stub games",
+  "0 */6 * * *",
+  internal.bggSync.enrichStubs,
+  {},
+);
+
 export default crons;

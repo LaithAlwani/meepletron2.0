@@ -1,10 +1,11 @@
 "use node";
 
 import { v, ConvexError } from "convex/values";
-import { action } from "./_generated/server";
+import { action, internalAction } from "./_generated/server";
 import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { PhotonImage, resize, SamplingFilter } from "@cf-wasm/photon/node";
+import { parseItem, parseFullItem } from "./lib/bggThing";
 
 const MAX_WIDTH = 800;
 const THUMB_WIDTH = 256;
@@ -91,6 +92,96 @@ export const setGameCoverFromUrl = action({
       gameId,
       storageId,
       thumbnailId,
+    });
+  },
+});
+
+/**
+ * Fetch + compress + store a cover from a URL, best-effort. Returns the storage
+ * ids (or undefined when the image can't be fetched/decoded) without touching
+ * any game — the enrichment mutation attaches them. Never throws.
+ */
+async function fetchAndStoreCover(
+  ctx: { storage: { store: (b: Blob) => Promise<Id<"_storage">> } },
+  url: string,
+): Promise<{ imageId?: Id<"_storage">; thumbnailId?: Id<"_storage"> }> {
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return {};
+    const contentType = res.headers.get("content-type") ?? "";
+    if (!contentType.startsWith("image/")) return {};
+    const original = new Uint8Array(await res.arrayBuffer());
+    if (original.byteLength === 0 || original.byteLength > MAX_FETCH_BYTES) {
+      return {};
+    }
+    const coverJpeg = encodeJpeg(original, MAX_WIDTH);
+    let outBytes: Uint8Array = original;
+    let outType = contentType;
+    if (coverJpeg && coverJpeg.byteLength < original.byteLength) {
+      outBytes = coverJpeg;
+      outType = "image/jpeg";
+    }
+    const imageId = await ctx.storage.store(
+      new Blob([Buffer.from(outBytes)], { type: outType }),
+    );
+    let thumbnailId: Id<"_storage"> | undefined;
+    const thumbJpeg = encodeJpeg(original, THUMB_WIDTH);
+    if (thumbJpeg && thumbJpeg.byteLength < outBytes.byteLength) {
+      thumbnailId = await ctx.storage.store(
+        new Blob([Buffer.from(thumbJpeg)], { type: "image/jpeg" }),
+      );
+    }
+    return { imageId, thumbnailId };
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * Background enrichment for one stub game created by BGG collection sync: fetch
+ * its full `/thing` metadata + stats, store a compressed cover, and hand it to
+ * `applyStubEnrichment` which promotes the stub to a real catalogue entry.
+ *
+ * Best-effort throughout — any failure stamps `bggCheckedAt` (via markChecked)
+ * so the sweep in `bggSync.enrichStubs` backs the game off instead of looping.
+ */
+export const enrichSyncedGame = internalAction({
+  args: { gameId: v.id("games"), bggId: v.string() },
+  handler: async (ctx, { gameId, bggId }) => {
+    const token = process.env.BGG_API_TOKEN;
+    if (!token) return;
+
+    let block: string | undefined;
+    try {
+      const res = await fetch(
+        `https://boardgamegeek.com/xmlapi2/thing?id=${bggId}&stats=1`,
+        {
+          headers: {
+            "User-Agent": "Meepletron/1.0 (board game rules assistant)",
+            Authorization: `Bearer ${token}`,
+          },
+        },
+      );
+      if (res.ok) block = (await res.text()).match(/<item [\s\S]*?<\/item>/)?.[0];
+    } catch {
+      // fall through to markChecked
+    }
+    if (!block) {
+      await ctx.runMutation(internal.bgg.markChecked, { gameId });
+      return;
+    }
+
+    // Strip imageUrl — it's fetched here, not a `games` field.
+    const { imageUrl, ...meta } = parseFullItem(block);
+    const bgg = { ...parseItem(block), fetchedAt: Date.now() };
+    const cover = imageUrl ? await fetchAndStoreCover(ctx, imageUrl) : {};
+
+    await ctx.runMutation(internal.games.applyStubEnrichment, {
+      gameId,
+      meta,
+      bgg,
+      imageId: cover.imageId,
+      thumbnailId: cover.thumbnailId,
     });
   },
 });

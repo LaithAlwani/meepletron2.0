@@ -1,12 +1,17 @@
 import { v } from "convex/values";
 import { paginationOptsValidator } from "convex/server";
-import { query, mutation, type QueryCtx } from "./_generated/server";
+import {
+  query,
+  mutation,
+  internalQuery,
+  internalMutation,
+  type QueryCtx,
+} from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
 import { internal } from "./_generated/api";
 import { requireAdmin } from "./lib/auth";
 import { slugify, slugifyUnique } from "./lib/slug";
 import { buildSearchText } from "./lib/gameSearch";
-import { recomputeChatReady } from "./lib/chatReady";
 import { bggStatsValidator } from "./lib/bggStats";
 
 /** Resolve a game's storage ids into signed URLs for the client. */
@@ -76,10 +81,7 @@ export const searchPaginated = query({
     const result = await ctx.db
       .query("games")
       .withSearchIndex("search_text", (q) =>
-        q
-          .search("searchText", trimmed)
-          .eq("isExpansion", false)
-          .eq("chatReady", true),
+        q.search("searchText", trimmed).eq("isExpansion", false),
       )
       .paginate(paginationOpts);
     return {
@@ -100,10 +102,11 @@ export const browsePaginated = query({
     hasExpansions: v.optional(v.boolean()),
   },
   handler: async (ctx, { paginationOpts, players, time, hasExpansions }) => {
-    // Only chat-ready games (family has an ingested rulebook) reach the library.
+    // Every base game reaches the library, whether or not it has an ingested
+    // rulebook — including BGG-synced stubs.
     const base = ctx.db
       .query("games")
-      .withIndex("by_chat_ready", (q) => q.eq("chatReady", true))
+      .withIndex("by_isExpansion", (q) => q.eq("isExpansion", false))
       .order("desc");
 
     const needsFilter = players != null || time != null || hasExpansions;
@@ -158,7 +161,7 @@ export const browseCount = query({
   handler: async (ctx, { players, time, hasExpansions }) => {
     const base = ctx.db
       .query("games")
-      .withIndex("by_chat_ready", (q) => q.eq("chatReady", true));
+      .withIndex("by_isExpansion", (q) => q.eq("isExpansion", false));
 
     const needsFilter = players != null || time != null || hasExpansions;
     const q = needsFilter
@@ -539,6 +542,114 @@ export const setGameImage = mutation({
   },
 });
 
+/* -------------------------------------------------------------------------- */
+/* Stub enrichment (BGG collection sync fills stubs into full entries)         */
+/* -------------------------------------------------------------------------- */
+
+/** How long before a failed enrichment attempt is retried. */
+const ENRICH_RETRY_TTL_MS = 6 * 60 * 60 * 1000;
+
+/**
+ * Stub games (auto-created by BGG collection sync) that still need enriching —
+ * they carry a BGG id and either were never attempted or backed off past the
+ * retry TTL. `bggCheckedAt` doubles as the "attempted" stamp so a permanently
+ * failing id doesn't loop the sweep forever.
+ */
+export const dueForEnrich = internalQuery({
+  args: { limit: v.number() },
+  handler: async (ctx, { limit }) => {
+    const now = Date.now();
+    const stubs = await ctx.db
+      .query("games")
+      .withIndex("by_isStub_and_isExpansion", (q) => q.eq("isStub", true))
+      .take(500);
+    return stubs
+      .filter(
+        (g) =>
+          !!g.bggId &&
+          now - (g.bggCheckedAt ?? 0) >= ENRICH_RETRY_TTL_MS,
+      )
+      .slice(0, limit)
+      .map((g) => ({ gameId: g._id, bggId: g.bggId as string }));
+  },
+});
+
+const enrichMetaValidator = v.object({
+  title: v.optional(v.string()),
+  year: v.optional(v.string()),
+  minPlayers: v.optional(v.number()),
+  maxPlayers: v.optional(v.number()),
+  minAge: v.optional(v.string()),
+  minPlayTime: v.optional(v.number()),
+  maxPlayTime: v.optional(v.number()),
+  description: v.optional(v.string()),
+  designers: v.optional(v.array(v.string())),
+  artists: v.optional(v.array(v.string())),
+  publishers: v.optional(v.array(v.string())),
+  categories: v.optional(v.array(v.string())),
+  gameMechanics: v.optional(v.array(v.string())),
+});
+
+/**
+ * Promote a stub into a full catalogue entry with the metadata + cover fetched
+ * from BGG. No-ops (and frees any stored blobs) when the game is gone or has
+ * already been curated — an automated import must never clobber an admin's work.
+ * Always stamps `bggCheckedAt` so a failed family doesn't re-loop the sweep.
+ */
+export const applyStubEnrichment = internalMutation({
+  args: {
+    gameId: v.id("games"),
+    meta: enrichMetaValidator,
+    bgg: v.optional(bggStatsValidator),
+    imageId: v.optional(v.id("_storage")),
+    thumbnailId: v.optional(v.id("_storage")),
+  },
+  handler: async (ctx, { gameId, meta, bgg, imageId, thumbnailId }) => {
+    const game = await ctx.db.get("games", gameId);
+    if (!game || !game.isStub) {
+      // Drop blobs stored speculatively before we knew we'd skip.
+      if (imageId) await ctx.storage.delete(imageId);
+      if (thumbnailId && thumbnailId !== imageId) {
+        await ctx.storage.delete(thumbnailId);
+      }
+      return;
+    }
+    const title = meta.title?.trim() || game.title;
+    const patch: Record<string, unknown> = {
+      isStub: false,
+      title,
+      // Slug is deliberately left as-is: the collection already links to it and
+      // the enriched title barely differs from the stub's.
+      year: meta.year ?? game.year,
+      minPlayers: meta.minPlayers,
+      maxPlayers: meta.maxPlayers,
+      minAge: meta.minAge,
+      minPlayTime: meta.minPlayTime,
+      maxPlayTime: meta.maxPlayTime,
+      description: meta.description,
+      designers: meta.designers ?? [],
+      artists: meta.artists ?? [],
+      publishers: meta.publishers ?? [],
+      categories: meta.categories ?? [],
+      gameMechanics: meta.gameMechanics ?? [],
+      searchText: buildSearchText({
+        title,
+        designers: meta.designers,
+        publishers: meta.publishers,
+        categories: meta.categories,
+        gameMechanics: meta.gameMechanics,
+      }),
+      bggCheckedAt: Date.now(),
+    };
+    if (bgg) patch.bgg = bgg;
+    if (imageId) {
+      patch.imageId = imageId;
+      patch.thumbnailId = thumbnailId ?? imageId;
+    }
+    await ctx.db.patch("games", gameId, patch);
+  },
+});
+
 /** Delete a game and everything under it (rulebooks, chunks, chats, messages). */
 export const deleteGame = mutation({
   args: { gameId: v.id("games") },
@@ -583,7 +694,7 @@ export const deleteGame = mutation({
     for (const id of blobs) await ctx.storage.delete(id);
     await ctx.db.delete("games", gameId);
 
-    // If this was an expansion, recompute its parent's hasExpansions + chatReady.
+    // If this was an expansion, recompute its parent's hasExpansions flag.
     if (game.isExpansion && game.parentId) {
       const sibling = await ctx.db
         .query("games")
@@ -592,7 +703,6 @@ export const deleteGame = mutation({
       await ctx.db.patch("games", game.parentId, {
         hasExpansions: sibling !== null,
       });
-      await recomputeChatReady(ctx, game.parentId);
     }
   },
 });

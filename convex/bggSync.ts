@@ -45,6 +45,10 @@ const IMPORT_BATCH = 100;
 const SWEEP_BATCH = 500;
 /** A job with no heartbeat for this long is considered dead. */
 const STALL_MS = 10 * 60 * 1000;
+/** Stub games enriched per sweep pass — the ceiling on BGG /thing traffic. */
+const ENRICH_BATCH = 12;
+/** Gap between /thing fetches within a pass, so a batch isn't a burst. */
+const ENRICH_STAGGER_MS = 3000;
 
 const USERNAME_RE = /^[A-Za-z0-9_.\-]{1,64}$/;
 
@@ -292,7 +296,6 @@ export const myCollection = query({
         const game = row.gameId
           ? await ctx.db.get("games", row.gameId)
           : null;
-        const curated = !!game && !game.isStub;
         return {
           _id: row._id,
           bggId: row.bggId,
@@ -304,10 +307,9 @@ export const myCollection = query({
           userRating: row.userRating,
           numPlays: row.numPlays,
           isExpansion: row.isExpansion,
-          // Only curated games are worth linking to — a stub's page has no
-          // rulebook, no chat, nothing to show.
-          slug: curated ? game.slug : null,
-          chatReady: curated ? !!game.chatReady : false,
+          // Every synced game — stub or curated — links to its own page and is
+          // chattable now that the ingested-rulebook gate is gone.
+          slug: game?.slug ?? null,
         };
       }),
     );
@@ -531,7 +533,6 @@ async function linkOrCreateGame(
     slug: await slugifyUnique(ctx, item.title),
     isExpansion: item.isExpansion,
     isStub: true,
-    chatReady: false,
     year: item.year,
     bggId: item.bggId,
     designers: [],
@@ -642,6 +643,42 @@ export const sweepCollection = internalMutation({
         collectionSyncedAt: now,
         collectionCount: job.processed,
       });
+    }
+    // Kick off enrichment of any stubs this sync created — fills them into full
+    // catalogue entries with covers. Self-draining, so one nudge is enough.
+    await ctx.scheduler.runAfter(0, internal.bggSync.enrichStubs, {});
+  },
+});
+
+/**
+ * Fill a batch of stub games (auto-created by collection sync) with full BGG
+ * metadata + a stored cover, promoting each to a real catalogue entry. Drains
+ * itself: while a full batch of stubs remains it reschedules after the batch
+ * has staggered through, so one sync — or the backstop cron — eventually
+ * enriches everything without bursting BoardGameGeek.
+ */
+export const enrichStubs = internalAction({
+  args: {},
+  handler: async (ctx): Promise<void> => {
+    if (!process.env.BGG_API_TOKEN) return;
+    const targets = await ctx.runQuery(internal.games.dueForEnrich, {
+      limit: ENRICH_BATCH,
+    });
+    for (const [i, t] of targets.entries()) {
+      await ctx.scheduler.runAfter(
+        i * ENRICH_STAGGER_MS,
+        internal.images.enrichSyncedGame,
+        { gameId: t.gameId, bggId: t.bggId },
+      );
+    }
+    // A full batch means there may be more — come back once this one has
+    // drained (and stamped bggCheckedAt, so those rows drop out of the query).
+    if (targets.length === ENRICH_BATCH) {
+      await ctx.scheduler.runAfter(
+        ENRICH_BATCH * ENRICH_STAGGER_MS + 5000,
+        internal.bggSync.enrichStubs,
+        {},
+      );
     }
   },
 });

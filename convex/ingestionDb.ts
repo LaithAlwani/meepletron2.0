@@ -9,7 +9,6 @@ import {
 import type { Id } from "./_generated/dataModel";
 import { internal } from "./_generated/api";
 import { requireAdmin } from "./lib/auth";
-import { recomputeChatReady } from "./lib/chatReady";
 
 const batchPlanValidator = v.array(
   v.object({
@@ -369,8 +368,6 @@ export const finalizeCommit = internalMutation({
       completionTokens: 0,
       totalTokens: embedTokens,
     });
-    // Mark the game's family chat-ready now that a rulebook is ingested.
-    if (rb) await recomputeChatReady(ctx, rb.gameId);
     // Refresh the derived detail-page content (FAQ, glossary, components) from
     // the freshly-ingested rulebook. Both resolve to the base game's family.
     if (rb) {
