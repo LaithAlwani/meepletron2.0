@@ -97,6 +97,11 @@ export default defineSchema({
     // BoardGameGeek id (from the original import) + cached BGG stats.
     bggId: v.optional(v.string()),
     bgg: v.optional(bggStatsValidator),
+    // When we last *attempted* a stats refresh, success or not. Distinct from
+    // bgg.fetchedAt, which records the last *success* and stays the display
+    // value: a game whose fetch keeps failing must still back off, or it would
+    // occupy a refresh slot every hour and starve the rest of the catalogue.
+    bggCheckedAt: v.optional(v.number()),
     // Auto-created by a user's BGG collection sync to hold a game we don't
     // curate. Stubs carry a title/year/thumbnail and nothing else, and are
     // excluded from every catalogue surface (browse, search, sitemap). Cleared

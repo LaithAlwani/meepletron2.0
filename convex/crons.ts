@@ -36,6 +36,15 @@ crons.daily(
   {},
 );
 
+// Refresh the stalest games' BGG stats. This replaced a public action the game
+// detail page called on view — see convex/bgg.ts:refreshOne.
+crons.cron(
+  "refresh stale bgg stats",
+  "0 * * * *",
+  internal.bgg.refreshStale,
+  {},
+);
+
 // Fail BGG sync jobs whose action died, so the UI stops showing a spinner that
 // will never resolve. (`crons.cron` rather than the `crons.daily` above — the
 // Convex guidelines allow only `interval`/`cron`; the existing four predate it.)

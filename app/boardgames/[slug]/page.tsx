@@ -25,7 +25,6 @@ import { SimilarGames } from "@/components/boardgames/SimilarGames";
 import { InlineAsk } from "@/components/boardgames/InlineAsk";
 import { FaqAccordion } from "@/components/boardgames/FaqAccordion";
 import { BggStats } from "@/components/boardgames/BggStats";
-import { BggAutoRefresh } from "@/components/boardgames/BggAutoRefresh";
 import {
   ComponentsList,
   RemindersList,
@@ -416,11 +415,6 @@ export default function GameDetailPage({
         />
 
         <BggStats bgg={game.bgg} />
-        <BggAutoRefresh
-          gameId={gameId}
-          bggId={game.bggId}
-          fetchedAt={game.bgg?.fetchedAt}
-        />
 
         <FaqAccordion gameId={gameId} />
 

@@ -1,12 +1,29 @@
 import { v, ConvexError } from "convex/values";
-import { action, internalMutation, internalQuery } from "./_generated/server";
+import {
+  action,
+  internalAction,
+  internalMutation,
+  internalQuery,
+} from "./_generated/server";
 import { internal } from "./_generated/api";
 import { bggStatsValidator } from "./lib/bggStats";
 
 export const setBggStats = internalMutation({
   args: { gameId: v.id("games"), bgg: bggStatsValidator },
   handler: async (ctx, { gameId, bgg }) => {
-    await ctx.db.patch("games", gameId, { bgg });
+    await ctx.db.patch("games", gameId, { bgg, bggCheckedAt: Date.now() });
+  },
+});
+
+/**
+ * Record that we tried and got nothing usable. Without this a game whose fetch
+ * always fails would stay "never refreshed" forever and take a slot in every
+ * single cron run.
+ */
+export const markChecked = internalMutation({
+  args: { gameId: v.id("games") },
+  handler: async (ctx, { gameId }) => {
+    await ctx.db.patch("games", gameId, { bggCheckedAt: Date.now() });
   },
 });
 
@@ -132,12 +149,17 @@ export const refreshTarget = internalQuery({
 });
 
 /**
- * Lazy, TTL-gated refresh of one game's BGG stats — fired when its detail page
- * is viewed and the cache is stale. No-op when fresh, when the game has no
- * bggId, or when the token isn't configured. A failed fetch leaves the cached
- * value untouched (the DB is always the read source).
+ * TTL-gated refresh of one game's BGG stats.
+ *
+ * Internal on purpose. This used to be a public action called from the game
+ * detail page, which meant anyone could drive unlimited Convex invocations and
+ * BGG fetches through it with an arbitrary gameId. It's now reachable only via
+ * the hourly `refreshStale` cron below.
+ *
+ * A failed fetch leaves the cached stats untouched — the DB is always the read
+ * source — but still stamps `bggCheckedAt` so the game backs off.
  */
-export const refreshOne = action({
+export const refreshOne = internalAction({
   args: { gameId: v.id("games") },
   handler: async (ctx, { gameId }): Promise<void> => {
     const token = process.env.BGG_API_TOKEN;
@@ -157,16 +179,78 @@ export const refreshOne = action({
           },
         },
       );
-      if (!res.ok) return;
-      const xml = await res.text();
+      const xml = res.ok ? await res.text() : "";
       const block = xml.match(/<item [\s\S]*?<\/item>/)?.[0];
-      if (!block) return;
+      if (!block) {
+        await ctx.runMutation(internal.bgg.markChecked, { gameId });
+        return;
+      }
       await ctx.runMutation(internal.bgg.setBggStats, {
         gameId,
         bgg: { ...parseItem(block), fetchedAt: Date.now() },
       });
     } catch {
-      // Leave the cached stats as-is.
+      // Leave the cached stats as-is, but don't retry this game every hour.
+      await ctx.runMutation(internal.bgg.markChecked, { gameId });
+    }
+  },
+});
+
+/** How many games one cron run refreshes. The ceiling on BGG traffic per hour. */
+const REFRESH_BATCH = 20;
+/** Gap between fetches within a run, so a batch isn't a burst. */
+const REFRESH_STAGGER_MS = 3000;
+
+/**
+ * Games most overdue for a stats refresh, oldest-checked first.
+ *
+ * Reads curated games through the `by_isStub_and_isExpansion` index using an
+ * `isStub` prefix. Excluding stubs is load-bearing: collection sync auto-creates
+ * stub games *with a bggId set*, so without the filter thousands of them would
+ * flood the queue and starve the real catalogue.
+ *
+ * This scans the curated games (~a few hundred). If that grows past a few
+ * thousand it wants its own index rather than a scan.
+ */
+export const dueForRefresh = internalQuery({
+  args: { limit: v.number() },
+  handler: async (ctx, { limit }) => {
+    const now = Date.now();
+    const games = await ctx.db
+      .query("games")
+      .withIndex("by_isStub_and_isExpansion", (q) => q.eq("isStub", false))
+      .take(2000);
+
+    return games
+      .filter(
+        (g) =>
+          !!g.bggId &&
+          (!g.bggCheckedAt || now - g.bggCheckedAt >= REFRESH_TTL_MS),
+      )
+      // Never-checked games sort first (0), then oldest check.
+      .sort((a, b) => (a.bggCheckedAt ?? 0) - (b.bggCheckedAt ?? 0))
+      .slice(0, limit)
+      .map((g) => g._id);
+  },
+});
+
+/**
+ * Cron entry point: refresh the stalest games. Replaces the old
+ * viewed-page-triggers-a-refresh path, so games nobody opens stay fresh too.
+ */
+export const refreshStale = internalAction({
+  args: {},
+  handler: async (ctx): Promise<void> => {
+    if (!process.env.BGG_API_TOKEN) return;
+    const gameIds = await ctx.runQuery(internal.bgg.dueForRefresh, {
+      limit: REFRESH_BATCH,
+    });
+    for (const [i, gameId] of gameIds.entries()) {
+      await ctx.scheduler.runAfter(
+        i * REFRESH_STAGGER_MS,
+        internal.bgg.refreshOne,
+        { gameId },
+      );
     }
   },
 });
