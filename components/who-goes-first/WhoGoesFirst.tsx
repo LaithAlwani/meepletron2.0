@@ -38,6 +38,9 @@ export function WhoGoesFirst() {
   // The winner's 1-based position among the fingers that were down when chosen,
   // so it's always within [1, playerCount] (never a running touch tally).
   const [winnerNo, setWinnerNo] = useState(0);
+  // True once the winner's color has spread across the screen — the top bar
+  // flips to white only then, so it isn't white on the still-light background.
+  const [revealed, setRevealed] = useState(false);
   const phase: Phase = winner
     ? "winner"
     : touches.length >= MIN_PLAYERS
@@ -58,6 +61,13 @@ export function WhoGoesFirst() {
   useEffect(() => {
     touchesRef.current = touches;
   }, [touches]);
+
+  // Flip the top bar to white once the color reveal has covered the screen.
+  useEffect(() => {
+    if (!winner) return;
+    const id = setTimeout(() => setRevealed(true), 950);
+    return () => clearTimeout(id);
+  }, [winner]);
 
   // Lock body scroll while the tool is mounted (it owns the whole viewport).
   useEffect(() => {
@@ -95,6 +105,7 @@ export function WhoGoesFirst() {
     setTouches([]);
     setWinner(null);
     setWinnerNo(0);
+    setRevealed(false);
   }, []);
 
   const addTouch = useCallback(
@@ -169,10 +180,13 @@ export function WhoGoesFirst() {
       onPointerUp={removeTouch}
       onPointerCancel={removeTouch}
       onContextMenu={(e) => e.preventDefault()}
-      className="relative h-dvh w-screen touch-none select-none overflow-hidden overscroll-none transition-colors duration-700"
-      style={{ backgroundColor: flooded ? winner!.color : "var(--color-background)" }}
+      className="relative h-dvh w-screen touch-none select-none overflow-hidden overscroll-none bg-background"
     >
-      <style>{`@keyframes wgf-ring { from { stroke-dashoffset: 0 } to { stroke-dashoffset: ${CIRC} } }`}</style>
+      <style>{`
+        @keyframes wgf-ring { from { stroke-dashoffset: 0 } to { stroke-dashoffset: ${CIRC} } }
+        @keyframes wgf-flood { from { transform: translate(-50%, -50%) scale(0.01) } to { transform: translate(-50%, -50%) scale(32) } }
+        @keyframes wgf-fade { from { opacity: 0 } to { opacity: 1 } }
+      `}</style>
 
       {/* Top bar: back · title · live player count */}
       <header className="absolute inset-x-0 top-0 z-30 flex items-center justify-between gap-2 px-3 pt-[calc(env(safe-area-inset-top)+0.75rem)]">
@@ -180,16 +194,16 @@ export function WhoGoesFirst() {
           onClick={() =>
             window.history.length > 1 ? router.back() : router.push("/boardgames")
           }
-          onFlood={flooded}
+          onFlood={revealed}
         />
         <h1
-          className={`font-display text-base font-bold sm:text-lg ${
-            flooded ? "text-white" : "text-foreground"
+          className={`font-display text-base font-bold transition-colors sm:text-lg ${
+            revealed ? "text-white" : "text-foreground"
           }`}
         >
           Who Goes First?
         </h1>
-        <CountPill n={touches.length} onFlood={flooded} />
+        <CountPill n={touches.length} onFlood={revealed} />
       </header>
 
       {/* Centered instruction while waiting for players (crawlable copy). */}
@@ -240,17 +254,37 @@ export function WhoGoesFirst() {
                 />
               )}
             </svg>
-            {/* solid center dot */}
+            {/* solid center dot (1.5×) with a colored glow */}
             <span
-              className="absolute left-1/2 top-1/2 h-14 w-14 -translate-x-1/2 -translate-y-1/2 rounded-full shadow-lg"
-              style={{ backgroundColor: t.color }}
+              className="absolute left-1/2 top-1/2 h-[5.25rem] w-[5.25rem] -translate-x-1/2 -translate-y-1/2 rounded-full"
+              style={{
+                backgroundColor: t.color,
+                boxShadow: `0 0 32px 10px ${t.color}`,
+              }}
             />
           </div>
         ))}
 
-      {/* Winner overlay */}
+      {/* Winner's color paints outward from their finger to fill the screen. */}
       {flooded && (
-        <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-4 px-6 text-center text-white">
+        <div
+          className="pointer-events-none absolute z-10 h-60 w-60 rounded-full"
+          style={{
+            left: winner!.x,
+            top: winner!.y,
+            backgroundColor: winner!.color,
+            transform: "translate(-50%, -50%) scale(0.01)",
+            animation: "wgf-flood 1100ms ease-out forwards",
+          }}
+        />
+      )}
+
+      {/* Winner overlay — fades in once the color has spread a bit. */}
+      {flooded && (
+        <div
+          className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-4 px-6 text-center text-white"
+          style={{ animation: "wgf-fade 500ms ease-out 650ms both" }}
+        >
           <div
             className="flex h-28 w-28 items-center justify-center rounded-full bg-white/25 text-5xl font-black shadow-xl backdrop-blur"
             aria-hidden
