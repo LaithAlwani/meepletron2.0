@@ -16,7 +16,7 @@ export const foldWantIntoWishlist = internalMutation({
       .query("bggCollection")
       .paginate({ numItems: 500, cursor: cursor ?? null });
     for (const r of page.page) {
-      if (!r.wishlist && (r.want || r.preordered)) {
+      if (!r.wishlist && (r.want || r.wantToBuy || r.preordered)) {
         await ctx.db.patch("bggCollection", r._id, { wishlist: true });
       }
     }

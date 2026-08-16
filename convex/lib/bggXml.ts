@@ -169,6 +169,7 @@ export function parseCollectionXml(xml: string): ParsedCollection {
       prevOwned: boolAttr(status, "prevowned") || undefined,
       forTrade: boolAttr(status, "fortrade") || undefined,
       want: boolAttr(status, "want") || undefined,
+      wantToBuy: boolAttr(status, "wanttobuy") || undefined,
       wantToPlay: boolAttr(status, "wanttoplay") || undefined,
       preordered: boolAttr(status, "preordered") || undefined,
       wishlist: boolAttr(status, "wishlist") || undefined,

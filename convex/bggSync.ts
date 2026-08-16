@@ -612,7 +612,11 @@ export const upsertCollectionItems = internalMutation({
         syncedAt: job.runStartedAt,
       };
       const seededWishlist =
-        wishlist || item.want || item.preordered || undefined;
+        wishlist ||
+        item.want ||
+        item.wantToBuy ||
+        item.preordered ||
+        undefined;
       const existing = await ctx.db
         .query("bggCollection")
         .withIndex("by_user_and_bgg_id", (q) =>

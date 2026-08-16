@@ -33,6 +33,7 @@ export const bggCollectionItemValidator = v.object({
   prevOwned: v.optional(v.boolean()),
   forTrade: v.optional(v.boolean()),
   want: v.optional(v.boolean()),
+  wantToBuy: v.optional(v.boolean()),
   wantToPlay: v.optional(v.boolean()),
   preordered: v.optional(v.boolean()),
   wishlist: v.optional(v.boolean()),
