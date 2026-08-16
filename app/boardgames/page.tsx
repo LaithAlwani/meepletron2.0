@@ -6,6 +6,8 @@ import { api } from "@/convex/_generated/api";
 import { Search, List, LayoutGrid } from "lucide-react";
 import { GameCard } from "@/components/boardgames/GameCard";
 import { GameListItem } from "@/components/boardgames/GameListItem";
+import { PreviewCard, PreviewRow } from "@/components/boardgames/PreviewCard";
+import { useBggSearch } from "@/components/boardgames/useBggSearch";
 
 type View = "grid" | "list";
 type TimeFilter = "quick" | "standard" | "epic";
@@ -22,9 +24,9 @@ const EMPTY_FILTERS: Filters = { players: null, time: null, hasExpansions: false
 // Persisted per browser tab so returning from a detail page lands you back where
 // you were — same filters/search, same number of pages loaded, same scroll.
 const SCROLL_KEY = "boardgames-list-state";
+// Note: the search term is deliberately NOT persisted — resuming a stale search
+// on every return to the library was surprising. Only filters + scroll resume.
 type SavedListState = {
-  term: string;
-  debounced: string;
   filters: Filters;
   count: number;
   scrollY: number;
@@ -90,8 +92,6 @@ export default function BoardgamesPage() {
       const raw = sessionStorage.getItem(SCROLL_KEY);
       if (!raw) return;
       const s = JSON.parse(raw) as SavedListState;
-      if (typeof s.term === "string") setTerm(s.term);
-      if (typeof s.debounced === "string") setDebounced(s.debounced);
       if (s.filters) setFilters(s.filters);
       if (s.count > 0 && s.scrollY > 0) {
         setRestoreTarget({ scrollY: s.scrollY, count: s.count });
@@ -147,6 +147,15 @@ export default function BoardgamesPage() {
   const loadingFirst = active.status === "LoadingFirstPage";
   const results = active.results;
 
+  // Wider search: games we don't have yet, from BoardGameGeek (deduped).
+  const catalogBggIds = new Set(
+    results.map((g) => g.bggId).filter((x): x is string => !!x),
+  );
+  const { results: bggResults, pending: bggPending } = useBggSearch(
+    debounced,
+    catalogBggIds,
+  );
+
   // Auto-load the next page when the sentinel scrolls into view (a bit before,
   // via rootMargin) so paging feels seamless — no button press.
   const sentinelRef = useRef<HTMLDivElement | null>(null);
@@ -184,13 +193,11 @@ export default function BoardgamesPage() {
   // Snapshot the list state whenever we navigate away (the component unmounts on
   // a client-side route change), so a later return can replay it.
   const saveRef = useRef<SavedListState>({
-    term,
-    debounced,
     filters,
     count: results.length,
     scrollY: 0,
   });
-  saveRef.current = { term, debounced, filters, count: results.length, scrollY: 0 };
+  saveRef.current = { filters, count: results.length, scrollY: 0 };
   useEffect(() => {
     return () => {
       // Don't clobber a good snapshot with an empty one (e.g. StrictMode's
@@ -329,31 +336,30 @@ export default function BoardgamesPage() {
             ))}
           </div>
         )
-      ) : results.length === 0 ? (
-        <div className="flex flex-col items-center gap-2 py-20 text-center">
-          <p className="font-semibold">
-            {searching
-              ? `No results for “${debounced}”`
-              : "No games match these filters"}
-          </p>
-          {searching ? (
-            <p className="text-sm text-subtle">
-              Want this game added?{" "}
-              <a href="/#contact" className="text-accent underline">
-                Request it
-              </a>
+      ) : results.length === 0 && bggResults.length === 0 ? (
+        bggPending ? (
+          // Still checking the wider database — don't flash "no results" yet.
+          <div className="flex flex-col items-center gap-3 py-20 text-center">
+            <span className="h-6 w-6 animate-spin rounded-full border-2 border-accent border-t-transparent" />
+            <p className="text-sm text-muted">Searching…</p>
+          </div>
+        ) : (
+          <div className="flex flex-col items-center gap-2 py-20 text-center">
+            <p className="font-semibold">
+              {searching
+                ? `No results for “${debounced}”`
+                : "No games match these filters"}
             </p>
-          ) : (
-            activeFilterCount > 0 && (
+            {!searching && activeFilterCount > 0 && (
               <button
                 onClick={() => setFilters(EMPTY_FILTERS)}
                 className="text-sm text-accent hover:underline"
               >
                 Clear filters
               </button>
-            )
-          )}
-        </div>
+            )}
+          </div>
+        )
       ) : (
         <>
           {view === "list" ? (
@@ -361,11 +367,17 @@ export default function BoardgamesPage() {
               {results.map((g) => (
                 <GameListItem key={g._id} game={g} />
               ))}
+              {bggResults.map((h) => (
+                <PreviewRow key={h.bggId} hit={h} />
+              ))}
             </div>
           ) : (
             <div className={gridClass}>
               {results.map((g, i) => (
                 <GameCard key={g._id} game={g} index={i} />
+              ))}
+              {bggResults.map((h, i) => (
+                <PreviewCard key={h.bggId} hit={h} index={results.length + i} />
               ))}
             </div>
           )}

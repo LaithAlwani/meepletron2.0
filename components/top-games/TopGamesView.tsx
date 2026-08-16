@@ -15,6 +15,8 @@ import {
   Crown,
   List,
   Sparkles,
+  Play,
+  Pause,
 } from "lucide-react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
@@ -285,7 +287,7 @@ function PodiumCard({ item }: { item: Item }) {
     <div
       className={cn(
         "relative flex flex-col items-center justify-center overflow-hidden rounded-3xl p-5 text-center sm:p-6",
-        first ? "min-h-64 sm:min-h-76" : "min-h-48 sm:min-h-56",
+        first ? "min-h-72 sm:min-h-80" : "min-h-56 sm:min-h-64",
       )}
       style={{
         boxShadow: `inset 0 0 0 2px ${medal.color}, 0 18px 50px -18px rgba(${medal.glow},0.7)`,
@@ -302,9 +304,29 @@ function PodiumCard({ item }: { item: Item }) {
       ) : (
         <div className="absolute inset-0 bg-surface-2" />
       )}
-      <div className="absolute inset-0 bg-linear-to-t from-black/95 via-black/75 to-black/40" />
+      <div className="absolute inset-0 bg-linear-to-t from-black/95 via-black/70 to-black/45" />
 
-      {/* Centered stack. */}
+      {/* Rank number, pinned top-left. */}
+      <div className="absolute left-4 top-3 z-10 flex items-center gap-1.5 sm:left-5 sm:top-4">
+        {first && (
+          <Crown
+            className="h-6 w-6 sm:h-8 sm:w-8"
+            style={{ color: medal.color, filter: "drop-shadow(0 2px 6px rgba(0,0,0,0.7))" }}
+          />
+        )}
+        <span
+          className="font-display font-black leading-none tabular-nums"
+          style={{
+            color: medal.color,
+            fontSize: first ? "clamp(2.5rem,10vw,4.5rem)" : "clamp(2rem,7vw,3.25rem)",
+            textShadow: `0 2px 16px rgba(0,0,0,0.75), 0 0 24px rgba(${medal.glow},0.45)`,
+          }}
+        >
+          {item.rank}
+        </span>
+      </div>
+
+      {/* Big centered cover + title. */}
       <div className="relative flex flex-col items-center gap-3">
         {cover && (
           // eslint-disable-next-line @next/next/no-img-element
@@ -313,34 +335,14 @@ function PodiumCard({ item }: { item: Item }) {
             alt=""
             className={cn(
               "rounded-2xl object-cover shadow-2xl ring-1 ring-white/25",
-              first ? "h-28 w-28 sm:h-40 sm:w-40" : "h-20 w-20 sm:h-32 sm:w-32",
+              first ? "h-40 w-40 sm:h-52 sm:w-52" : "h-28 w-28 sm:h-40 sm:w-40",
             )}
           />
         )}
         <div className="min-w-0">
-          <div className="flex items-center justify-center gap-2">
-            {first && (
-              <Crown
-                className="h-6 w-6 sm:h-8 sm:w-8"
-                style={{ color: medal.color, filter: "drop-shadow(0 2px 6px rgba(0,0,0,0.6))" }}
-              />
-            )}
-            <span
-              className="font-display font-black leading-none tabular-nums"
-              style={{
-                color: medal.color,
-                fontSize: first
-                  ? "clamp(2.75rem,11vw,5rem)"
-                  : "clamp(2.25rem,8vw,3.75rem)",
-                textShadow: `0 2px 18px rgba(0,0,0,0.6), 0 0 24px rgba(${medal.glow},0.45)`,
-              }}
-            >
-              {item.rank}
-            </span>
-          </div>
           <h3
             className={cn(
-              "font-display mt-1 font-extrabold wrap-break-word text-white",
+              "font-display font-extrabold wrap-break-word text-white",
               first ? "text-2xl sm:text-3xl" : "text-xl sm:text-2xl",
             )}
             style={{ textShadow: shadow }}
@@ -368,9 +370,78 @@ function PodiumCard({ item }: { item: Item }) {
   );
 }
 
+/**
+ * Gentle auto-scroll for the countdown; any manual scroll pauses it. Stops once
+ * `stopRef` (the #1 card) is centred in the viewport, or the page bottom.
+ */
+function useAutoScroll(stopRef: React.RefObject<HTMLElement | null>): {
+  playing: boolean;
+  toggle: () => void;
+} {
+  const [playing, setPlaying] = useState(() => {
+    if (typeof window === "undefined") return true;
+    return !window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+  });
+
+  // The animation loop.
+  useEffect(() => {
+    if (!playing) return;
+    let raf = 0;
+    let last = 0;
+    let target = window.scrollY;
+    const SPEED = 90; // px/second
+    const tick = (t: number) => {
+      if (last) {
+        target += (SPEED * (t - last)) / 1000;
+        window.scrollTo(0, target);
+        // Stop when #1 has risen to the middle of the screen…
+        const el = stopRef.current;
+        if (el) {
+          const r = el.getBoundingClientRect();
+          if (r.top + r.height / 2 <= window.innerHeight / 2) {
+            setPlaying(false);
+            return;
+          }
+        }
+        // …or if we somehow reach the very bottom first.
+        if (
+          window.innerHeight + window.scrollY >=
+          document.documentElement.scrollHeight - 2
+        ) {
+          setPlaying(false);
+          return;
+        }
+      }
+      last = t;
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [playing, stopRef]);
+
+  // Any real user input hands control back.
+  useEffect(() => {
+    if (!playing) return;
+    const pause = () => setPlaying(false);
+    const opts = { passive: true } as const;
+    window.addEventListener("wheel", pause, opts);
+    window.addEventListener("touchmove", pause, opts);
+    window.addEventListener("keydown", pause);
+    return () => {
+      window.removeEventListener("wheel", pause);
+      window.removeEventListener("touchmove", pause);
+      window.removeEventListener("keydown", pause);
+    };
+  }, [playing]);
+
+  return { playing, toggle: () => setPlaying((p) => !p) };
+}
+
 function RevealShow({ items }: { items: Item[] }) {
   // Reverse: highest rank first, counting down to #1 (the climax) at the bottom.
   const reversed = [...items].sort((a, b) => b.rank - a.rank);
+  const firstRef = useRef<HTMLDivElement>(null);
+  const auto = useAutoScroll(firstRef);
   return (
     // clip-x so the sideways slide-in never spawns a horizontal scrollbar.
     <div className="space-y-3 overflow-x-clip">
@@ -378,12 +449,33 @@ function RevealShow({ items }: { items: Item[] }) {
         The countdown ↓
       </p>
       {reversed.map((item) => (
-        <Reveal key={item.gameId} from={pickDir(item.gameId)} boom={item.rank <= 3}>
-          {item.rank <= 3 ? <PodiumCard item={item} /> : <RevealRow item={item} />}
-        </Reveal>
+        <div key={item.gameId} ref={item.rank === 1 ? firstRef : undefined}>
+          <Reveal from={pickDir(item.gameId)} boom={item.rank <= 3}>
+            {item.rank <= 3 ? <PodiumCard item={item} /> : <RevealRow item={item} />}
+          </Reveal>
+        </div>
       ))}
-      {/* Tail room so #1 can scroll up into the reveal zone. */}
+      {/* Tail room so #1 can scroll up to the middle. */}
       <div aria-hidden className="h-[25vh]" />
+
+      {/* Auto-scroll control. */}
+      <button
+        type="button"
+        onClick={auto.toggle}
+        className="fixed bottom-5 right-4 z-30 inline-flex items-center gap-1.5 rounded-full border border-border bg-surface/90 px-3.5 py-2 text-sm font-semibold text-foreground shadow-lg backdrop-blur transition-colors hover:border-accent/50 sm:bottom-6 sm:right-6"
+      >
+        {auto.playing ? (
+          <>
+            <Pause className="h-4 w-4" />
+            Pause
+          </>
+        ) : (
+          <>
+            <Play className="h-4 w-4" />
+            Play
+          </>
+        )}
+      </button>
     </div>
   );
 }

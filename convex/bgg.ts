@@ -7,7 +7,118 @@ import {
 } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { bggStatsValidator } from "./lib/bggStats";
-import { parseItem, parseFullItem } from "./lib/bggThing";
+import { parseItem, parseFullItem, decodeEntities } from "./lib/bggThing";
+
+const BGG_USER_AGENT = "Meepletron/1.0 (board game rules assistant)";
+
+export type BggPreview = {
+  bggId: string;
+  name: string;
+  year: string | null;
+  thumbUrl: string | null;
+  minPlayers: number | null;
+  maxPlayers: number | null;
+  minPlayTime: number | null;
+  maxPlayTime: number | null;
+  rating: number | null;
+};
+
+/**
+ * Search BoardGameGeek by name for the "not in our library yet" results, then
+ * enrich the hits with a cover thumbnail + basic details via a single batched
+ * `/thing` call. Public; returns [] on any failure so search degrades gracefully
+ * to the local catalogue. The full metadata + stored cover happen on import.
+ */
+export const search = action({
+  args: { term: v.string() },
+  handler: async (ctx, { term }): Promise<BggPreview[]> => {
+    const q = term.trim();
+    if (q.length < 2) return [];
+    const token = process.env.BGG_API_TOKEN;
+    if (!token) return [];
+    const headers = {
+      "User-Agent": BGG_USER_AGENT,
+      Authorization: `Bearer ${token}`,
+    };
+    try {
+      // 1) Name search → ids + names.
+      const res = await fetch(
+        `https://boardgamegeek.com/xmlapi2/search?query=${encodeURIComponent(
+          q,
+        )}&type=boardgame,boardgameexpansion`,
+        { headers },
+      );
+      if (!res.ok) return [];
+      const xml = await res.text();
+      const seen = new Set<string>();
+      const found: { bggId: string; name: string; year: string | null }[] = [];
+      for (const m of xml.matchAll(/<item\b[^>]*\bid="(\d+)"[^>]*>([\s\S]*?)<\/item>/g)) {
+        const bggId = m[1];
+        if (seen.has(bggId)) continue;
+        const inner = m[2];
+        const name = inner.match(/<name\b[^>]*\bvalue="([^"]*)"/)?.[1];
+        if (!name) continue;
+        const yearRaw = inner.match(/<yearpublished\b[^>]*\bvalue="([^"]*)"/)?.[1];
+        seen.add(bggId);
+        found.push({
+          bggId,
+          name: decodeEntities(name),
+          year: yearRaw && yearRaw !== "0" ? yearRaw : null,
+        });
+        if (found.length >= 12) break;
+      }
+      if (found.length === 0) return [];
+
+      // 2) One batched /thing call for covers + basic details.
+      const details = new Map<
+        string,
+        Omit<BggPreview, "bggId" | "name" | "year">
+      >();
+      try {
+        const ids = found.map((f) => f.bggId).join(",");
+        const thing = await fetch(
+          `https://boardgamegeek.com/xmlapi2/thing?id=${ids}&stats=1`,
+          { headers },
+        );
+        if (thing.ok) {
+          const thingXml = await thing.text();
+          for (const m of thingXml.matchAll(/<item [\s\S]*?<\/item>/g)) {
+            const block = m[0];
+            const id = block.match(/<item[^>]*\bid="(\d+)"/)?.[1];
+            if (!id) continue;
+            const full = parseFullItem(block);
+            const stats = parseItem(block);
+            const thumb = block.match(/<thumbnail>([^<]+)<\/thumbnail>/)?.[1];
+            details.set(id, {
+              thumbUrl: thumb
+                ? decodeEntities(thumb).trim()
+                : (full.imageUrl ?? null),
+              minPlayers: full.minPlayers ?? null,
+              maxPlayers: full.maxPlayers ?? null,
+              minPlayTime: full.minPlayTime ?? null,
+              maxPlayTime: full.maxPlayTime ?? null,
+              rating: stats.rating ?? null,
+            });
+          }
+        }
+      } catch {
+        // details are best-effort — fall back to name/year only
+      }
+
+      return found.map((f) => ({
+        ...f,
+        thumbUrl: details.get(f.bggId)?.thumbUrl ?? null,
+        minPlayers: details.get(f.bggId)?.minPlayers ?? null,
+        maxPlayers: details.get(f.bggId)?.maxPlayers ?? null,
+        minPlayTime: details.get(f.bggId)?.minPlayTime ?? null,
+        maxPlayTime: details.get(f.bggId)?.maxPlayTime ?? null,
+        rating: details.get(f.bggId)?.rating ?? null,
+      }));
+    } catch {
+      return [];
+    }
+  },
+});
 
 export const setBggStats = internalMutation({
   args: { gameId: v.id("games"), bgg: bggStatsValidator },

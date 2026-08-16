@@ -1,7 +1,7 @@
 "use node";
 
 import { v, ConvexError } from "convex/values";
-import { action, internalAction } from "./_generated/server";
+import { action, internalAction, type ActionCtx } from "./_generated/server";
 import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { PhotonImage, resize, SamplingFilter } from "@cf-wasm/photon/node";
@@ -150,69 +150,132 @@ async function fetchAndStoreCover(
  * Best-effort throughout — any failure stamps `bggCheckedAt` (via markChecked)
  * so the sweep in `bggSync.enrichStubs` backs the game off instead of looping.
  */
+/**
+ * Fetch one game's full `/thing` metadata + stats, store a compressed cover, and
+ * promote the stub to a real catalogue entry via `applyStubEnrichment`. Shared by
+ * the collection-sync sweep and the on-demand import. Best-effort — a failed
+ * fetch stamps `bggCheckedAt` (markChecked) so callers back off / fall back.
+ */
+async function enrichGameFromBgg(
+  ctx: ActionCtx,
+  gameId: Id<"games">,
+  bggId: string,
+): Promise<void> {
+  const token = process.env.BGG_API_TOKEN;
+  if (!token) return;
+
+  let block: string | undefined;
+  try {
+    const res = await fetch(
+      `https://boardgamegeek.com/xmlapi2/thing?id=${bggId}&stats=1`,
+      {
+        headers: {
+          "User-Agent": "Meepletron/1.0 (board game rules assistant)",
+          Authorization: `Bearer ${token}`,
+        },
+      },
+    );
+    if (res.ok) block = (await res.text()).match(/<item [\s\S]*?<\/item>/)?.[0];
+  } catch {
+    // fall through to markChecked
+  }
+  if (!block) {
+    await ctx.runMutation(internal.bgg.markChecked, { gameId });
+    return;
+  }
+
+  // Strip imageUrl — it's fetched here, not a `games` field.
+  const { imageUrl, ...meta } = parseFullItem(block);
+  const bgg = { ...parseItem(block), fetchedAt: Date.now() };
+  const isExpansion = parseItemType(block) === "boardgameexpansion";
+
+  // If this is an expansion, make sure its base game exists and link to it.
+  // The base may not be in the user's collection, so create + enrich it.
+  let parentId: Id<"games"> | undefined;
+  if (isExpansion) {
+    const parents = parseExpansionParents(block);
+    if (parents.length > 0) {
+      const base = parents[0];
+      const { gameId: pid, needsEnrich } = await ctx.runMutation(
+        internal.games.ensureStubForBgg,
+        { bggId: base.bggId, title: base.name },
+      );
+      parentId = pid;
+      // Fill the base too when it's new or still an unfilled stub.
+      if (needsEnrich) {
+        await ctx.scheduler.runAfter(0, internal.images.enrichSyncedGame, {
+          gameId: pid,
+          bggId: base.bggId,
+        });
+      }
+    }
+  }
+
+  const cover = imageUrl ? await fetchAndStoreCover(ctx, imageUrl) : {};
+
+  await ctx.runMutation(internal.games.applyStubEnrichment, {
+    gameId,
+    meta,
+    bgg,
+    imageId: cover.imageId,
+    thumbnailId: cover.thumbnailId,
+    isExpansion,
+    parentId,
+  });
+}
+
+/** Background enrichment for one stub game created by BGG collection sync. */
 export const enrichSyncedGame = internalAction({
   args: { gameId: v.id("games"), bggId: v.string() },
   handler: async (ctx, { gameId, bggId }) => {
-    const token = process.env.BGG_API_TOKEN;
-    if (!token) return;
+    await enrichGameFromBgg(ctx, gameId, bggId);
+  },
+});
 
-    let block: string | undefined;
-    try {
-      const res = await fetch(
-        `https://boardgamegeek.com/xmlapi2/thing?id=${bggId}&stats=1`,
-        {
-          headers: {
-            "User-Agent": "Meepletron/1.0 (board game rules assistant)",
-            Authorization: `Bearer ${token}`,
-          },
-        },
-      );
-      if (res.ok) block = (await res.text()).match(/<item [\s\S]*?<\/item>/)?.[0];
-    } catch {
-      // fall through to markChecked
-    }
-    if (!block) {
-      await ctx.runMutation(internal.bgg.markChecked, { gameId });
-      return;
+/**
+ * On-demand import of a game the catalogue doesn't have yet, from a BGG id.
+ * Creates the game if needed, fetches its full details + cover, and returns the
+ * slug to route to. Deduped: an already-imported game returns immediately. Open
+ * to everyone (guests included) — the data is canonical BGG data keyed by id.
+ */
+export const importGame = action({
+  args: { bggId: v.string(), title: v.optional(v.string()) },
+  handler: async (
+    ctx,
+    { bggId, title },
+  ): Promise<{ slug: string; gameId: Id<"games">; created: boolean }> => {
+    const id = bggId.trim();
+    if (!/^\d+$/.test(id)) {
+      throw new ConvexError("That doesn't look like a valid game.");
     }
 
-    // Strip imageUrl — it's fetched here, not a `games` field.
-    const { imageUrl, ...meta } = parseFullItem(block);
-    const bgg = { ...parseItem(block), fetchedAt: Date.now() };
-    const isExpansion = parseItemType(block) === "boardgameexpansion";
-
-    // If this is an expansion, make sure its base game exists and link to it.
-    // The base may not be in the user's collection, so create + enrich it.
-    let parentId: Id<"games"> | undefined;
-    if (isExpansion) {
-      const parents = parseExpansionParents(block);
-      if (parents.length > 0) {
-        const base = parents[0];
-        const { gameId: pid, needsEnrich } = await ctx.runMutation(
-          internal.games.ensureStubForBgg,
-          { bggId: base.bggId, title: base.name },
-        );
-        parentId = pid;
-        // Fill the base too when it's new or still an unfilled stub.
-        if (needsEnrich) {
-          await ctx.scheduler.runAfter(0, internal.images.enrichSyncedGame, {
-            gameId: pid,
-            bggId: base.bggId,
-          });
-        }
-      }
-    }
-
-    const cover = imageUrl ? await fetchAndStoreCover(ctx, imageUrl) : {};
-
-    await ctx.runMutation(internal.games.applyStubEnrichment, {
-      gameId,
-      meta,
-      bgg,
-      imageId: cover.imageId,
-      thumbnailId: cover.thumbnailId,
-      isExpansion,
-      parentId,
+    const existing = await ctx.runQuery(internal.games.gameByBggId, {
+      bggId: id,
     });
+    if (existing && !existing.isStub) {
+      return { slug: existing.slug, gameId: existing._id, created: false };
+    }
+
+    let gameId: Id<"games">;
+    let created = false;
+    if (existing) {
+      gameId = existing._id;
+    } else {
+      const stub = await ctx.runMutation(internal.games.ensureStubForBgg, {
+        bggId: id,
+        title: (title ?? "").trim() || "New game",
+      });
+      gameId = stub.gameId;
+      created = true;
+    }
+
+    // Await full enrichment so the detail page we route to already has everything.
+    await enrichGameFromBgg(ctx, gameId, id);
+
+    const after = await ctx.runQuery(internal.games.gameByBggId, { bggId: id });
+    if (!after) {
+      throw new ConvexError("Couldn't set up that game. Please try again.");
+    }
+    return { slug: after.slug, gameId: after._id, created };
   },
 });

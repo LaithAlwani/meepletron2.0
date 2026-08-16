@@ -169,8 +169,8 @@ function CreateForm({ lists }: { lists: ListRow[] }) {
   return (
     <div className="rounded-2xl border border-border bg-surface p-4">
       <h2 className="font-display mb-3 font-bold">Start a new list</h2>
-      <div className="flex flex-wrap items-end gap-x-5 gap-y-4">
-        <div>
+      <div className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-end">
+        <div className="min-w-0">
           <label className={LABEL}>List size</label>
           <SizeControl size={size} onChange={setSize} />
         </div>
@@ -181,7 +181,7 @@ function CreateForm({ lists }: { lists: ListRow[] }) {
         <button
           onClick={onCreate}
           disabled={busy}
-          className={buttonClasses("primary", "md")}
+          className={buttonClasses("primary", "md", "w-full sm:w-auto")}
         >
           <Plus className="h-4 w-4" />
           Create
@@ -211,7 +211,7 @@ function SizeControl({
   onChange: (n: number) => void;
 }) {
   return (
-    <div className={cn(TRACK, "gap-0.5")}>
+    <div className="flex w-full items-center gap-0.5 rounded-xl border border-border bg-surface-2 p-1 sm:inline-flex sm:w-auto">
       {PRESETS.map((p) => {
         const active = size === p;
         return (
@@ -221,7 +221,7 @@ function SizeControl({
             onClick={() => onChange(p)}
             aria-pressed={active}
             className={cn(
-              "h-9 min-w-11 rounded-lg px-2.5 text-sm font-bold tabular-nums transition-all",
+              "h-9 flex-1 rounded-lg px-2.5 text-sm font-bold tabular-nums transition-all sm:min-w-11 sm:flex-none",
               active
                 ? "bg-accent text-accent-foreground shadow-sm"
                 : "text-muted hover:bg-surface hover:text-foreground",
@@ -290,8 +290,8 @@ function Community() {
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-end gap-x-5 gap-y-4 rounded-2xl border border-border bg-surface p-4">
-        <div>
+      <div className="flex flex-col gap-4 rounded-2xl border border-border bg-surface p-4 sm:flex-row sm:flex-wrap sm:items-end">
+        <div className="min-w-0">
           <label className={LABEL}>List size</label>
           <SizeControl size={size} onChange={setSize} />
         </div>

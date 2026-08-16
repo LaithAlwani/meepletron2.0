@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { useMutation } from "convex/react";
+import { useMutation, useAction } from "convex/react";
 import { GripVertical, X, Search, Plus, Check, Star } from "lucide-react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
@@ -180,9 +180,9 @@ export function TopGamesEditor({
   }
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[1fr_20rem]">
+    <div className="flex flex-col gap-6 lg:grid lg:grid-cols-[1fr_20rem]">
       {/* Ranked list */}
-      <div className="min-w-0">
+      <div className="order-2 min-w-0 lg:order-1">
         <div className="mb-4 flex flex-wrap items-center gap-3">
           <Input
             value={name}
@@ -190,7 +190,7 @@ export function TopGamesEditor({
             onBlur={saveName}
             onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
             placeholder={defaultName}
-            className="h-10 max-w-xs flex-1"
+            className="h-10 w-full sm:w-auto sm:max-w-xs sm:flex-1"
             aria-label="List name"
           />
           <span className="text-sm font-semibold tabular-nums text-muted">
@@ -215,7 +215,7 @@ export function TopGamesEditor({
           <div className="rounded-2xl border border-dashed border-border p-10 text-center text-muted">
             <p className="font-medium">No games yet.</p>
             <p className="mt-1 text-sm">
-              Search on the right and tap a game to add it, then drag to rank.
+              Find games with the search, then drag to rank.
             </p>
           </div>
         ) : (
@@ -349,10 +349,43 @@ function AddPanel({
     imageUrl: string | null;
   }) => void;
 }) {
-  const { term, setTerm, results, status, loadMore } = useGameSearch(20);
+  const { term, setTerm, results, status, loadMore, bggResults, bggPending } =
+    useGameSearch(20);
+  const importGame = useAction(api.images.importGame);
+  const toast = useToast();
+  const [importingId, setImportingId] = useState<string | null>(null);
+
+  async function addFromBgg(h: {
+    bggId: string;
+    name: string;
+    year: string | null;
+  }) {
+    if (atCap) {
+      toast(`That's the maximum number of games.`, "info");
+      return;
+    }
+    setImportingId(h.bggId);
+    try {
+      const { gameId, slug } = await importGame({
+        bggId: h.bggId,
+        title: h.name,
+      });
+      onAdd({
+        _id: gameId,
+        title: h.name,
+        slug,
+        thumbnailUrl: null,
+        imageUrl: null,
+      });
+    } catch (e) {
+      toast(e instanceof Error ? e.message : "Couldn't add that game.", "error");
+    } finally {
+      setImportingId(null);
+    }
+  }
 
   return (
-    <div className="lg:sticky lg:top-20 lg:self-start">
+    <div className="order-1 min-w-0 lg:order-2 lg:sticky lg:top-20 lg:self-start">
       <div className="rounded-2xl border border-border bg-surface p-3">
         <div className="relative">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-subtle" />
@@ -412,11 +445,44 @@ function AddPanel({
               </button>
             </li>
           )}
-          {results.length === 0 && status !== "LoadingFirstPage" && (
-            <li className="px-2 py-6 text-center text-sm text-subtle">
-              No games found.
-            </li>
-          )}
+
+          {/* Games we don't have yet — imported (and saved) on click. */}
+          {bggResults.map((h) => {
+            const busy = importingId === h.bggId;
+            return (
+              <li key={h.bggId}>
+                <button
+                  onClick={() => addFromBgg(h)}
+                  disabled={busy || atCap || importingId != null}
+                  className={cn(
+                    "flex w-full items-center gap-2 rounded-xl p-1.5 text-left transition-colors",
+                    atCap ? "opacity-50" : "hover:bg-surface-2",
+                  )}
+                >
+                  <Thumb url={h.thumbUrl} className="h-9 w-9" />
+                  <span className="min-w-0 flex-1 truncate text-sm font-medium">
+                    {h.name}
+                    {h.year ? (
+                      <span className="ml-1 text-xs text-subtle">{h.year}</span>
+                    ) : null}
+                  </span>
+                  {busy ? (
+                    <span className="h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-accent border-t-transparent" />
+                  ) : (
+                    <Plus className="h-4 w-4 shrink-0 text-subtle" />
+                  )}
+                </button>
+              </li>
+            );
+          })}
+
+          {results.length === 0 &&
+            bggResults.length === 0 &&
+            status !== "LoadingFirstPage" && (
+              <li className="px-2 py-6 text-center text-sm text-subtle">
+                {bggPending ? "Searching…" : "No games found."}
+              </li>
+            )}
         </ul>
       </div>
     </div>

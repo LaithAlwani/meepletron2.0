@@ -84,9 +84,17 @@ export const searchPaginated = query({
         q.search("searchText", trimmed).eq("isExpansion", false).eq("isStub", false),
       )
       .paginate(paginationOpts);
+    // The full-text index is typo-tolerant, which for short queries drags in
+    // unrelated games (e.g. "wall" → "ball"). Keep only rows that actually
+    // contain every typed term (in the title/designers/publishers/… blob).
+    const terms = trimmed.toLowerCase().split(/\s+/).filter(Boolean);
+    const relevant = result.page.filter((g) => {
+      const hay = (g.searchText ?? g.title).toLowerCase();
+      return terms.every((t) => hay.includes(t));
+    });
     return {
       ...result,
-      page: await Promise.all(result.page.map((g) => withMedia(ctx, g))),
+      page: await Promise.all(relevant.map((g) => withMedia(ctx, g))),
     };
   },
 });
@@ -702,6 +710,18 @@ export const ensureStubForBgg = internalMutation({
       gameMechanics: [],
     });
     return { gameId, needsEnrich: true };
+  },
+});
+
+/** Minimal lookup by BGG id — used by the on-demand import to dedupe + resolve slug. */
+export const gameByBggId = internalQuery({
+  args: { bggId: v.string() },
+  handler: async (ctx, { bggId }) => {
+    const g = await ctx.db
+      .query("games")
+      .withIndex("by_bgg_id", (q) => q.eq("bggId", bggId))
+      .first();
+    return g ? { _id: g._id, slug: g.slug, isStub: g.isStub === true } : null;
   },
 });
 
