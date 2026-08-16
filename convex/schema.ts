@@ -492,4 +492,30 @@ export default defineSchema({
     .index("by_user_and_play_id", ["userId", "playId"]) // idempotent upsert key
     .index("by_user_and_date", ["userId", "date"])
     .index("by_user_and_bgg_id", ["userId", "bggId"]),
+
+  // A user's ranked "Top N games" list for a given year. Entries are a bounded
+  // (≤ ~250) inline array — array index = rank − 1 — so a drag-reorder is one
+  // cheap patch and a finalized list is a self-contained snapshot (the cached
+  // `title` keeps history/aggregates readable even if a game is later deleted).
+  // Identity is (userId, size, year): at most one row per triple.
+  topGamesLists: defineTable({
+    userId: v.id("users"),
+    size: v.number(), // preset 10/25/50/100 or a custom int (3..250)
+    year: v.number(), // the year this list represents
+    title: v.optional(v.string()), // custom name; default "Top {size} · {year}"
+    status: v.union(v.literal("draft"), v.literal("finalized")),
+    // public ⇒ finalized only; reopening to draft forces this back to private.
+    visibility: v.union(v.literal("private"), v.literal("public")),
+    entries: v.array(
+      v.object({ gameId: v.id("games"), title: v.string() }),
+    ),
+    finalizedAt: v.optional(v.number()),
+    updatedAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_user_and_size", ["userId", "size"]) // owner history per size
+    .index("by_user_size_year", ["userId", "size", "year"]) // uniqueness + comparison
+    .index("by_user_and_status", ["userId", "status"])
+    // Community roll-up + public browse across all users for a size/year.
+    .index("by_visibility_size_year", ["visibility", "size", "year"]),
 });

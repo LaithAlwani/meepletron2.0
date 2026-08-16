@@ -14,6 +14,7 @@ import {
   Scissors,
   MessageCircle,
   Bookmark,
+  Trophy,
   LogIn,
 } from "lucide-react";
 import { api } from "@/convex/_generated/api";
@@ -24,6 +25,7 @@ import { cn } from "@/lib/cn";
 const NAV = [
   { href: "/boardgames", label: "Library", icon: LayoutGrid },
   { href: "/tuckbox", label: "Tuckbox", icon: Scissors },
+  { href: "/top-games", label: "Top Games", icon: Trophy },
   { href: "/chats", label: "Chats", icon: MessageCircle },
   { href: "/collection", label: "Collection", icon: Bookmark },
 ];

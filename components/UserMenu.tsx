@@ -5,6 +5,7 @@ import Link from "next/link";
 import {
   User,
   Scissors,
+  Trophy,
   Settings,
   Shield,
   Hand,
@@ -54,6 +55,7 @@ export function UserMenu({
   }[] = [
     { href: "/profile", label: "Profile", icon: User, bottomNav: true },
     { href: "/tuckbox", label: "Tuckbox", icon: Scissors, headerNav: true },
+    { href: "/top-games", label: "Top Games", icon: Trophy, headerNav: true },
     { href: "/who-goes-first", label: "First Player", icon: Hand, touchOnly: true },
     { href: "/settings", label: "Settings", icon: Settings },
     ...(isAdmin
