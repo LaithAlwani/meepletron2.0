@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { MessageCircle } from "lucide-react";
 import {
   useQuery,
   usePaginatedQuery,
@@ -11,31 +10,32 @@ import {
   AuthLoading,
 } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { MediaRow } from "@/components/boardgames/MediaRow";
+import { GameCard } from "@/components/boardgames/GameCard";
 import { buttonClasses } from "@/components/ui/Button";
-import { Skeleton } from "@/components/ui/Surface";
 
 type Filter = "owned" | "wishlist" | "all";
 
 const FILTERS: { value: Filter; label: string }[] = [
+  { value: "all", label: "All" },
   { value: "owned", label: "Owned" },
   { value: "wishlist", label: "Wishlist" },
-  { value: "all", label: "All" },
 ];
+
+const gridClass = "grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4";
 
 export default function CollectionPage() {
   return (
-    <div className="mx-auto max-w-3xl px-4 py-8">
+    <div className="mx-auto max-w-6xl px-4 py-8">
       <h1 className="font-display mb-5 text-3xl font-extrabold tracking-tight">
         Your collection
       </h1>
       <AuthLoading>
-        <RowSkeleton />
+        <CardSkeleton />
       </AuthLoading>
       <Unauthenticated>
         <div className="rounded-2xl border border-border bg-surface p-6 text-center">
           <p className="text-sm text-muted">
-            Sign in to sync your BoardGameGeek collection.
+            Sign in to build your collection and sync from BoardGameGeek.
           </p>
           <Link href="/auth" className={`mt-4 ${buttonClasses("primary", "sm")}`}>
             Sign in
@@ -49,19 +49,16 @@ export default function CollectionPage() {
   );
 }
 
-function RowSkeleton() {
+function CardSkeleton() {
   return (
-    <ul className="space-y-3">
-      {Array.from({ length: 5 }).map((_, i) => (
-        <li
+    <div className={gridClass}>
+      {Array.from({ length: 8 }).map((_, i) => (
+        <div
           key={i}
-          className="flex items-center gap-3 rounded-2xl border border-border bg-surface p-3"
-        >
-          <Skeleton className="h-14 w-14 shrink-0 rounded-xl" />
-          <Skeleton className="h-4 flex-1" />
-        </li>
+          className="aspect-4/3 animate-pulse rounded-2xl bg-surface-2"
+        />
       ))}
-    </ul>
+    </div>
   );
 }
 
@@ -72,7 +69,7 @@ function CollectionBody() {
   const { results, status, loadMore } = usePaginatedQuery(
     api.bggSync.myCollection,
     { filter },
-    { initialNumItems: 30 },
+    { initialNumItems: 24 },
   );
 
   const job = jobs?.find((j) => j.kind === "collection");
@@ -115,9 +112,13 @@ function CollectionBody() {
 
       {syncing && (
         <p className="mb-4 rounded-xl border border-border bg-surface px-4 py-3 text-sm text-muted">
-          {job.status === "waiting"
-            ? "BoardGameGeek is preparing your collection — this can take a minute."
-            : `Syncing… ${job.processed} games so far.`}
+          {job.status === "enriching"
+            ? `Adding games to your library… ${job.enrichProcessed ?? 0}${
+                job.enrichTotal != null ? ` / ${job.enrichTotal}` : ""
+              }`
+            : job.status === "waiting"
+              ? "BoardGameGeek is preparing your collection — this can take a minute."
+              : `Syncing… ${job.processed} games so far.`}
         </p>
       )}
       {job?.status === "error" && job.error && (
@@ -127,7 +128,7 @@ function CollectionBody() {
       )}
 
       {status === "LoadingFirstPage" ? (
-        <RowSkeleton />
+        <CardSkeleton />
       ) : results.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-border p-10 text-center text-muted">
           <p className="font-medium">
@@ -145,40 +146,14 @@ function CollectionBody() {
         </div>
       ) : (
         <>
-          <ul className="space-y-3">
-            {results.map((row) => (
-              <MediaRow
-                key={row._id}
-                href={row.slug ? `/boardgames/${row.slug}` : undefined}
-                thumbUrl={row.thumbnailUrl}
-                title={row.title}
-                subtitle={
-                  [
-                    row.year,
-                    row.numPlays ? `${row.numPlays} plays` : null,
-                    row.isExpansion ? "Expansion" : null,
-                  ]
-                    .filter(Boolean)
-                    .join(" · ") || null
-                }
-                meta={row.userRating ? `★ ${row.userRating}` : undefined}
-                trailing={
-                  row.slug ? (
-                    <Link
-                      href={`/boardgames/${row.slug}/chat`}
-                      className="flex shrink-0 items-center gap-1.5 rounded-xl border border-border px-3.5 py-2 text-xs font-semibold text-accent transition-colors hover:bg-surface-2"
-                    >
-                      <MessageCircle className="h-4 w-4" />
-                      Chat
-                    </Link>
-                  ) : undefined
-                }
-              />
+          <div className={gridClass}>
+            {results.map((game, i) => (
+              <GameCard key={game._id} game={game} index={i} />
             ))}
-          </ul>
+          </div>
           {status === "CanLoadMore" && (
             <button
-              onClick={() => loadMore(30)}
+              onClick={() => loadMore(24)}
               className={`mt-4 w-full ${buttonClasses("ghost", "md")}`}
             >
               Load more

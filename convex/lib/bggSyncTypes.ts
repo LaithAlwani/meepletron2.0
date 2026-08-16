@@ -27,12 +27,14 @@ export const bggCollectionItemValidator = v.object({
   thumbnailUrl: v.optional(v.string()),
   imageUrl: v.optional(v.string()),
   isExpansion: v.boolean(),
-  // <status/> flags
+  // <status/> flags. All kept raw so tabs can split them out later; want +
+  // preordered are also folded into `wishlist` on import (see upsertCollectionItems).
   own: v.boolean(),
   prevOwned: v.optional(v.boolean()),
   forTrade: v.optional(v.boolean()),
   want: v.optional(v.boolean()),
   wantToPlay: v.optional(v.boolean()),
+  preordered: v.optional(v.boolean()),
   wishlist: v.optional(v.boolean()),
   // THEIR rating and play count, not the global average.
   userRating: v.optional(v.number()),

@@ -298,36 +298,31 @@ export const myCollection = query({
     }
 
     const result = await q.paginate(paginationOpts);
-    const page = await Promise.all(
-      result.page.map(async (row) => {
-        // Null-check: a game can be deleted out from under a linked row, and
-        // the denormalized title is exactly the fallback for that.
-        const game = row.gameId
-          ? await ctx.db.get("games", row.gameId)
-          : null;
-        // Prefer the BGG thumbnail URL; for a manually-added curated game fall
-        // back to its stored cover so the row isn't blank.
-        const mediaId = game?.thumbnailId ?? game?.imageId;
-        const thumbnailUrl =
-          row.thumbnailUrl ??
-          (mediaId ? await ctx.storage.getUrl(mediaId) : null);
-        return {
-          _id: row._id,
-          bggId: row.bggId,
-          title: row.title,
-          year: row.year,
-          thumbnailUrl,
-          own: row.own,
-          wishlist: row.wishlist,
-          userRating: row.userRating,
-          numPlays: row.numPlays,
-          isExpansion: row.isExpansion,
-          // Every synced game — stub or curated — links to its own page and is
-          // chattable now that the ingested-rulebook gate is gone.
-          slug: game?.slug ?? null,
-        };
-      }),
-    );
+    // The collection renders library-style GameCards, so return the linked game
+    // + media. Rows whose game was deleted are dropped (nothing to card).
+    const page = (
+      await Promise.all(
+        result.page.map(async (row) => {
+          if (!row.gameId) return null;
+          const game = await ctx.db.get("games", row.gameId);
+          if (!game) return null;
+          const [imageUrl, storedThumb] = await Promise.all([
+            game.imageId
+              ? ctx.storage.getUrl(game.imageId)
+              : Promise.resolve(null),
+            game.thumbnailId
+              ? ctx.storage.getUrl(game.thumbnailId)
+              : Promise.resolve(null),
+          ]);
+          // Fall back to the BGG thumbnail on the row when there's no stored cover.
+          return {
+            ...game,
+            imageUrl,
+            thumbnailUrl: storedThumb ?? row.thumbnailUrl ?? null,
+          };
+        }),
+      )
+    ).flatMap((g) => (g ? [g] : []));
     return { ...result, page };
   },
 });
@@ -589,8 +584,9 @@ export const upsertCollectionItems = internalMutation({
       if (created) createdCount++;
       titles.push(item.title);
       // Own/wishlist are the user's to edit after the first import — never let a
-      // re-sync clobber them. So on an existing row we refresh metadata only; a
-      // brand-new row is seeded with the BGG owned/wishlist status.
+      // re-sync clobber them. So on an existing row we refresh metadata only (the
+      // raw status flags incl. want/preordered still update); a brand-new row is
+      // seeded with the BGG status, folding want + preordered into wishlist.
       const { own, wishlist, ...meta } = item;
       const base = {
         ...meta,
@@ -599,6 +595,8 @@ export const upsertCollectionItems = internalMutation({
         sortTitle: item.title.toLowerCase(),
         syncedAt: job.runStartedAt,
       };
+      const seededWishlist =
+        wishlist || item.want || item.preordered || undefined;
       const existing = await ctx.db
         .query("bggCollection")
         .withIndex("by_user_and_bgg_id", (q) =>
@@ -608,7 +606,11 @@ export const upsertCollectionItems = internalMutation({
       if (existing) {
         await ctx.db.patch("bggCollection", existing._id, base);
       } else {
-        await ctx.db.insert("bggCollection", { ...base, own, wishlist });
+        await ctx.db.insert("bggCollection", {
+          ...base,
+          own,
+          wishlist: seededWishlist,
+        });
       }
     }
 

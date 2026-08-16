@@ -170,6 +170,7 @@ export function parseCollectionXml(xml: string): ParsedCollection {
       forTrade: boolAttr(status, "fortrade") || undefined,
       want: boolAttr(status, "want") || undefined,
       wantToPlay: boolAttr(status, "wanttoplay") || undefined,
+      preordered: boolAttr(status, "preordered") || undefined,
       wishlist: boolAttr(status, "wishlist") || undefined,
       // <rating value="8"> is THEIR rating; "N/A" when unrated.
       userRating: numAttr(stats?.rating, "value"),

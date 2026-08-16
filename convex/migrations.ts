@@ -4,6 +4,33 @@ import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 
 /**
+ * One-off: fold existing want/preordered collection rows into the wishlist
+ * (heart) — the raw want/preordered flags stay on the row so a future "Want" tab
+ * can split them back out. Self-draining. (Preordered only lands on rows once a
+ * sync has run with the new parser.)
+ */
+export const foldWantIntoWishlist = internalMutation({
+  args: { cursor: v.optional(v.union(v.string(), v.null())) },
+  handler: async (ctx, { cursor }): Promise<void> => {
+    const page = await ctx.db
+      .query("bggCollection")
+      .paginate({ numItems: 500, cursor: cursor ?? null });
+    for (const r of page.page) {
+      if (!r.wishlist && (r.want || r.preordered)) {
+        await ctx.db.patch("bggCollection", r._id, { wishlist: true });
+      }
+    }
+    if (!page.isDone) {
+      await ctx.scheduler.runAfter(
+        0,
+        internal.migrations.foldWantIntoWishlist,
+        { cursor: page.continueCursor },
+      );
+    }
+  },
+});
+
+/**
  * One-off: fold existing `favorites` (hearts) into the unified collection by
  * setting `wishlist: true` on the user's `bggCollection` row (creating one if
  * needed). Idempotent, self-draining. The `favorites` table is left in place as
