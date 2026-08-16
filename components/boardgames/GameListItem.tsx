@@ -3,6 +3,7 @@ import { Star } from "lucide-react";
 import type { GameWithMedia } from "@/convex/games";
 import { formatPlayTime } from "@/lib/format";
 import { FavoriteToggle } from "./FavoriteToggle";
+import { BookmarkToggle } from "./BookmarkToggle";
 import { Die } from "@/components/ui/icons";
 
 export function GameListItem({ game }: { game: GameWithMedia }) {
@@ -16,9 +17,12 @@ export function GameListItem({ game }: { game: GameWithMedia }) {
     .filter(Boolean)
     .join(" · ");
   const cover = game.thumbnailUrl ?? game.imageUrl ?? null;
+  const rating = game.bgg?.rating;
+  const iconBtn =
+    "flex h-8 w-8 items-center justify-center rounded-md text-muted transition-colors hover:text-accent";
 
   return (
-    <div className="group flex items-center gap-3 py-3">
+    <div className="group flex items-center gap-2 py-3">
       <Link
         href={`/boardgames/${game.slug}`}
         className="flex min-w-0 flex-1 items-center gap-3"
@@ -37,23 +41,24 @@ export function GameListItem({ game }: { game: GameWithMedia }) {
           <p className="font-display truncate font-bold transition-colors group-hover:text-accent">
             {game.title}
           </p>
-          {stats && <p className="mt-0.5 text-xs text-muted">{stats}</p>}
+          {stats && <p className="mt-0.5 truncate text-xs text-muted">{stats}</p>}
         </div>
       </Link>
-      {game.bgg?.rating != null && (
-        <span
-          className="inline-flex shrink-0 items-center gap-0.5 rounded-lg bg-accent px-1.5 py-0.5 text-xs font-bold text-accent-foreground"
-          title={`BoardGameGeek average ${game.bgg.rating.toFixed(1)} / 10`}
-        >
-          <Star className="h-3 w-3 fill-current" />
-          {game.bgg.rating.toFixed(1)}
-        </span>
-      )}
-      <FavoriteToggle
-        gameId={game._id}
-        size="sm"
-        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-muted transition-colors hover:bg-surface-2 hover:text-accent"
-      />
+
+      {/* avg + toggles, beside the title */}
+      <div className="flex shrink-0 items-center gap-0.5">
+        {rating != null && (
+          <span
+            className="mr-0.5 inline-flex items-center gap-0.5 text-xs font-bold text-accent"
+            title={`BoardGameGeek average ${rating.toFixed(1)} / 10`}
+          >
+            <Star className="h-3 w-3 fill-current" />
+            {rating.toFixed(1)}
+          </span>
+        )}
+        <FavoriteToggle gameId={game._id} size="sm" className={iconBtn} />
+        <BookmarkToggle gameId={game._id} size="sm" className={iconBtn} />
+      </div>
     </div>
   );
 }

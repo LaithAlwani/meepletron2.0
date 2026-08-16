@@ -289,23 +289,12 @@ export const myCollection = query({
     let q = ctx.db
       .query("bggCollection")
       .withIndex("by_user_and_sort_title", (qq) => qq.eq("userId", user._id));
-    // Effective owned/wishlist = the BGG-imported flag OR the user's manual one.
     // `.filter` doesn't reduce rows read, but a single user's collection is
     // bounded at a couple of thousand rows, so the scan stays cheap.
     if (filter === "owned") {
-      q = q.filter((qq) =>
-        qq.or(
-          qq.eq(qq.field("own"), true),
-          qq.eq(qq.field("manualOwn"), true),
-        ),
-      );
+      q = q.filter((qq) => qq.eq(qq.field("own"), true));
     } else if (filter === "wishlist") {
-      q = q.filter((qq) =>
-        qq.or(
-          qq.eq(qq.field("wishlist"), true),
-          qq.eq(qq.field("manualWishlist"), true),
-        ),
-      );
+      q = q.filter((qq) => qq.eq(qq.field("wishlist"), true));
     }
 
     const result = await q.paginate(paginationOpts);
@@ -328,8 +317,8 @@ export const myCollection = query({
           title: row.title,
           year: row.year,
           thumbnailUrl,
-          own: row.own || !!row.manualOwn,
-          wishlist: row.wishlist || !!row.manualWishlist,
+          own: row.own,
+          wishlist: row.wishlist,
           userRating: row.userRating,
           numPlays: row.numPlays,
           isExpansion: row.isExpansion,
@@ -599,8 +588,12 @@ export const upsertCollectionItems = internalMutation({
       const { gameId, created } = await linkOrCreateGame(ctx, item);
       if (created) createdCount++;
       titles.push(item.title);
-      const row = {
-        ...item,
+      // Own/wishlist are the user's to edit after the first import — never let a
+      // re-sync clobber them. So on an existing row we refresh metadata only; a
+      // brand-new row is seeded with the BGG owned/wishlist status.
+      const { own, wishlist, ...meta } = item;
+      const base = {
+        ...meta,
         userId: job.userId,
         gameId,
         sortTitle: item.title.toLowerCase(),
@@ -613,9 +606,9 @@ export const upsertCollectionItems = internalMutation({
         )
         .unique();
       if (existing) {
-        await ctx.db.patch("bggCollection", existing._id, row);
+        await ctx.db.patch("bggCollection", existing._id, base);
       } else {
-        await ctx.db.insert("bggCollection", row);
+        await ctx.db.insert("bggCollection", { ...base, own, wishlist });
       }
     }
 
@@ -629,56 +622,18 @@ export const upsertCollectionItems = internalMutation({
   },
 });
 
+/**
+ * Import done — finalise and hand off to enrichment. Re-sync is deliberately
+ * additive: no destructive sweep, so games the user removed from BGG (or edited
+ * in-app) are left alone. New BGG games were already inserted with their owned/
+ * wishlist status by `upsertCollectionItems`.
+ */
 export const finishCollection = internalMutation({
   args: { jobId: v.id("bggSyncJobs") },
   handler: async (ctx, { jobId }) => {
     const job = await ctx.db.get("bggSyncJobs", jobId);
     if (!job || job.status === "canceled") return;
-    await ctx.db.patch("bggSyncJobs", jobId, {
-      status: "sweeping",
-      updatedAt: Date.now(),
-    });
-    await ctx.scheduler.runAfter(0, internal.bggSync.sweepCollection, { jobId });
-  },
-});
 
-/**
- * Delete rows this run didn't touch — i.e. games the user no longer has in
- * their BGG collection. Batched and self-rescheduling, so a large removal
- * doesn't blow the transaction limits.
- */
-export const sweepCollection = internalMutation({
-  args: { jobId: v.id("bggSyncJobs") },
-  handler: async (ctx, { jobId }) => {
-    const job = await ctx.db.get("bggSyncJobs", jobId);
-    if (!job || job.status === "canceled") return;
-
-    const stale = await ctx.db
-      .query("bggCollection")
-      .withIndex("by_user_and_synced_at", (q) =>
-        q.eq("userId", job.userId).lt("syncedAt", job.runStartedAt),
-      )
-      .take(SWEEP_BATCH);
-    for (const row of stale) {
-      // Keep rows the user hand-added even if they're not in the BGG collection;
-      // stamp them current so they drop out of the stale range (else the sweep
-      // would keep re-finding them and never terminate).
-      if (row.manualOwn || row.manualWishlist) {
-        await ctx.db.patch("bggCollection", row._id, {
-          syncedAt: job.runStartedAt,
-        });
-        continue;
-      }
-      await ctx.db.delete("bggCollection", row._id);
-    }
-
-    if (stale.length === SWEEP_BATCH) {
-      await ctx.db.patch("bggSyncJobs", jobId, { updatedAt: Date.now() });
-      await ctx.scheduler.runAfter(0, internal.bggSync.sweepCollection, { jobId });
-      return;
-    }
-
-    // Import + sweep are done — the collection is ready to browse right away.
     const now = Date.now();
     const account = await ctx.db.get("bggAccounts", job.accountId);
     if (account) {

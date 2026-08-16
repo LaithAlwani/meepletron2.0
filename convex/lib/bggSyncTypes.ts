@@ -48,14 +48,10 @@ export const bggCollectionRowValidator = bggCollectionItemValidator.extend({
   gameId: v.optional(v.id("games")),
   // Lowercased title, so alphabetical pagination is an index scan.
   sortTitle: v.string(),
-  // Stamped with the run's `runStartedAt`; rows left behind by a run are swept.
+  // Stamped with the run's `runStartedAt`. Once set on import, `own`/`wishlist`
+  // are the user's to edit (heart = wishlist, bookmark = owned); a re-sync only
+  // adds new rows and never overwrites these on existing rows.
   syncedAt: v.number(),
-  // The user's own toggles, kept separate from the BGG-imported own/wishlist so
-  // a re-sync can refresh the BGG side without clobbering them. Effective
-  // owned = own || manualOwn; effective wishlist = wishlist || manualWishlist.
-  // A row carrying either manual flag is never swept.
-  manualOwn: v.optional(v.boolean()), // the bookmark button
-  manualWishlist: v.optional(v.boolean()), // the heart button
 });
 
 /** One play as parsed out of a /plays response. */

@@ -3,6 +3,7 @@ import { Users, Clock, Star } from "lucide-react";
 import type { GameWithMedia } from "@/convex/games";
 import { formatPlayTime } from "@/lib/format";
 import { FavoriteToggle } from "./FavoriteToggle";
+import { BookmarkToggle } from "./BookmarkToggle";
 import { Die } from "@/components/ui/icons";
 
 export function GameCard({
@@ -20,74 +21,87 @@ export function GameCard({
       : null;
   const time = formatPlayTime(game.minPlayTime, game.maxPlayTime);
   const cover = game.thumbnailUrl ?? game.imageUrl ?? "";
+  const rating = game.bgg?.rating;
+
+  const iconBtn =
+    "flex h-7 w-7 items-center justify-center rounded-md text-muted transition-colors hover:text-accent";
 
   return (
     <div
       style={{ animationDelay: `${Math.min(index, 10) * 40}ms` }}
-      className="animate-in group relative w-full overflow-hidden rounded-2xl border border-border bg-surface shadow-sm transition-all duration-200 hover:-translate-y-1 hover:border-accent/50 hover:shadow-lg"
+      className="animate-in group relative flex w-full flex-col overflow-hidden rounded-2xl border border-border bg-surface shadow-sm transition-all duration-200 hover:-translate-y-1 hover:border-accent/50 hover:shadow-lg"
     >
-      <Link href={`/boardgames/${game.slug}`} className="flex flex-col">
-        <div className="relative aspect-[4/3] overflow-hidden bg-surface-2">
-          {cover ? (
-            <>
-              {/* Blurred, faded copy fills the frame behind the natural cover. */}
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={cover}
-                alt=""
-                aria-hidden
-                className="absolute inset-0 h-full w-full scale-105 object-cover opacity-50 blur-sm transition-transform group-hover:scale-110"
-                loading="lazy"
-              />
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={cover}
-                alt={game.title}
-                className="relative h-full w-full object-contain transition-transform duration-300 group-hover:scale-105"
-                loading="lazy"
-              />
-            </>
-          ) : (
-            <div className="flex h-full w-full items-center justify-center text-subtle">
-              <Die className="h-10 w-10" />
-            </div>
-          )}
-          {game.bgg?.rating != null && (
-            <span
-              className="absolute left-2 top-2 z-10 inline-flex items-center gap-0.5 rounded-lg bg-accent px-1.5 py-0.5 text-xs font-bold text-accent-foreground shadow-sm"
-              title={`BoardGameGeek average ${game.bgg.rating.toFixed(1)} / 10`}
-            >
-              <Star className="h-3 w-3 fill-current" />
-              {game.bgg.rating.toFixed(1)}
-            </span>
-          )}
-        </div>
-        <div className="flex flex-1 flex-col p-3">
-          <h3 className="font-display line-clamp-2 font-bold leading-snug">
-            {game.title}
-          </h3>
-          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted">
+      {/* Stretched link covers the card for navigation; the toggle buttons sit
+          above it (z-20) so they stay interactive without nesting in an <a>. */}
+      <Link
+        href={`/boardgames/${game.slug}`}
+        aria-label={game.title}
+        className="absolute inset-0 z-10"
+      />
+
+      <div className="relative aspect-4/3 overflow-hidden bg-surface-2">
+        {cover ? (
+          <>
+            {/* Blurred, faded copy fills the frame behind the natural cover. */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={cover}
+              alt=""
+              aria-hidden
+              className="absolute inset-0 h-full w-full scale-105 object-cover opacity-50 blur-sm transition-transform group-hover:scale-110"
+              loading="lazy"
+            />
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={cover}
+              alt={game.title}
+              className="relative h-full w-full object-contain transition-transform duration-300 group-hover:scale-105"
+              loading="lazy"
+            />
+          </>
+        ) : (
+          <div className="flex h-full w-full items-center justify-center text-subtle">
+            <Die className="h-10 w-10" />
+          </div>
+        )}
+      </div>
+
+      <div className="flex flex-1 flex-col p-3">
+        <h3 className="font-display line-clamp-2 font-bold leading-snug">
+          {game.title}
+        </h3>
+        <div className="mt-auto flex items-center justify-between gap-1.5 pt-2">
+          <div className="flex min-w-0 items-center gap-x-2 overflow-hidden text-[11px] text-muted">
             {players && (
-              <span className="inline-flex items-center gap-1">
+              <span className="inline-flex shrink-0 items-center gap-0.5 whitespace-nowrap">
                 <Users className="h-3.5 w-3.5" />
                 {players}
               </span>
             )}
             {time && (
-              <span className="inline-flex items-center gap-1">
+              <span className="inline-flex shrink-0 items-center gap-0.5 whitespace-nowrap">
                 <Clock className="h-3.5 w-3.5" />
                 {time}
               </span>
             )}
           </div>
+          <div className="flex shrink-0 items-center gap-0.5">
+            {rating != null && (
+              <span
+                className="mr-0.5 inline-flex items-center gap-0.5 text-[11px] font-bold text-accent"
+                title={`BoardGameGeek average ${rating.toFixed(1)} / 10`}
+              >
+                <Star className="h-3 w-3 fill-current" />
+                {rating.toFixed(1)}
+              </span>
+            )}
+            <div className="pointer-events-auto relative z-20 flex items-center gap-0.5">
+              <FavoriteToggle gameId={game._id} size="sm" className={iconBtn} />
+              <BookmarkToggle gameId={game._id} size="sm" className={iconBtn} />
+            </div>
+          </div>
         </div>
-      </Link>
-
-      <FavoriteToggle
-        gameId={game._id}
-        size="sm"
-        className="absolute right-2 top-2 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-background/70 text-muted shadow-sm backdrop-blur transition-colors hover:text-accent"
-      />
+      </div>
     </div>
   );
 }

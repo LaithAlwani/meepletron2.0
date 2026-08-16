@@ -4,9 +4,10 @@ import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 
 /**
- * One-off: fold existing `favorites` (hearts) into the unified collection as
- * `manualWishlist` rows in `bggCollection`. Idempotent, self-draining. The
- * `favorites` table is left in place as a backstop; nothing reads it after this.
+ * One-off: fold existing `favorites` (hearts) into the unified collection by
+ * setting `wishlist: true` on the user's `bggCollection` row (creating one if
+ * needed). Idempotent, self-draining. The `favorites` table is left in place as
+ * a backstop; nothing reads it after this.
  */
 export const migrateFavoritesToWishlist = internalMutation({
   args: { cursor: v.optional(v.union(v.string(), v.null())) },
@@ -22,9 +23,9 @@ export const migrateFavoritesToWishlist = internalMutation({
         )
         .unique();
       if (existing) {
-        if (!existing.manualWishlist) {
+        if (!existing.wishlist) {
           await ctx.db.patch("bggCollection", existing._id, {
-            manualWishlist: true,
+            wishlist: true,
           });
         }
         continue;
@@ -40,8 +41,8 @@ export const migrateFavoritesToWishlist = internalMutation({
         year: game.year,
         isExpansion: game.isExpansion,
         own: false,
+        wishlist: true,
         syncedAt: Date.now(),
-        manualWishlist: true,
       });
     }
     if (!page.isDone) {

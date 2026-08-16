@@ -5,11 +5,10 @@ import type { Doc, Id } from "./_generated/dataModel";
 import { getCurrentUser, requireUser } from "./lib/auth";
 
 /**
- * The user's manual collection toggles — the heart (wishlist) and the bookmark
- * (owned). These live on `bggCollection` rows in the `manualOwn`/`manualWishlist`
- * fields, kept separate from the BGG-imported `own`/`wishlist` so a re-sync
- * refreshes the BGG side without wiping what the user added by hand. A row that
- * ends up with no flag at all (BGG or manual) is deleted.
+ * The heart (wishlist) and bookmark (owned) toggles. `own`/`wishlist` on the
+ * `bggCollection` row are the single source of truth — the BGG sync seeds them
+ * on first import, and the user edits them freely afterwards. A row that ends up
+ * with neither flag is deleted; a row with either shows in the matching tab.
  */
 
 async function findRow(
@@ -25,8 +24,8 @@ async function findRow(
     .unique();
 }
 
-/** Fields for a fresh manual row built from a game. */
-function manualRowFields(
+/** Fields for a fresh collection row built from a game. */
+function newRowFields(
   userId: Id<"users">,
   game: Doc<"games">,
 ): Omit<Doc<"bggCollection">, "_id" | "_creationTime"> {
@@ -42,16 +41,14 @@ function manualRowFields(
     isExpansion: game.isExpansion,
     own: false,
     syncedAt: Date.now(),
-    manualOwn: false,
-    manualWishlist: false,
   };
 }
 
-/** Apply a manual-flag change, deleting the row if nothing is left on it. */
-async function setFlag(
+/** Set own/wishlist, creating the row or deleting it once both are off. */
+async function setFlags(
   ctx: MutationCtx,
   gameId: Id<"games">,
-  patch: { manualOwn?: boolean; manualWishlist?: boolean },
+  patch: { own?: boolean; wishlist?: boolean },
 ): Promise<boolean> {
   const user = await requireUser(ctx);
   const existing = await findRow(ctx, user._id, gameId);
@@ -60,24 +57,19 @@ async function setFlag(
     const game = await ctx.db.get("games", gameId);
     if (!game) throw new ConvexError("Game not found");
     await ctx.db.insert("bggCollection", {
-      ...manualRowFields(user._id, game),
+      ...newRowFields(user._id, game),
       ...patch,
     });
-    return patch.manualOwn ?? patch.manualWishlist ?? false;
+    return patch.own ?? patch.wishlist ?? false;
   }
 
   const merged = { ...existing, ...patch };
-  const anyFlag =
-    merged.own ||
-    merged.wishlist ||
-    merged.manualOwn ||
-    merged.manualWishlist;
-  if (!anyFlag) {
+  if (!merged.own && !merged.wishlist) {
     await ctx.db.delete("bggCollection", existing._id);
   } else {
     await ctx.db.patch("bggCollection", existing._id, patch);
   }
-  return patch.manualOwn ?? patch.manualWishlist ?? false;
+  return patch.own ?? patch.wishlist ?? false;
 }
 
 /** Heart → wishlist. Returns the new state. */
@@ -86,7 +78,7 @@ export const toggleWishlist = mutation({
   handler: async (ctx, { gameId }): Promise<boolean> => {
     const user = await requireUser(ctx);
     const row = await findRow(ctx, user._id, gameId);
-    return await setFlag(ctx, gameId, { manualWishlist: !row?.manualWishlist });
+    return await setFlags(ctx, gameId, { wishlist: !row?.wishlist });
   },
 });
 
@@ -96,11 +88,11 @@ export const toggleOwned = mutation({
   handler: async (ctx, { gameId }): Promise<boolean> => {
     const user = await requireUser(ctx);
     const row = await findRow(ctx, user._id, gameId);
-    return await setFlag(ctx, gameId, { manualOwn: !row?.manualOwn });
+    return await setFlags(ctx, gameId, { own: !row?.own });
   },
 });
 
-/** The current user's manual toggle state for a game (drives the buttons). */
+/** The current user's collection state for a game (drives the buttons). */
 export const state = query({
   args: { gameId: v.id("games") },
   handler: async (
@@ -111,8 +103,8 @@ export const state = query({
     if (!user) return { wishlist: false, owned: false };
     const row = await findRow(ctx, user._id, gameId);
     return {
-      wishlist: !!row?.manualWishlist,
-      owned: !!row?.manualOwn,
+      wishlist: !!row?.wishlist,
+      owned: !!row?.own,
     };
   },
 });
