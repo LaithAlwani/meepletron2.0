@@ -2,7 +2,9 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useQuery } from "convex/react";
 import { LayoutGrid, MessageCircle, Bookmark, User } from "lucide-react";
+import { api } from "@/convex/_generated/api";
 import { cn } from "@/lib/cn";
 
 const TABS = [
@@ -19,6 +21,8 @@ const TABS = [
  */
 export function BottomNav() {
   const pathname = usePathname() ?? "";
+  const me = useQuery(api.users.me);
+  const avatarUrl = me?.avatarUrl ?? null;
   const hidden =
     pathname === "/" ||
     pathname === "/auth" ||
@@ -48,10 +52,22 @@ export function BottomNav() {
                     active ? "text-accent" : "text-subtle hover:text-muted",
                   )}
                 >
-                  <Icon
-                    className="h-4.5 w-4.5"
-                    strokeWidth={active ? 2.4 : 2}
-                  />
+                  {t.href === "/profile" && avatarUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={avatarUrl}
+                      alt=""
+                      className={cn(
+                        "h-5 w-5 rounded-full object-cover",
+                        active && "ring-2 ring-accent",
+                      )}
+                    />
+                  ) : (
+                    <Icon
+                      className="h-4.5 w-4.5"
+                      strokeWidth={active ? 2.4 : 2}
+                    />
+                  )}
                   {t.label}
                 </Link>
               </li>

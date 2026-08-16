@@ -101,6 +101,7 @@ export function Header() {
             ) : (
               <UserMenu
                 initial={(me?.name || me?.email || "?").charAt(0).toUpperCase()}
+                avatarUrl={me?.avatarUrl}
                 isAdmin={isAdmin}
               />
             )}

@@ -15,9 +15,11 @@ import { ThemeMenu } from "@/components/ThemeToggle";
 
 export function UserMenu({
   initial,
+  avatarUrl,
   isAdmin,
 }: {
   initial: string;
+  avatarUrl?: string | null;
   isAdmin: boolean;
 }) {
   const [open, setOpen] = useState(false);
@@ -65,9 +67,14 @@ export function UserMenu({
         onClick={() => setOpen((v) => !v)}
         aria-label="Account menu"
         aria-expanded={open}
-        className="flex h-9 w-9 items-center justify-center rounded-full bg-accent/12 text-sm font-bold text-accent transition-colors hover:bg-accent/20"
+        className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full bg-accent/12 text-sm font-bold text-accent transition-colors hover:bg-accent/20"
       >
-        {initial}
+        {avatarUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={avatarUrl} alt="" className="h-full w-full object-cover" />
+        ) : (
+          initial
+        )}
       </button>
       {open && (
         <div className="animate-in absolute right-0 z-50 mt-2 w-48 rounded-2xl border border-border bg-surface p-1.5 shadow-xl">
