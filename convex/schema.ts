@@ -39,6 +39,9 @@ export default defineSchema({
     usernameLower: v.optional(v.string()),
     // Uploaded avatar in Convex storage; falls back to the OAuth `image` URL.
     avatarStorageId: v.optional(v.id("_storage")),
+    // The last ≤5 avatars the user uploaded (most-recent first) for quick reuse.
+    // A 6th upload evicts + deletes the oldest.
+    avatarHistory: v.optional(v.array(v.id("_storage"))),
     tokensUsedToday: v.optional(v.number()),
     tokensResetAt: v.optional(v.number()), // ms timestamp of the current budget window's start
     // Guest→account upgrade: a short-lived claim token set while anonymous, then

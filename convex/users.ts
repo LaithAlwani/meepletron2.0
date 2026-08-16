@@ -15,7 +15,17 @@ export const me = query({
     const avatarUrl = user.avatarStorageId
       ? await ctx.storage.getUrl(user.avatarStorageId)
       : (user.image ?? null);
-    return { ...user, avatarUrl };
+    const recentAvatars = (
+      await Promise.all(
+        (user.avatarHistory ?? []).map(async (storageId) => ({
+          storageId,
+          url: await ctx.storage.getUrl(storageId),
+        })),
+      )
+    ).filter((r): r is { storageId: typeof r.storageId; url: string } =>
+      r.url !== null,
+    );
+    return { ...user, avatarUrl, recentAvatars };
   },
 });
 
@@ -97,7 +107,11 @@ export const generateAvatarUploadUrl = mutation({
   },
 });
 
-/** Set the avatar from an uploaded image (validates type, frees the old one). */
+/**
+ * Set the avatar from a freshly-uploaded (already client-compressed) image.
+ * Pushes it onto the recents history, keeping the last 5 and deleting whatever
+ * a 6th upload evicts.
+ */
 export const setAvatar = mutation({
   args: { storageId: v.id("_storage") },
   handler: async (ctx, { storageId }) => {
@@ -107,18 +121,38 @@ export const setAvatar = mutation({
       await ctx.storage.delete(storageId);
       throw new ConvexError("That file isn't an image.");
     }
-    const old = user.avatarStorageId;
-    await ctx.db.patch("users", user._id, { avatarStorageId: storageId });
-    if (old && old !== storageId) await ctx.storage.delete(old);
+    const prev = user.avatarHistory ?? [];
+    const merged = [storageId, ...prev.filter((id) => id !== storageId)];
+    const history = merged.slice(0, 5);
+    for (const evicted of merged.slice(5)) await ctx.storage.delete(evicted);
+    await ctx.db.patch("users", user._id, {
+      avatarStorageId: storageId,
+      avatarHistory: history,
+    });
   },
 });
 
-/** Remove the uploaded avatar (reverts to the OAuth image / initials). */
+/** Reuse one of the recent avatars (must be in the history). */
+export const useRecentAvatar = mutation({
+  args: { storageId: v.id("_storage") },
+  handler: async (ctx, { storageId }) => {
+    const user = await requireUser(ctx);
+    const history = user.avatarHistory ?? [];
+    if (!history.includes(storageId)) {
+      throw new ConvexError("That photo isn't in your recents.");
+    }
+    await ctx.db.patch("users", user._id, {
+      avatarStorageId: storageId,
+      avatarHistory: [storageId, ...history.filter((id) => id !== storageId)],
+    });
+  },
+});
+
+/** Clear the current avatar (keeps recents so it can be re-picked). */
 export const removeAvatar = mutation({
   args: {},
   handler: async (ctx) => {
     const user = await requireUser(ctx);
-    if (user.avatarStorageId) await ctx.storage.delete(user.avatarStorageId);
     await ctx.db.patch("users", user._id, { avatarStorageId: undefined });
   },
 });

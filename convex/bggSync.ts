@@ -276,8 +276,17 @@ export const myJobs = query({
 export const myCollection = query({
   args: {
     paginationOpts: paginationOptsValidator,
+    // Categories map 1:1 to a BGG status flag (want + preordered are already
+    // folded into `wishlist` at import). `all` shows the whole collection.
     filter: v.optional(
-      v.union(v.literal("owned"), v.literal("wishlist"), v.literal("all")),
+      v.union(
+        v.literal("owned"),
+        v.literal("wishlist"),
+        v.literal("wantToPlay"),
+        v.literal("prevOwned"),
+        v.literal("forTrade"),
+        v.literal("all"),
+      ),
     ),
   },
   handler: async (ctx, { paginationOpts, filter }) => {
@@ -286,15 +295,22 @@ export const myCollection = query({
       return { page: [], isDone: true, continueCursor: "" };
     }
 
+    const FIELD = {
+      owned: "own",
+      wishlist: "wishlist",
+      wantToPlay: "wantToPlay",
+      prevOwned: "prevOwned",
+      forTrade: "forTrade",
+    } as const;
+
     let q = ctx.db
       .query("bggCollection")
       .withIndex("by_user_and_sort_title", (qq) => qq.eq("userId", user._id));
     // `.filter` doesn't reduce rows read, but a single user's collection is
     // bounded at a couple of thousand rows, so the scan stays cheap.
-    if (filter === "owned") {
-      q = q.filter((qq) => qq.eq(qq.field("own"), true));
-    } else if (filter === "wishlist") {
-      q = q.filter((qq) => qq.eq(qq.field("wishlist"), true));
+    if (filter && filter !== "all") {
+      const field = FIELD[filter];
+      q = q.filter((qq) => qq.eq(qq.field(field), true));
     }
 
     const result = await q.paginate(paginationOpts);

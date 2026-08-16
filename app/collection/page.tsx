@@ -13,13 +13,31 @@ import { api } from "@/convex/_generated/api";
 import { GameCard } from "@/components/boardgames/GameCard";
 import { buttonClasses } from "@/components/ui/Button";
 
-type Filter = "owned" | "wishlist" | "all";
+type Filter =
+  | "all"
+  | "owned"
+  | "wishlist"
+  | "wantToPlay"
+  | "prevOwned"
+  | "forTrade";
 
 const FILTERS: { value: Filter; label: string }[] = [
   { value: "all", label: "All" },
   { value: "owned", label: "Owned" },
   { value: "wishlist", label: "Wishlist" },
+  { value: "wantToPlay", label: "Want to play" },
+  { value: "prevOwned", label: "Previously owned" },
+  { value: "forTrade", label: "For trade" },
 ];
+
+const EMPTY_HINT: Record<Filter, string> = {
+  all: "Heart or bookmark games in the library, or link BoardGameGeek.",
+  owned: "Bookmark games you own, or link BoardGameGeek to import them.",
+  wishlist: "Heart games in the library to add them here.",
+  wantToPlay: "Games marked “want to play” on BoardGameGeek show up here.",
+  prevOwned: "Games marked “previously owned” on BoardGameGeek show up here.",
+  forTrade: "Games marked “for trade” on BoardGameGeek show up here.",
+};
 
 const gridClass = "grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4";
 
@@ -96,16 +114,16 @@ function CollectionBody() {
 
   return (
     <>
-      <div className="mb-4 flex flex-wrap gap-1.5">
+      <div className="-mx-4 mb-4 flex gap-1.5 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:px-0">
         {FILTERS.map((f) => (
           <button
             key={f.value}
             onClick={() => setFilter(f.value)}
-            className={
+            className={`shrink-0 ${
               filter === f.value
                 ? buttonClasses("primary", "sm")
                 : buttonClasses("ghost", "sm")
-            }
+            }`}
           >
             {f.label}
           </button>
@@ -149,15 +167,7 @@ function CollectionBody() {
           <p className="font-medium">
             {syncing ? "Syncing…" : "Nothing here yet."}
           </p>
-          {!syncing && (
-            <p className="mt-1 text-sm">
-              {filter === "wishlist"
-                ? "Heart games in the library to add them here."
-                : filter === "owned"
-                  ? "Bookmark games you own, or link BoardGameGeek to import them."
-                  : "Heart or bookmark games in the library, or link BoardGameGeek."}
-            </p>
-          )}
+          {!syncing && <p className="mt-1 text-sm">{EMPTY_HINT[filter]}</p>}
         </div>
       ) : (
         <>

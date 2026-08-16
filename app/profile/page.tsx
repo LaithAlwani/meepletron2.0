@@ -12,7 +12,7 @@ import {
 } from "convex/react";
 import { useAuthActions } from "@convex-dev/auth/react";
 import { api } from "@/convex/_generated/api";
-import type { Doc } from "@/convex/_generated/dataModel";
+import type { Doc, Id } from "@/convex/_generated/dataModel";
 import { useToast } from "@/components/ui/Toast";
 import { useConfirm } from "@/components/ui/Confirm";
 import { friendlyError } from "@/lib/friendlyError";
@@ -151,6 +151,7 @@ function ProfileBody() {
           isGuest={isGuest}
           initial={initial}
           hasUpload={!!me.avatarStorageId}
+          recentAvatars={me.recentAvatars}
         />
         <h1 className="font-display text-xl font-extrabold text-foreground">{fullName}</h1>
         {me.username && (
@@ -222,21 +223,49 @@ function ProfileBody() {
   );
 }
 
+/** Resize + re-encode to a small JPEG in the browser, so storage only ever holds
+ *  the compressed avatar (never the multi-MB original). */
+async function compressImage(
+  file: File,
+  max = 400,
+  quality = 0.82,
+): Promise<Blob> {
+  const bitmap = await createImageBitmap(file);
+  const scale = Math.min(1, max / Math.max(bitmap.width, bitmap.height));
+  const w = Math.max(1, Math.round(bitmap.width * scale));
+  const h = Math.max(1, Math.round(bitmap.height * scale));
+  const canvas = document.createElement("canvas");
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("Canvas unavailable");
+  ctx.drawImage(bitmap, 0, 0, w, h);
+  bitmap.close?.();
+  const blob = await new Promise<Blob | null>((resolve) =>
+    canvas.toBlob(resolve, "image/jpeg", quality),
+  );
+  if (!blob) throw new Error("Compression failed");
+  return blob;
+}
+
 function ProfileAvatar({
   avatarUrl,
   canEdit,
   isGuest,
   initial,
   hasUpload,
+  recentAvatars,
 }: {
   avatarUrl: string | null;
   canEdit: boolean;
   isGuest: boolean;
   initial: string;
   hasUpload: boolean;
+  recentAvatars: { storageId: Id<"_storage">; url: string }[];
 }) {
   const genUrl = useMutation(api.users.generateAvatarUploadUrl);
   const setAvatar = useMutation(api.users.setAvatar);
+  const useRecent = useMutation(api.users.useRecentAvatar);
   const removeAvatar = useMutation(api.users.removeAvatar);
   const toast = useToast();
   const fileRef = useRef<HTMLInputElement>(null);
@@ -252,11 +281,12 @@ function ProfileAvatar({
     }
     setBusy(true);
     try {
+      const blob = await compressImage(file);
       const url = await genUrl({});
       const res = await fetch(url, {
         method: "POST",
-        headers: { "Content-Type": file.type },
-        body: file,
+        headers: { "Content-Type": "image/jpeg" },
+        body: blob,
       });
       if (!res.ok) throw new Error("upload failed");
       const { storageId } = await res.json();
@@ -264,6 +294,17 @@ function ProfileAvatar({
       toast("Photo updated", "success");
     } catch (err) {
       toast(friendlyError(err, "Couldn't upload that photo"), "error");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function pickRecent(storageId: Id<"_storage">) {
+    setBusy(true);
+    try {
+      await useRecent({ storageId });
+    } catch {
+      toast("Couldn't switch photo", "error");
     } finally {
       setBusy(false);
     }
@@ -320,6 +361,33 @@ function ProfileAvatar({
           </>
         )}
       </div>
+
+      {/* Recent avatars — reuse without re-uploading */}
+      {canEdit && recentAvatars.length > 0 && (
+        <div className="mt-3 flex items-center gap-2">
+          {recentAvatars.map((r) => {
+            const current = r.url === avatarUrl;
+            return (
+              <button
+                key={r.storageId}
+                type="button"
+                onClick={() => !current && pickRecent(r.storageId)}
+                disabled={busy || current}
+                aria-label="Use this photo"
+                className={`h-9 w-9 overflow-hidden rounded-full border-2 transition-colors ${
+                  current
+                    ? "border-accent"
+                    : "border-transparent hover:border-border"
+                }`}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={r.url} alt="" className="h-full w-full object-cover" />
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       {canEdit && hasUpload && (
         <button
           type="button"
