@@ -42,6 +42,18 @@ export default defineSchema({
     // The last ≤5 avatars the user uploaded (most-recent first) for quick reuse.
     // A 6th upload evicts + deletes the oldest.
     avatarHistory: v.optional(v.array(v.id("_storage"))),
+    // What the user chooses to expose on their public /user/<username> page.
+    // All optional; read with defaults (name/avatar/top-lists on, collection off).
+    publicProfile: v.optional(
+      v.object({
+        showName: v.optional(v.boolean()),
+        showAvatar: v.optional(v.boolean()),
+        showTopLists: v.optional(v.boolean()),
+        showOwned: v.optional(v.boolean()),
+        showForTrade: v.optional(v.boolean()),
+        showWishlist: v.optional(v.boolean()),
+      }),
+    ),
     tokensUsedToday: v.optional(v.number()),
     tokensResetAt: v.optional(v.number()), // ms timestamp of the current budget window's start
     // Guest→account upgrade: a short-lived claim token set while anonymous, then

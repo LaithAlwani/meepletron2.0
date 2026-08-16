@@ -98,6 +98,27 @@ export const updateProfile = mutation({
   },
 });
 
+/**
+ * Update which parts of the profile are exposed on the public /user/<username>
+ * page. Merges the given toggles into the existing set (all optional).
+ */
+export const setPublicProfile = mutation({
+  args: {
+    showName: v.optional(v.boolean()),
+    showAvatar: v.optional(v.boolean()),
+    showTopLists: v.optional(v.boolean()),
+    showOwned: v.optional(v.boolean()),
+    showForTrade: v.optional(v.boolean()),
+    showWishlist: v.optional(v.boolean()),
+  },
+  handler: async (ctx, args) => {
+    const user = await requireUser(ctx);
+    await ctx.db.patch("users", user._id, {
+      publicProfile: { ...(user.publicProfile ?? {}), ...args },
+    });
+  },
+});
+
 /** A short-lived URL the client POSTs the avatar file to. */
 export const generateAvatarUploadUrl = mutation({
   args: {},

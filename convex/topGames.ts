@@ -1,4 +1,5 @@
 import { v } from "convex/values";
+import { paginationOptsValidator } from "convex/server";
 import { query, mutation, type QueryCtx } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
 import { getCurrentUser, requireUser } from "./lib/auth";
@@ -17,8 +18,8 @@ import { getCurrentUser, requireUser } from "./lib/auth";
  * `userId` always comes from the authed user, `updatedAt: Date.now()`.
  */
 
-const MIN_SIZE = 3;
-const MAX_SIZE = 250;
+/** The only list sizes we offer. */
+const PRESET_SIZES = [10, 25, 50, 100];
 const HISTORY_YEARS = 5;
 /** Public lists a single community roll-up will read — a hard, surfaced cap. */
 const COMMUNITY_LIST_CAP = 200;
@@ -51,18 +52,63 @@ async function gameThumb(ctx: QueryCtx, gameId: Id<"games">) {
   };
 }
 
-/** Public author info for a shared list / profile header. */
+/**
+ * Public author info for a shared list / profile header, honouring the user's
+ * sharing choices: name and avatar are withheld unless opted in (default on).
+ */
 async function authorInfo(ctx: QueryCtx, userId: Id<"users">) {
   const u = await ctx.db.get("users", userId);
   if (!u) return null;
-  const avatarUrl = u.avatarStorageId
-    ? await ctx.storage.getUrl(u.avatarStorageId)
-    : (u.image ?? null);
+  const p = u.publicProfile ?? {};
+  const showName = p.showName ?? true;
+  const showAvatar = p.showAvatar ?? true;
+  const avatarUrl = showAvatar
+    ? u.avatarStorageId
+      ? await ctx.storage.getUrl(u.avatarStorageId)
+      : (u.image ?? null)
+    : null;
   return {
     username: u.username ?? null,
-    name: u.name ?? null,
+    name: showName ? (u.name ?? null) : null,
     avatarUrl,
   };
+}
+
+/**
+ * A shared "list of games" section for the public profile (owned / for-trade /
+ * wishlist), drawn from the user's BGG collection. Returns the total count and a
+ * bounded, cover-resolved sample.
+ */
+async function collectionSection(
+  ctx: QueryCtx,
+  userId: Id<"users">,
+  pick: (r: Doc<"bggCollection">) => boolean,
+  limit: number,
+) {
+  // A bounded scan: a public profile is a showcase, not the full collection —
+  // resolving thousands of covers in one query would blow read/byte limits.
+  const rows = await ctx.db
+    .query("bggCollection")
+    .withIndex("by_user_and_sort_title", (q) => q.eq("userId", userId))
+    .take(600);
+  const matched = rows.filter(pick);
+  const items = await Promise.all(
+    matched.slice(0, limit).map(async (r) => {
+      const g = r.gameId ? await ctx.db.get("games", r.gameId) : null;
+      const thumbUrl = g?.thumbnailId
+        ? await ctx.storage.getUrl(g.thumbnailId)
+        : g?.imageId
+          ? await ctx.storage.getUrl(g.imageId)
+          : null;
+      return {
+        gameId: r.gameId ?? null,
+        title: g?.title ?? r.title,
+        slug: g?.slug ?? null,
+        thumbUrl,
+      };
+    }),
+  );
+  return { total: matched.length, items };
 }
 
 /** Rank (1-based) of a game within a list's entries, or null if absent. */
@@ -193,6 +239,54 @@ function listMeta(list: ListDoc) {
   };
 }
 
+/**
+ * Up to `n` cover URLs sampled from a list's games, for the collage on a list
+ * card. Deterministic per list (a PRNG seeded from its id), so the picks look
+ * random but stay stable across query re-runs — Math.random isn't allowed in
+ * queries, and a reshuffle on every render would be jarring anyway. Reads are
+ * bounded to a few candidates.
+ */
+async function coverSample(
+  ctx: QueryCtx,
+  list: ListDoc,
+  n: number,
+): Promise<string[]> {
+  if (list.entries.length === 0) return [];
+  let h = 0;
+  for (let i = 0; i < list._id.length; i++) {
+    h = (Math.imul(h, 31) + list._id.charCodeAt(i)) | 0;
+  }
+  const rand = () => {
+    h = (h + 0x6d2b79f5) | 0;
+    let t = Math.imul(h ^ (h >>> 15), 1 | h);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+  const idx = list.entries.map((_, i) => i);
+  for (let i = idx.length - 1; i > 0; i--) {
+    const j = Math.floor(rand() * (i + 1));
+    [idx[i], idx[j]] = [idx[j], idx[i]];
+  }
+  const covers: string[] = [];
+  for (const i of idx.slice(0, n + 4)) {
+    if (covers.length >= n) break;
+    const g = await ctx.db.get("games", list.entries[i].gameId);
+    if (!g) continue;
+    const url = g.thumbnailId
+      ? await ctx.storage.getUrl(g.thumbnailId)
+      : g.imageId
+        ? await ctx.storage.getUrl(g.imageId)
+        : null;
+    if (url) covers.push(url);
+  }
+  return covers;
+}
+
+/** A list card row: the lightweight meta plus a small cover collage. */
+async function listCard(ctx: QueryCtx, list: ListDoc) {
+  return { ...listMeta(list), covers: await coverSample(ctx, list, 5) };
+}
+
 /** Load an owned list for a write, or throw. */
 async function ownedList(
   ctx: QueryCtx,
@@ -219,7 +313,7 @@ export const listMine = query({
       .withIndex("by_user", (q) => q.eq("userId", user._id))
       .collect();
     rows.sort((a, b) => b.year - a.year || b.size - a.size);
-    return rows.map(listMeta);
+    return await Promise.all(rows.map((r) => listCard(ctx, r)));
   },
 });
 
@@ -236,8 +330,8 @@ export const create = mutation({
     { size, year, title, seedFromListId },
   ): Promise<{ listId: Id<"topGamesLists">; existed: boolean }> => {
     const user = await requireUser(ctx);
-    if (!Number.isInteger(size) || size < MIN_SIZE || size > MAX_SIZE) {
-      throw new Error(`Size must be a whole number between ${MIN_SIZE} and ${MAX_SIZE}.`);
+    if (!PRESET_SIZES.includes(size)) {
+      throw new Error("Pick a list size of 10, 25, 50, or 100.");
     }
     if (!Number.isInteger(year) || year < 1970 || year > 2200) {
       throw new Error("That doesn't look like a valid year.");
@@ -420,18 +514,131 @@ export const publicProfile = query({
       .unique();
     if (!user) return null;
 
-    const rows = await ctx.db
-      .query("topGamesLists")
-      .withIndex("by_user", (q) => q.eq("userId", user._id))
-      .collect();
-    const lists = rows
-      .filter((r) => r.visibility === "public" && r.status === "finalized")
-      .sort((a, b) => b.year - a.year || b.size - a.size)
-      .map(listMeta);
+    const p = user.publicProfile ?? {};
+    const showTopLists = p.showTopLists ?? true;
+
+    let lists: Awaited<ReturnType<typeof listCard>>[] = [];
+    if (showTopLists) {
+      const rows = await ctx.db
+        .query("topGamesLists")
+        .withIndex("by_user", (q) => q.eq("userId", user._id))
+        .collect();
+      const filtered = rows
+        .filter((r) => r.visibility === "public" && r.status === "finalized")
+        .sort((a, b) => b.year - a.year || b.size - a.size);
+      lists = await Promise.all(filtered.map((r) => listCard(ctx, r)));
+    }
 
     return {
       author: await authorInfo(ctx, user._id),
       lists,
+      owned:
+        (p.showOwned ?? false)
+          ? await collectionSection(ctx, user._id, (r) => r.own === true, 30)
+          : null,
+      forTrade:
+        (p.showForTrade ?? false)
+          ? await collectionSection(ctx, user._id, (r) => r.forTrade === true, 30)
+          : null,
+      wishlist:
+        (p.showWishlist ?? false)
+          ? await collectionSection(ctx, user._id, (r) => r.wishlist === true, 30)
+          : null,
+    };
+  },
+});
+
+/* -------------------------------------------------------------------------- */
+/* Full collection browse (paginated)                                         */
+/* -------------------------------------------------------------------------- */
+
+const collectionListValidator = v.union(
+  v.literal("owned"),
+  v.literal("for-trade"),
+  v.literal("wishlist"),
+);
+type CollectionList = "owned" | "for-trade" | "wishlist";
+
+/** The bggCollection flag field + this user's share toggle for a list. */
+function collectionField(list: CollectionList): "own" | "forTrade" | "wishlist" {
+  return list === "owned" ? "own" : list === "for-trade" ? "forTrade" : "wishlist";
+}
+function isShared(
+  prefs: NonNullable<Doc<"users">["publicProfile"]>,
+  list: CollectionList,
+): boolean {
+  return list === "owned"
+    ? (prefs.showOwned ?? false)
+    : list === "for-trade"
+      ? (prefs.showForTrade ?? false)
+      : (prefs.showWishlist ?? false);
+}
+
+async function userByUsername(ctx: QueryCtx, username: string) {
+  const lower = username.trim().toLowerCase();
+  if (!lower) return null;
+  return await ctx.db
+    .query("users")
+    .withIndex("by_username_lower", (q) => q.eq("usernameLower", lower))
+    .unique();
+}
+
+/** Header info + whether a given collection list is shared, for the browse page. */
+export const publicCollectionMeta = query({
+  args: { username: v.string(), list: collectionListValidator },
+  handler: async (ctx, { username, list }) => {
+    const user = await userByUsername(ctx, username);
+    if (!user) return null;
+    return {
+      author: await authorInfo(ctx, user._id),
+      shared: isShared(user.publicProfile ?? {}, list),
+    };
+  },
+});
+
+/**
+ * Paginated full collection list for a public profile (owned / for-trade /
+ * wishlist). Returns an empty, done page when the user doesn't exist or hasn't
+ * shared that list. Handles hundreds/thousands of games without loading them
+ * all at once.
+ */
+export const publicCollectionPage = query({
+  args: {
+    username: v.string(),
+    list: collectionListValidator,
+    paginationOpts: paginationOptsValidator,
+  },
+  handler: async (ctx, { username, list, paginationOpts }) => {
+    const empty = { page: [], isDone: true, continueCursor: "" };
+    const user = await userByUsername(ctx, username);
+    if (!user || !isShared(user.publicProfile ?? {}, list)) return empty;
+
+    const field = collectionField(list);
+    const result = await ctx.db
+      .query("bggCollection")
+      .withIndex("by_user_and_sort_title", (q) => q.eq("userId", user._id))
+      .filter((q) => q.eq(q.field(field), true))
+      .paginate(paginationOpts);
+
+    return {
+      ...result,
+      page: await Promise.all(
+        result.page.map(async (r) => {
+          const g = r.gameId ? await ctx.db.get("games", r.gameId) : null;
+          const thumbUrl = g?.thumbnailId
+            ? await ctx.storage.getUrl(g.thumbnailId)
+            : g?.imageId
+              ? await ctx.storage.getUrl(g.imageId)
+              : null;
+          return {
+            _id: r._id,
+            gameId: r.gameId ?? null,
+            title: g?.title ?? r.title,
+            slug: g?.slug ?? null,
+            thumbUrl,
+          };
+        }),
+      ),
     };
   },
 });

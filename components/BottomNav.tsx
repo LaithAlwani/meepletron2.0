@@ -2,27 +2,24 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useQuery } from "convex/react";
-import { LayoutGrid, MessageCircle, Bookmark, User } from "lucide-react";
-import { api } from "@/convex/_generated/api";
+import { LayoutGrid, MessageCircle, Bookmark, Trophy } from "lucide-react";
 import { cn } from "@/lib/cn";
 
 const TABS = [
   { href: "/boardgames", label: "Library", icon: LayoutGrid },
   { href: "/chats", label: "Chats", icon: MessageCircle },
   { href: "/collection", label: "Collection", icon: Bookmark },
-  { href: "/profile", label: "Profile", icon: User },
+  { href: "/top-games", label: "Top Games", icon: Trophy },
 ];
 
 /**
  * Mobile-only bottom tab bar (the primary nav on small screens). Hidden on the
- * splash, chat (own shell), and auth routes. Renders a matching in-flow spacer
- * so the fixed bar never covers page content.
+ * splash, chat (own shell), and auth routes. Profile lives in the avatar menu
+ * (like desktop); the tab bar surfaces the main browse destinations. Renders a
+ * matching in-flow spacer so the fixed bar never covers page content.
  */
 export function BottomNav() {
   const pathname = usePathname() ?? "";
-  const me = useQuery(api.users.me);
-  const avatarUrl = me?.avatarUrl ?? null;
   const hidden =
     pathname === "/" ||
     pathname === "/auth" ||
@@ -52,22 +49,7 @@ export function BottomNav() {
                     active ? "text-accent" : "text-subtle hover:text-muted",
                   )}
                 >
-                  {t.href === "/profile" && avatarUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={avatarUrl}
-                      alt=""
-                      className={cn(
-                        "h-5 w-5 rounded-full object-cover",
-                        active && "ring-2 ring-accent",
-                      )}
-                    />
-                  ) : (
-                    <Icon
-                      className="h-4.5 w-4.5"
-                      strokeWidth={active ? 2.4 : 2}
-                    />
-                  )}
+                  <Icon className="h-4.5 w-4.5" strokeWidth={active ? 2.4 : 2} />
                   {t.label}
                 </Link>
               </li>

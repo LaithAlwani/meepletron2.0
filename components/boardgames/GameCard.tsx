@@ -31,15 +31,13 @@ export function GameCard({
       style={{ animationDelay: `${Math.min(index, 10) * 40}ms` }}
       className="animate-in group relative flex h-full w-full flex-col overflow-hidden rounded-2xl border border-border bg-surface shadow-sm transition-all duration-200 hover:-translate-y-1 hover:border-accent/50 hover:shadow-lg"
     >
-      {/* Stretched link covers the card for navigation; the toggle buttons sit
-          above it (z-20) so they stay interactive without nesting in an <a>. */}
+      {/* Only the cover and title navigate — so clicks near the tags/footer
+          don't accidentally open the detail page. */}
       <Link
         href={`/boardgames/${game.slug}`}
         aria-label={game.title}
-        className="absolute inset-0 z-10"
-      />
-
-      <div className="relative aspect-4/3 overflow-hidden bg-surface-2">
+        className="relative block aspect-4/3 overflow-hidden bg-surface-2"
+      >
         {cover ? (
           <>
             {/* Blurred, faded copy fills the frame behind the natural cover. */}
@@ -64,7 +62,7 @@ export function GameCard({
             <Die className="h-10 w-10" />
           </div>
         )}
-      </div>
+      </Link>
 
       {/* Read-only tags: which of your collection lists this game is in. */}
       <div className="pointer-events-none absolute left-2 top-2 z-20">
@@ -73,7 +71,12 @@ export function GameCard({
 
       <div className="flex flex-1 flex-col p-3">
         <h3 className="font-display line-clamp-2 font-bold leading-snug">
-          {game.title}
+          <Link
+            href={`/boardgames/${game.slug}`}
+            className="transition-colors hover:text-accent"
+          >
+            {game.title}
+          </Link>
         </h3>
         <div className="mt-auto flex items-center justify-between gap-1.5 pt-2">
           <div className="flex min-w-0 items-center gap-x-2 overflow-hidden text-[11px] text-muted">
@@ -100,9 +103,7 @@ export function GameCard({
                 {rating.toFixed(1)}
               </span>
             )}
-            <div className="pointer-events-auto relative z-20 flex items-center">
-              <CollectionButton gameId={game._id} size="sm" className={iconBtn} />
-            </div>
+            <CollectionButton gameId={game._id} size="sm" className={iconBtn} />
           </div>
         </div>
       </div>

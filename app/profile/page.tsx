@@ -18,6 +18,7 @@ import { useConfirm } from "@/components/ui/Confirm";
 import { friendlyError } from "@/lib/friendlyError";
 import { InstallPrompt } from "@/components/InstallPrompt";
 import { Die } from "@/components/ui/icons";
+import { cn } from "@/lib/cn";
 
 const CameraIcon = (
   <svg
@@ -186,6 +187,9 @@ function ProfileBody() {
 
       {/* Personal info */}
       {!isGuest && <PersonalInfo me={me} />}
+
+      {/* Public profile sharing */}
+      {!isGuest && <PublicProfileCard me={me} />}
 
       {/* Activity */}
       <p className="mb-3 px-1 text-xs font-semibold uppercase tracking-widest text-subtle">
@@ -482,6 +486,132 @@ function StatCard({
       </div>
       <div className="text-xs text-subtle">{label}</div>
       {sub && <div className="mt-0.5 text-[11px] text-subtle">{sub}</div>}
+    </div>
+  );
+}
+
+type PrefKey =
+  | "showName"
+  | "showAvatar"
+  | "showTopLists"
+  | "showOwned"
+  | "showForTrade"
+  | "showWishlist";
+
+const SHARE_TOGGLES: { key: PrefKey; label: string; def: boolean }[] = [
+  { key: "showName", label: "Name", def: true },
+  { key: "showAvatar", label: "Profile photo", def: true },
+  { key: "showTopLists", label: "Top Games lists", def: true },
+  { key: "showOwned", label: "Owned games", def: false },
+  { key: "showForTrade", label: "Games for trade", def: false },
+  { key: "showWishlist", label: "Wishlist", def: false },
+];
+
+function Switch({
+  checked,
+  onChange,
+  label,
+}: {
+  checked: boolean;
+  onChange: (v: boolean) => void;
+  label: string;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-label={label}
+      onClick={() => onChange(!checked)}
+      className={cn(
+        "inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors",
+        checked ? "bg-accent" : "bg-surface-2 ring-1 ring-inset ring-border",
+      )}
+    >
+      <span
+        className={cn(
+          "inline-block h-5 w-5 rounded-full bg-white shadow transition-transform duration-200",
+          checked ? "translate-x-[22px]" : "translate-x-0.5",
+        )}
+      />
+    </button>
+  );
+}
+
+function PublicProfileCard({ me }: { me: Doc<"users"> }) {
+  const setPublicProfile = useMutation(api.users.setPublicProfile);
+  const toast = useToast();
+  const prefs = me.publicProfile ?? {};
+  const username = me.username;
+
+  async function set(key: PrefKey, value: boolean) {
+    try {
+      await setPublicProfile({ [key]: value } as Partial<Record<PrefKey, boolean>>);
+    } catch {
+      toast("Couldn't update sharing", "error");
+    }
+  }
+
+  async function copyLink() {
+    if (!username) return;
+    try {
+      await navigator.clipboard.writeText(
+        `${window.location.origin}/user/${username}`,
+      );
+      toast("Link copied", "success");
+    } catch {
+      toast("Couldn't copy link", "error");
+    }
+  }
+
+  return (
+    <div className="mb-6 rounded-2xl border border-border-muted bg-surface p-6 shadow-sm">
+      <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-subtle">
+        Public profile
+      </p>
+
+      {username ? (
+        <div className="mb-4 flex flex-wrap items-center gap-2 text-sm">
+          <span className="text-muted">Shareable at</span>
+          <Link
+            href={`/user/${username}`}
+            className="font-semibold text-accent hover:underline"
+          >
+            /user/{username}
+          </Link>
+          <button
+            onClick={copyLink}
+            className="rounded-lg border border-border px-2 py-1 text-xs font-medium text-muted transition-colors hover:bg-surface-2"
+          >
+            Copy link
+          </button>
+        </div>
+      ) : (
+        <p className="mb-4 text-sm text-muted">
+          Set a username above to get a shareable profile page.
+        </p>
+      )}
+
+      <p className="mb-1 text-xs text-subtle">Choose what visitors can see:</p>
+      <div className="divide-y divide-border">
+        {SHARE_TOGGLES.map((t) => {
+          const checked = prefs[t.key] ?? t.def;
+          return (
+            <div key={t.key} className="flex items-center justify-between py-2.5">
+              <span className="text-sm text-foreground">{t.label}</span>
+              <Switch
+                checked={checked}
+                onChange={(v) => set(t.key, v)}
+                label={t.label}
+              />
+            </div>
+          );
+        })}
+      </div>
+      <p className="mt-3 text-[11px] text-subtle">
+        Top Games lists only appear if you&apos;ve made them public. Collections
+        come from your linked BoardGameGeek account.
+      </p>
     </div>
   );
 }

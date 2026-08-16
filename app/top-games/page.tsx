@@ -10,14 +10,14 @@ import {
   Unauthenticated,
   AuthLoading,
 } from "convex/react";
-import { Trophy, Globe, Plus, Minus } from "lucide-react";
+import { Trophy, Plus, Minus } from "lucide-react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { buttonClasses } from "@/components/ui/Button";
-import { Chip, Skeleton } from "@/components/ui/Surface";
+import { Skeleton } from "@/components/ui/Surface";
 import { Thumb } from "@/components/top-games/Thumb";
+import { ListCard } from "@/components/top-games/ListCard";
 import { useToast } from "@/components/ui/Toast";
-import { relativeTime } from "@/lib/format";
 import { cn } from "@/lib/cn";
 
 const PRESETS = [10, 25, 50, 100];
@@ -40,6 +40,7 @@ type ListRow = {
   visibility: "private" | "public";
   count: number;
   updatedAt: number;
+  covers: string[];
 };
 
 export default function TopGamesPage() {
@@ -56,16 +57,18 @@ export default function TopGamesPage() {
         Rank your favourite games each year, then watch how they move over time.
       </p>
 
-      <div className="mb-6 flex gap-1.5">
+      <div className="mb-6 flex gap-6 border-b border-border">
         {(["mine", "community"] as const).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
-            className={
+            aria-current={tab === t ? "page" : undefined}
+            className={cn(
+              "-mb-px border-b-2 px-0.5 pb-2.5 text-sm font-semibold transition-colors",
               tab === t
-                ? buttonClasses("primary", "sm")
-                : buttonClasses("ghost", "sm")
-            }
+                ? "border-accent text-foreground"
+                : "border-transparent text-muted hover:text-foreground",
+            )}
           >
             {t === "mine" ? "My lists" : "Community"}
           </button>
@@ -119,41 +122,13 @@ function MyLists() {
         <ul className="grid gap-3 sm:grid-cols-2">
           {lists.map((l) => (
             <li key={l._id}>
-              <Link
-                href={`/top-games/${l._id}`}
-                className="block rounded-2xl border border-border bg-surface p-4 transition-all hover:-translate-y-0.5 hover:border-accent/40 hover:shadow-lg"
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <span className="font-display truncate font-bold">
-                    {l.title ?? `Top ${l.size} · ${l.year}`}
-                  </span>
-                  <StatusChip list={l} />
-                </div>
-                <p className="mt-1 text-xs text-muted">
-                  Top {l.size} · {l.year} · {l.count} game{l.count === 1 ? "" : "s"}
-                </p>
-                <p className="mt-2 text-xs text-subtle">
-                  Updated {relativeTime(l.updatedAt)}
-                </p>
-              </Link>
+              <ListCard list={l} />
             </li>
           ))}
         </ul>
       )}
     </div>
   );
-}
-
-function StatusChip({ list }: { list: ListRow }) {
-  if (list.status === "draft") return <Chip>Draft</Chip>;
-  if (list.visibility === "public")
-    return (
-      <Chip tone={2}>
-        <Globe className="h-3 w-3" />
-        Public
-      </Chip>
-    );
-  return <Chip tone={1}>Finalized</Chip>;
 }
 
 function CreateForm({ lists }: { lists: ListRow[] }) {
@@ -227,7 +202,7 @@ function CreateForm({ lists }: { lists: ListRow[] }) {
   );
 }
 
-/** Segmented preset picker + an inline custom "number of games" field. */
+/** Segmented preset picker (10 / 25 / 50 / 100). */
 function SizeControl({
   size,
   onChange,
@@ -235,8 +210,6 @@ function SizeControl({
   size: number;
   onChange: (n: number) => void;
 }) {
-  const isPreset = PRESETS.includes(size);
-  const customActive = !isPreset && size > 0;
   return (
     <div className={cn(TRACK, "gap-0.5")}>
       {PRESETS.map((p) => {
@@ -258,24 +231,6 @@ function SizeControl({
           </button>
         );
       })}
-      <span className="mx-0.5 h-5 w-px shrink-0 bg-border" aria-hidden />
-      <input
-        type="number"
-        inputMode="numeric"
-        min={3}
-        max={250}
-        value={isPreset ? "" : size || ""}
-        placeholder="##"
-        onChange={(e) => onChange(Number(e.target.value))}
-        aria-label="Custom number of games"
-        className={cn(
-          "h-9 w-14 rounded-lg text-center text-sm font-bold tabular-nums outline-none transition-colors placeholder:font-semibold placeholder:text-subtle focus:ring-2 focus:ring-ring/40",
-          NO_SPIN,
-          customActive
-            ? "bg-accent/12 text-accent"
-            : "bg-transparent text-foreground hover:bg-surface focus:bg-surface",
-        )}
-      />
     </div>
   );
 }
