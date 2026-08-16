@@ -9,6 +9,7 @@
  */
 
 import type * as admin from "../admin.js";
+import type * as assistant from "../assistant.js";
 import type * as auth from "../auth.js";
 import type * as bgg from "../bgg.js";
 import type * as bggSync from "../bggSync.js";
@@ -28,6 +29,7 @@ import type * as images from "../images.js";
 import type * as ingestion from "../ingestion.js";
 import type * as ingestionDb from "../ingestionDb.js";
 import type * as lib_annotations from "../lib/annotations.js";
+import type * as lib_assistantPrompt from "../lib/assistantPrompt.js";
 import type * as lib_auth from "../lib/auth.js";
 import type * as lib_bggCrypto from "../lib/bggCrypto.js";
 import type * as lib_bggFetch from "../lib/bggFetch.js";
@@ -65,6 +67,7 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   admin: typeof admin;
+  assistant: typeof assistant;
   auth: typeof auth;
   bgg: typeof bgg;
   bggSync: typeof bggSync;
@@ -84,6 +87,7 @@ declare const fullApi: ApiFromModules<{
   ingestion: typeof ingestion;
   ingestionDb: typeof ingestionDb;
   "lib/annotations": typeof lib_annotations;
+  "lib/assistantPrompt": typeof lib_assistantPrompt;
   "lib/auth": typeof lib_auth;
   "lib/bggCrypto": typeof lib_bggCrypto;
   "lib/bggFetch": typeof lib_bggFetch;

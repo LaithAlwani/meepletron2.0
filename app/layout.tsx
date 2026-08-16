@@ -5,6 +5,7 @@ import { Providers } from "./providers";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
 import { BottomNav } from "@/components/BottomNav";
+import { GlobalAssistant } from "@/components/assistant/GlobalAssistant";
 import { PreferencesEffects } from "@/components/PreferencesEffects";
 import { SITE_URL } from "@/lib/site";
 
@@ -81,6 +82,7 @@ export default function RootLayout({
           <main className="relative z-10 flex-1">{children}</main>
           <SiteFooter />
           <BottomNav />
+          <GlobalAssistant />
         </Providers>
       </body>
     </html>

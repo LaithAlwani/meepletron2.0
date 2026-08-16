@@ -95,10 +95,14 @@ async function loadOwnedChat(
 // Public queries / mutations
 // ---------------------------------------------------------------------------
 
-/** Fetch or create the current user's chat for a game. Returns the chat id. */
+/**
+ * Fetch or create the current user's chat for a game. Returns the chat id.
+ * `selectAllFamily` (used by the global assistant) selects the base game plus
+ * every expansion's rulebooks, so it searches the whole family.
+ */
 export const getOrCreateChat = mutation({
-  args: { gameId: v.id("games") },
-  handler: async (ctx, { gameId }): Promise<Id<"chats">> => {
+  args: { gameId: v.id("games"), selectAllFamily: v.optional(v.boolean()) },
+  handler: async (ctx, { gameId, selectAllFamily }): Promise<Id<"chats">> => {
     const user = await requireUser(ctx);
     // One chat per game family — anchor it on the base game.
     const baseId = await resolveBaseGameId(ctx, gameId);
@@ -109,13 +113,11 @@ export const getOrCreateChat = mutation({
       )
       .unique();
     if (existing) {
-      // Prune stale/deleted rulebook selections (keeps retrieval + the source
-      // panel in sync with the family's current rulebooks).
-      const effective = await effectiveRulebookIds(
-        ctx,
-        baseId,
-        existing.selectedRulebookIds,
-      );
+      // Bubble: use the whole family. Otherwise prune stale/deleted selections
+      // (keeps retrieval + the source panel in sync with current rulebooks).
+      const effective = selectAllFamily
+        ? [...(await familyRulebookIds(ctx, baseId))]
+        : await effectiveRulebookIds(ctx, baseId, existing.selectedRulebookIds);
       const changed =
         effective.length !== existing.selectedRulebookIds.length ||
         effective.some((id, i) => id !== existing.selectedRulebookIds[i]);
@@ -127,8 +129,10 @@ export const getOrCreateChat = mutation({
       return existing._id;
     }
 
-    // Default selection: the base game's own rulebooks only (expansions off).
-    const selectedRulebookIds = await ingestedRulebookIds(ctx, baseId);
+    // New chat: the whole family (bubble) or the base game's own rulebooks.
+    const selectedRulebookIds = selectAllFamily
+      ? [...(await familyRulebookIds(ctx, baseId))]
+      : await ingestedRulebookIds(ctx, baseId);
     return await ctx.db.insert("chats", {
       userId: user._id,
       gameId: baseId,

@@ -1,8 +1,10 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { Send } from "lucide-react";
+import { Send, Mic } from "lucide-react";
 import { usePreferences } from "@/lib/usePreferences";
+import { useSpeechInput } from "./useSpeechInput";
+import { cn } from "@/lib/cn";
 
 export function ChatInput({
   onSend,
@@ -16,6 +18,17 @@ export function ChatInput({
   const [text, setText] = useState("");
   const taRef = useRef<HTMLTextAreaElement>(null);
   const { enterToSend } = usePreferences();
+
+  // Voice dictation — merges the transcript onto whatever was already typed.
+  const dictationBase = useRef("");
+  const speech = useSpeechInput((transcript) => {
+    setText(`${dictationBase.current} ${transcript}`.trimStart());
+  });
+  function toggleMic() {
+    if (!speech.listening) dictationBase.current = text ? `${text} ` : "";
+    speech.toggle();
+    taRef.current?.focus();
+  }
 
   function submit() {
     const trimmed = text.trim();
@@ -62,6 +75,22 @@ export function ChatInput({
         }
         className="max-h-40 flex-1 resize-none bg-transparent px-2 py-1.5 text-sm outline-none placeholder:text-subtle"
       />
+      {speech.supported && (
+        <button
+          type="button"
+          onClick={toggleMic}
+          aria-label={speech.listening ? "Stop dictation" : "Dictate"}
+          aria-pressed={speech.listening}
+          className={cn(
+            "flex shrink-0 items-center justify-center rounded-xl p-2.5 transition-colors",
+            speech.listening
+              ? "bg-accent/15 text-accent"
+              : "text-muted hover:text-foreground",
+          )}
+        >
+          <Mic className={cn("h-4.5 w-4.5", speech.listening && "animate-pulse")} />
+        </button>
+      )}
       <button
         type="submit"
         disabled={disabled || !text.trim()}
