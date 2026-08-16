@@ -19,6 +19,7 @@ import { api } from "@/convex/_generated/api";
 import { formatPlayTime } from "@/lib/format";
 import { FavoriteToggle } from "@/components/boardgames/FavoriteToggle";
 import { BookmarkToggle } from "@/components/boardgames/BookmarkToggle";
+import { StatusMenu } from "@/components/boardgames/StatusMenu";
 import { BackgroundCover } from "@/components/boardgames/BackgroundCover";
 import { SimilarGames } from "@/components/boardgames/SimilarGames";
 import { InlineAsk } from "@/components/boardgames/InlineAsk";
@@ -350,6 +351,11 @@ export default function GameDetailPage({
               <div className="mt-4 flex flex-wrap items-center gap-2">
                 <FavoriteToggle gameId={gameId} className={actionCls} />
                 <BookmarkToggle gameId={gameId} className={actionCls} />
+                <StatusMenu
+                  gameId={gameId}
+                  variant="button"
+                  className={actionCls}
+                />
                 <button
                   type="button"
                   onClick={() => toast("Play logging is coming soon", "info")}

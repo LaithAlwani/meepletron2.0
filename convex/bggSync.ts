@@ -273,17 +273,18 @@ export const myJobs = query({
   },
 });
 
-/** Per-category counts for the collection tabs. Scans the user's rows (bounded). */
+/** Two-level counts for the collection tabs. Scans the user's rows (bounded). */
 export const myCollectionCounts = query({
   args: {},
   handler: async (ctx) => {
     const zero = {
       all: 0,
       owned: 0,
-      wishlist: 0,
-      wantToPlay: 0,
-      prevOwned: 0,
-      forTrade: 0,
+      notOwned: 0,
+      ownedWantToPlay: 0,
+      ownedForTrade: 0,
+      notOwnedWant: 0,
+      notOwnedPrevOwned: 0,
     };
     const user = await getCurrentUser(ctx);
     if (!user) return zero;
@@ -293,11 +294,15 @@ export const myCollectionCounts = query({
       .take(5000);
     const c = { ...zero, all: rows.length };
     for (const r of rows) {
-      if (r.own) c.owned++;
-      if (r.wishlist) c.wishlist++;
-      if (r.wantToPlay) c.wantToPlay++;
-      if (r.prevOwned) c.prevOwned++;
-      if (r.forTrade) c.forTrade++;
+      if (r.own) {
+        c.owned++;
+        if (r.wantToPlay) c.ownedWantToPlay++;
+        if (r.forTrade) c.ownedForTrade++;
+      } else {
+        c.notOwned++;
+        if (r.wishlist) c.notOwnedWant++;
+        if (r.prevOwned) c.notOwnedPrevOwned++;
+      }
     }
     return c;
   },
@@ -306,31 +311,31 @@ export const myCollectionCounts = query({
 export const myCollection = query({
   args: {
     paginationOpts: paginationOptsValidator,
-    // Categories map 1:1 to a BGG status flag (want + preordered are already
-    // folded into `wishlist` at import). `all` shows the whole collection.
-    filter: v.optional(
+    // Two-level filter: `section` splits owned vs not-owned (or all), `status`
+    // narrows to a BGG sub-status (want = the folded wishlist bucket).
+    section: v.optional(
+      v.union(v.literal("all"), v.literal("owned"), v.literal("notOwned")),
+    ),
+    status: v.optional(
       v.union(
-        v.literal("owned"),
-        v.literal("wishlist"),
+        v.literal("want"),
         v.literal("wantToPlay"),
-        v.literal("prevOwned"),
         v.literal("forTrade"),
-        v.literal("all"),
+        v.literal("prevOwned"),
       ),
     ),
   },
-  handler: async (ctx, { paginationOpts, filter }) => {
+  handler: async (ctx, { paginationOpts, section, status }) => {
     const user = await getCurrentUser(ctx);
     if (!user) {
       return { page: [], isDone: true, continueCursor: "" };
     }
 
-    const FIELD = {
-      owned: "own",
-      wishlist: "wishlist",
+    const STATUS_FIELD = {
+      want: "wishlist",
       wantToPlay: "wantToPlay",
-      prevOwned: "prevOwned",
       forTrade: "forTrade",
+      prevOwned: "prevOwned",
     } as const;
 
     let q = ctx.db
@@ -338,8 +343,13 @@ export const myCollection = query({
       .withIndex("by_user_and_sort_title", (qq) => qq.eq("userId", user._id));
     // `.filter` doesn't reduce rows read, but a single user's collection is
     // bounded at a couple of thousand rows, so the scan stays cheap.
-    if (filter && filter !== "all") {
-      const field = FIELD[filter];
+    if (section === "owned") {
+      q = q.filter((qq) => qq.eq(qq.field("own"), true));
+    } else if (section === "notOwned") {
+      q = q.filter((qq) => qq.eq(qq.field("own"), false));
+    }
+    if (status) {
+      const field = STATUS_FIELD[status];
       q = q.filter((qq) => qq.eq(qq.field(field), true));
     }
 

@@ -5,11 +5,28 @@ import type { Doc, Id } from "./_generated/dataModel";
 import { getCurrentUser, requireUser } from "./lib/auth";
 
 /**
- * The heart (wishlist) and bookmark (owned) toggles. `own`/`wishlist` on the
- * `bggCollection` row are the single source of truth — the BGG sync seeds them
- * on first import, and the user edits them freely afterwards. A row that ends up
- * with neither flag is deleted; a row with either shows in the matching tab.
+ * Collection status toggles. Every game the user has any relationship with is one
+ * `bggCollection` row; the boolean status flags are the source of truth — the BGG
+ * sync seeds them on import, the user edits them freely afterwards. The two
+ * primary toggles are Owned (`own`, bookmark) and Want (`wishlist`, heart — which
+ * folds BGG want/want-to-buy/preordered in at import); the sub-statuses are
+ * wantToPlay / forTrade / prevOwned. A row with no flag left is deleted.
  */
+
+/** All editable status flags on a collection row. */
+const STATUS_KEYS = [
+  "own",
+  "wishlist",
+  "wantToPlay",
+  "forTrade",
+  "prevOwned",
+] as const;
+type StatusKey = (typeof STATUS_KEYS)[number];
+
+/** A row is worth keeping while it still carries any status flag. */
+function isMeaningful(row: Partial<Record<StatusKey, boolean | undefined>>): boolean {
+  return STATUS_KEYS.some((k) => row[k]);
+}
 
 async function findRow(
   ctx: QueryCtx,
@@ -44,12 +61,12 @@ function newRowFields(
   };
 }
 
-/** Set own/wishlist, creating the row or deleting it once both are off. */
+/** Apply a status change, creating the row or deleting it once no flag is left. */
 async function setFlags(
   ctx: MutationCtx,
   gameId: Id<"games">,
-  patch: { own?: boolean; wishlist?: boolean },
-): Promise<boolean> {
+  patch: Partial<Record<StatusKey, boolean>>,
+): Promise<void> {
   const user = await requireUser(ctx);
   const existing = await findRow(ctx, user._id, gameId);
 
@@ -60,51 +77,87 @@ async function setFlags(
       ...newRowFields(user._id, game),
       ...patch,
     });
-    return patch.own ?? patch.wishlist ?? false;
+    return;
   }
 
   const merged = { ...existing, ...patch };
-  if (!merged.own && !merged.wishlist) {
+  if (!isMeaningful(merged)) {
     await ctx.db.delete("bggCollection", existing._id);
   } else {
     await ctx.db.patch("bggCollection", existing._id, patch);
   }
-  return patch.own ?? patch.wishlist ?? false;
 }
 
-/** Heart → wishlist. Returns the new state. */
+/** Heart → Want (the merged wishlist bucket). Returns the new state. */
 export const toggleWishlist = mutation({
   args: { gameId: v.id("games") },
   handler: async (ctx, { gameId }): Promise<boolean> => {
     const user = await requireUser(ctx);
     const row = await findRow(ctx, user._id, gameId);
-    return await setFlags(ctx, gameId, { wishlist: !row?.wishlist });
+    const next = !row?.wishlist;
+    await setFlags(ctx, gameId, { wishlist: next });
+    return next;
   },
 });
 
-/** Bookmark → owned. Returns the new state. */
+/** Bookmark → Owned. Returns the new state. */
 export const toggleOwned = mutation({
   args: { gameId: v.id("games") },
   handler: async (ctx, { gameId }): Promise<boolean> => {
     const user = await requireUser(ctx);
     const row = await findRow(ctx, user._id, gameId);
-    return await setFlags(ctx, gameId, { own: !row?.own });
+    const next = !row?.own;
+    await setFlags(ctx, gameId, { own: next });
+    return next;
   },
 });
 
-/** The current user's collection state for a game (drives the buttons). */
+/** Set one of the editable sub-statuses (want to play / for trade / prev owned). */
+export const setStatus = mutation({
+  args: {
+    gameId: v.id("games"),
+    key: v.union(
+      v.literal("wantToPlay"),
+      v.literal("forTrade"),
+      v.literal("prevOwned"),
+    ),
+    value: v.boolean(),
+  },
+  handler: async (ctx, { gameId, key, value }) => {
+    await setFlags(ctx, gameId, { [key]: value });
+  },
+});
+
+/** The current user's full status for a game (drives the toggles + status menu). */
 export const state = query({
   args: { gameId: v.id("games") },
   handler: async (
     ctx,
     { gameId },
-  ): Promise<{ wishlist: boolean; owned: boolean }> => {
+  ): Promise<{
+    owned: boolean;
+    want: boolean;
+    wantToPlay: boolean;
+    forTrade: boolean;
+    prevOwned: boolean;
+  }> => {
+    const zero = {
+      owned: false,
+      want: false,
+      wantToPlay: false,
+      forTrade: false,
+      prevOwned: false,
+    };
     const user = await getCurrentUser(ctx);
-    if (!user) return { wishlist: false, owned: false };
+    if (!user) return zero;
     const row = await findRow(ctx, user._id, gameId);
+    if (!row) return zero;
     return {
-      wishlist: !!row?.wishlist,
-      owned: !!row?.own,
+      owned: !!row.own,
+      want: !!row.wishlist,
+      wantToPlay: !!row.wantToPlay,
+      forTrade: !!row.forTrade,
+      prevOwned: !!row.prevOwned,
     };
   },
 });

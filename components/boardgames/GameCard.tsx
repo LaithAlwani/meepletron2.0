@@ -4,14 +4,18 @@ import type { GameWithMedia } from "@/convex/games";
 import { formatPlayTime } from "@/lib/format";
 import { FavoriteToggle } from "./FavoriteToggle";
 import { BookmarkToggle } from "./BookmarkToggle";
+import { StatusMenu } from "./StatusMenu";
 import { Die } from "@/components/ui/icons";
 
 export function GameCard({
   game,
   index = 0,
+  showStatus = false,
 }: {
   game: GameWithMedia;
   index?: number;
+  /** Show the editable BGG sub-status badge (used on the collection page). */
+  showStatus?: boolean;
 }) {
   const players =
     game.minPlayers && game.maxPlayers
@@ -65,6 +69,12 @@ export function GameCard({
           </div>
         )}
       </div>
+
+      {showStatus && (
+        <div className="absolute left-2 top-2 z-20">
+          <StatusMenu gameId={game._id} />
+        </div>
+      )}
 
       <div className="flex flex-1 flex-col p-3">
         <h3 className="font-display line-clamp-2 font-bold leading-snug">
