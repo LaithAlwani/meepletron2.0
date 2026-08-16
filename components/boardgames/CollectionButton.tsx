@@ -43,7 +43,12 @@ export function CollectionButton({
   const btnRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
-  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+  const [coords, setCoords] = useState<{ top: number; left: number }>({
+    top: 0,
+    left: 0,
+  });
+  // Hidden until measured + placed, so the pre-position frame never flashes.
+  const [placed, setPlaced] = useState(false);
 
   const inCollection = !!(
     state &&
@@ -71,17 +76,44 @@ export function CollectionButton({
     };
   }, [open]);
 
+  // Once the menu is in the DOM, measure it and pick a corner that fits: below
+  // the button by default, flipped above when there's more room; left-aligned to
+  // the button unless that overflows, then right-aligned — always clamped.
+  useEffect(() => {
+    if (!open) {
+      setPlaced(false);
+      return;
+    }
+    const btn = btnRef.current?.getBoundingClientRect();
+    const menu = menuRef.current?.getBoundingClientRect();
+    if (!btn || !menu) return;
+    const gap = 6;
+    const m = 8; // viewport margin
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const mw = menu.width;
+    const mh = menu.height;
+
+    let top = btn.bottom + gap;
+    const fitsBelow = top + mh <= vh - m;
+    const roomAbove = btn.top - gap - mh >= m;
+    if (!fitsBelow && roomAbove) top = btn.top - gap - mh;
+    top = Math.max(m, Math.min(top, vh - mh - m));
+
+    let left = btn.left;
+    if (left + mw > vw - m) left = btn.right - mw; // align right edges instead
+    left = Math.max(m, Math.min(left, vw - mw - m));
+
+    setCoords({ top, left });
+    setPlaced(true);
+  }, [open]);
+
   function openMenu(e: React.MouseEvent) {
     e.preventDefault();
     e.stopPropagation();
     if (!isAuthenticated) {
       toast("Sign in to build your collection", "info");
       return;
-    }
-    const r = btnRef.current?.getBoundingClientRect();
-    if (r) {
-      const left = Math.min(r.left, window.innerWidth - 208);
-      setPos({ top: r.bottom + 6, left: Math.max(8, left) });
     }
     setOpen((o) => !o);
   }
@@ -114,11 +146,16 @@ export function CollectionButton({
         />
       </button>
       {open &&
-        pos &&
         createPortal(
           <div
             ref={menuRef}
-            style={{ position: "fixed", top: pos.top, left: pos.left, zIndex: 60 }}
+            style={{
+              position: "fixed",
+              top: coords.top,
+              left: coords.left,
+              zIndex: 60,
+              visibility: placed ? "visible" : "hidden",
+            }}
             className="w-52 rounded-xl border border-border bg-surface p-1 shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
