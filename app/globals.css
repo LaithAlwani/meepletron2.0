@@ -266,6 +266,14 @@ body::before {
   animation: msg-in 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
+/* Fully hide the scrollbar (used where we drive scrolling with buttons/touch). */
+.no-scrollbar {
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
 /* Slim, accent-tinted horizontal scrollbar for card rows (related games etc.). */
 .hscroll {
   scrollbar-width: thin;

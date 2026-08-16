@@ -29,7 +29,7 @@ export function GameCard({
   return (
     <div
       style={{ animationDelay: `${Math.min(index, 10) * 40}ms` }}
-      className="animate-in group relative flex w-full flex-col overflow-hidden rounded-2xl border border-border bg-surface shadow-sm transition-all duration-200 hover:-translate-y-1 hover:border-accent/50 hover:shadow-lg"
+      className="animate-in group relative flex h-full w-full flex-col overflow-hidden rounded-2xl border border-border bg-surface shadow-sm transition-all duration-200 hover:-translate-y-1 hover:border-accent/50 hover:shadow-lg"
     >
       {/* Stretched link covers the card for navigation; the toggle buttons sit
           above it (z-20) so they stay interactive without nesting in an <a>. */}
