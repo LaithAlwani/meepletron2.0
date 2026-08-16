@@ -273,6 +273,36 @@ export const myJobs = query({
   },
 });
 
+/** Per-category counts for the collection tabs. Scans the user's rows (bounded). */
+export const myCollectionCounts = query({
+  args: {},
+  handler: async (ctx) => {
+    const zero = {
+      all: 0,
+      owned: 0,
+      wishlist: 0,
+      wantToPlay: 0,
+      prevOwned: 0,
+      forTrade: 0,
+    };
+    const user = await getCurrentUser(ctx);
+    if (!user) return zero;
+    const rows = await ctx.db
+      .query("bggCollection")
+      .withIndex("by_user_and_sort_title", (q) => q.eq("userId", user._id))
+      .take(5000);
+    const c = { ...zero, all: rows.length };
+    for (const r of rows) {
+      if (r.own) c.owned++;
+      if (r.wishlist) c.wishlist++;
+      if (r.wantToPlay) c.wantToPlay++;
+      if (r.prevOwned) c.prevOwned++;
+      if (r.forTrade) c.forTrade++;
+    }
+    return c;
+  },
+});
+
 export const myCollection = query({
   args: {
     paginationOpts: paginationOptsValidator,

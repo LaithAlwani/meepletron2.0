@@ -84,6 +84,7 @@ function CollectionBody() {
   const [filter, setFilter] = useState<Filter>("all");
   const account = useQuery(api.bggSync.myAccount);
   const jobs = useQuery(api.bggSync.myJobs);
+  const counts = useQuery(api.bggSync.myCollectionCounts);
   const { results, status, loadMore } = usePaginatedQuery(
     api.bggSync.myCollection,
     { filter },
@@ -115,19 +116,25 @@ function CollectionBody() {
   return (
     <>
       <div className="-mx-4 mb-4 flex gap-1.5 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:px-0">
-        {FILTERS.map((f) => (
-          <button
-            key={f.value}
-            onClick={() => setFilter(f.value)}
-            className={`shrink-0 ${
-              filter === f.value
-                ? buttonClasses("primary", "sm")
-                : buttonClasses("ghost", "sm")
-            }`}
-          >
-            {f.label}
-          </button>
-        ))}
+        {FILTERS.map((f) => {
+          const n = counts?.[f.value];
+          return (
+            <button
+              key={f.value}
+              onClick={() => setFilter(f.value)}
+              className={`shrink-0 ${
+                filter === f.value
+                  ? buttonClasses("primary", "sm")
+                  : buttonClasses("ghost", "sm")
+              }`}
+            >
+              {f.label}
+              {n != null && (
+                <span className="ml-1.5 tabular-nums opacity-60">{n}</span>
+              )}
+            </button>
+          );
+        })}
       </div>
 
       {account === null && (
