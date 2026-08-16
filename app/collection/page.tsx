@@ -66,7 +66,7 @@ function RowSkeleton() {
 }
 
 function CollectionBody() {
-  const [filter, setFilter] = useState<Filter>("owned");
+  const [filter, setFilter] = useState<Filter>("all");
   const account = useQuery(api.bggSync.myAccount);
   const jobs = useQuery(api.bggSync.myJobs);
   const { results, status, loadMore } = usePaginatedQuery(
@@ -81,22 +81,6 @@ function CollectionBody() {
     ["queued", "waiting", "running", "sweeping", "enriching"].includes(
       job.status,
     );
-
-  if (account === undefined) return <RowSkeleton />;
-
-  if (!account) {
-    return (
-      <div className="rounded-2xl border border-dashed border-border p-10 text-center text-muted">
-        <p className="font-medium">No BoardGameGeek account linked.</p>
-        <Link
-          href="/settings"
-          className="mt-2 inline-block font-semibold text-accent hover:underline"
-        >
-          Link your account
-        </Link>
-      </div>
-    );
-  }
 
   return (
     <>
@@ -115,6 +99,19 @@ function CollectionBody() {
           </button>
         ))}
       </div>
+
+      {account === null && (
+        <p className="mb-4 rounded-xl border border-dashed border-border px-4 py-3 text-sm text-muted">
+          Heart a game to add it to your wishlist, or bookmark it as owned.{" "}
+          <Link
+            href="/settings"
+            className="font-semibold text-accent hover:underline"
+          >
+            Link BoardGameGeek
+          </Link>{" "}
+          to import your whole collection.
+        </p>
+      )}
 
       {syncing && (
         <p className="mb-4 rounded-xl border border-border bg-surface px-4 py-3 text-sm text-muted">
@@ -139,8 +136,10 @@ function CollectionBody() {
           {!syncing && (
             <p className="mt-1 text-sm">
               {filter === "wishlist"
-                ? "No games on your BoardGameGeek wishlist."
-                : "Sync from Settings to pull in your games."}
+                ? "Heart games in the library to add them here."
+                : filter === "owned"
+                  ? "Bookmark games you own, or link BoardGameGeek to import them."
+                  : "Heart or bookmark games in the library, or link BoardGameGeek."}
             </p>
           )}
         </div>

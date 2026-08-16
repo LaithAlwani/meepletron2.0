@@ -13,12 +13,12 @@ import {
   FileText,
   Paperclip,
   X,
-  Bookmark,
   Dices,
 } from "lucide-react";
 import { api } from "@/convex/_generated/api";
 import { formatPlayTime } from "@/lib/format";
 import { FavoriteToggle } from "@/components/boardgames/FavoriteToggle";
+import { BookmarkToggle } from "@/components/boardgames/BookmarkToggle";
 import { BackgroundCover } from "@/components/boardgames/BackgroundCover";
 import { SimilarGames } from "@/components/boardgames/SimilarGames";
 import { InlineAsk } from "@/components/boardgames/InlineAsk";
@@ -349,15 +349,7 @@ export default function GameDetailPage({
               {/* Quick actions */}
               <div className="mt-4 flex flex-wrap items-center gap-2">
                 <FavoriteToggle gameId={gameId} className={actionCls} />
-                <button
-                  type="button"
-                  onClick={() => toast("Collections are coming soon", "info")}
-                  aria-label="Add to collection"
-                  title="Add to collection (coming soon)"
-                  className={actionCls}
-                >
-                  <Bookmark className="h-4.5 w-4.5" />
-                </button>
+                <BookmarkToggle gameId={gameId} className={actionCls} />
                 <button
                   type="button"
                   onClick={() => toast("Play logging is coming soon", "info")}

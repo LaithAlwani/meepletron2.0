@@ -13,7 +13,7 @@ import {
   LayoutGrid,
   Scissors,
   MessageCircle,
-  Heart,
+  Bookmark,
   LogIn,
 } from "lucide-react";
 import { api } from "@/convex/_generated/api";
@@ -25,7 +25,7 @@ const NAV = [
   { href: "/boardgames", label: "Library", icon: LayoutGrid },
   { href: "/tuckbox", label: "Tuckbox", icon: Scissors },
   { href: "/chats", label: "Chats", icon: MessageCircle },
-  { href: "/favorites", label: "Favourites", icon: Heart },
+  { href: "/collection", label: "Collection", icon: Bookmark },
 ];
 
 function Brand() {

@@ -2,13 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutGrid, MessageCircle, Heart, User } from "lucide-react";
+import { LayoutGrid, MessageCircle, Bookmark, User } from "lucide-react";
 import { cn } from "@/lib/cn";
 
 const TABS = [
   { href: "/boardgames", label: "Library", icon: LayoutGrid },
   { href: "/chats", label: "Chats", icon: MessageCircle },
-  { href: "/favorites", label: "Favourites", icon: Heart },
+  { href: "/collection", label: "Collection", icon: Bookmark },
   { href: "/profile", label: "Profile", icon: User },
 ];
 

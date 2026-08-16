@@ -289,12 +289,23 @@ export const myCollection = query({
     let q = ctx.db
       .query("bggCollection")
       .withIndex("by_user_and_sort_title", (qq) => qq.eq("userId", user._id));
+    // Effective owned/wishlist = the BGG-imported flag OR the user's manual one.
     // `.filter` doesn't reduce rows read, but a single user's collection is
     // bounded at a couple of thousand rows, so the scan stays cheap.
     if (filter === "owned") {
-      q = q.filter((qq) => qq.eq(qq.field("own"), true));
+      q = q.filter((qq) =>
+        qq.or(
+          qq.eq(qq.field("own"), true),
+          qq.eq(qq.field("manualOwn"), true),
+        ),
+      );
     } else if (filter === "wishlist") {
-      q = q.filter((qq) => qq.eq(qq.field("wishlist"), true));
+      q = q.filter((qq) =>
+        qq.or(
+          qq.eq(qq.field("wishlist"), true),
+          qq.eq(qq.field("manualWishlist"), true),
+        ),
+      );
     }
 
     const result = await q.paginate(paginationOpts);
@@ -305,14 +316,20 @@ export const myCollection = query({
         const game = row.gameId
           ? await ctx.db.get("games", row.gameId)
           : null;
+        // Prefer the BGG thumbnail URL; for a manually-added curated game fall
+        // back to its stored cover so the row isn't blank.
+        const mediaId = game?.thumbnailId ?? game?.imageId;
+        const thumbnailUrl =
+          row.thumbnailUrl ??
+          (mediaId ? await ctx.storage.getUrl(mediaId) : null);
         return {
           _id: row._id,
           bggId: row.bggId,
           title: row.title,
           year: row.year,
-          thumbnailUrl: row.thumbnailUrl,
-          own: row.own,
-          wishlist: row.wishlist,
+          thumbnailUrl,
+          own: row.own || !!row.manualOwn,
+          wishlist: row.wishlist || !!row.manualWishlist,
           userRating: row.userRating,
           numPlays: row.numPlays,
           isExpansion: row.isExpansion,
@@ -642,7 +659,18 @@ export const sweepCollection = internalMutation({
         q.eq("userId", job.userId).lt("syncedAt", job.runStartedAt),
       )
       .take(SWEEP_BATCH);
-    for (const row of stale) await ctx.db.delete("bggCollection", row._id);
+    for (const row of stale) {
+      // Keep rows the user hand-added even if they're not in the BGG collection;
+      // stamp them current so they drop out of the stale range (else the sweep
+      // would keep re-finding them and never terminate).
+      if (row.manualOwn || row.manualWishlist) {
+        await ctx.db.patch("bggCollection", row._id, {
+          syncedAt: job.runStartedAt,
+        });
+        continue;
+      }
+      await ctx.db.delete("bggCollection", row._id);
+    }
 
     if (stale.length === SWEEP_BATCH) {
       await ctx.db.patch("bggSyncJobs", jobId, { updatedAt: Date.now() });

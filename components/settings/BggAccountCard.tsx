@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import { useAction, useMutation, useQuery } from "convex/react";
 import { RefreshCw } from "lucide-react";
 import { api } from "@/convex/_generated/api";
@@ -136,25 +135,17 @@ export function BggAccountCard() {
   // --- Linked ---------------------------------------------------------------
   return (
     <div className="space-y-3 px-4 py-3.5">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-sm font-medium text-foreground">
-            {account.username}
-          </p>
-          <p className="mt-0.5 text-xs text-muted">
-            {account.collectionSyncedAt
-              ? `${account.collectionCount ?? 0} games · synced ${relativeTime(
-                  account.collectionSyncedAt,
-                )}`
-              : "Not synced yet"}
-          </p>
-        </div>
-        <Link
-          href="/collection"
-          className="shrink-0 text-xs font-semibold text-accent hover:underline"
-        >
-          View
-        </Link>
+      <div className="min-w-0">
+        <p className="text-sm font-medium text-foreground">
+          {account.username}
+        </p>
+        <p className="mt-0.5 text-xs text-muted">
+          {account.collectionSyncedAt
+            ? `${account.collectionCount ?? 0} games · synced ${relativeTime(
+                account.collectionSyncedAt,
+              )}`
+            : "Not synced yet"}
+        </p>
       </div>
 
       {account.status === "needs_reauth" && (

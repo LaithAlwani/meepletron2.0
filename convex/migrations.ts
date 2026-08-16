@@ -4,6 +4,57 @@ import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 
 /**
+ * One-off: fold existing `favorites` (hearts) into the unified collection as
+ * `manualWishlist` rows in `bggCollection`. Idempotent, self-draining. The
+ * `favorites` table is left in place as a backstop; nothing reads it after this.
+ */
+export const migrateFavoritesToWishlist = internalMutation({
+  args: { cursor: v.optional(v.union(v.string(), v.null())) },
+  handler: async (ctx, { cursor }): Promise<void> => {
+    const page = await ctx.db
+      .query("favorites")
+      .paginate({ numItems: 200, cursor: cursor ?? null });
+    for (const fav of page.page) {
+      const existing = await ctx.db
+        .query("bggCollection")
+        .withIndex("by_user_and_game", (q) =>
+          q.eq("userId", fav.userId).eq("gameId", fav.gameId),
+        )
+        .unique();
+      if (existing) {
+        if (!existing.manualWishlist) {
+          await ctx.db.patch("bggCollection", existing._id, {
+            manualWishlist: true,
+          });
+        }
+        continue;
+      }
+      const game = await ctx.db.get("games", fav.gameId);
+      if (!game) continue;
+      await ctx.db.insert("bggCollection", {
+        userId: fav.userId,
+        gameId: game._id,
+        bggId: game.bggId ?? `local:${game._id}`,
+        title: game.title,
+        sortTitle: game.title.toLowerCase(),
+        year: game.year,
+        isExpansion: game.isExpansion,
+        own: false,
+        syncedAt: Date.now(),
+        manualWishlist: true,
+      });
+    }
+    if (!page.isDone) {
+      await ctx.scheduler.runAfter(
+        0,
+        internal.migrations.migrateFavoritesToWishlist,
+        { cursor: page.continueCursor },
+      );
+    }
+  },
+});
+
+/**
  * One-off: strip the deprecated `chatReady` field from every game.
  *
  * Runs while `chatReady` is still (transiently) in the schema as optional, so

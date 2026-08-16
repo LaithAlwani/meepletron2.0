@@ -50,6 +50,12 @@ export const bggCollectionRowValidator = bggCollectionItemValidator.extend({
   sortTitle: v.string(),
   // Stamped with the run's `runStartedAt`; rows left behind by a run are swept.
   syncedAt: v.number(),
+  // The user's own toggles, kept separate from the BGG-imported own/wishlist so
+  // a re-sync can refresh the BGG side without clobbering them. Effective
+  // owned = own || manualOwn; effective wishlist = wishlist || manualWishlist.
+  // A row carrying either manual flag is never swept.
+  manualOwn: v.optional(v.boolean()), // the bookmark button
+  manualWishlist: v.optional(v.boolean()), // the heart button
 });
 
 /** One play as parsed out of a /plays response. */

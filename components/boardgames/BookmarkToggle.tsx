@@ -1,17 +1,16 @@
 "use client";
 
 import { useConvexAuth, useQuery, useMutation } from "convex/react";
-import { Heart } from "lucide-react";
+import { Bookmark } from "lucide-react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { useToast } from "@/components/ui/Toast";
 
 /**
- * The heart — adds a game to your collection's **wishlist**. Used on cards, rows,
- * and the detail hero. Always stops the surrounding link/click; `className`
- * replaces the button styling and `size` picks the icon scale.
+ * The bookmark — marks a game as **owned** in your collection. Mirror of the
+ * heart (wishlist); `className` replaces the button styling.
  */
-export function FavoriteToggle({
+export function BookmarkToggle({
   gameId,
   className,
   size = "md",
@@ -25,8 +24,8 @@ export function FavoriteToggle({
     api.collection.state,
     isAuthenticated ? { gameId } : "skip",
   );
-  const wishlisted = !!state?.wishlist;
-  const toggle = useMutation(api.collection.toggleWishlist);
+  const owned = !!state?.owned;
+  const toggle = useMutation(api.collection.toggleOwned);
   const toast = useToast();
 
   async function onClick(e: React.MouseEvent) {
@@ -39,23 +38,23 @@ export function FavoriteToggle({
     try {
       await toggle({ gameId });
     } catch {
-      toast("Couldn't update your wishlist", "error");
+      toast("Couldn't update your collection", "error");
     }
   }
 
   return (
     <button
       onClick={onClick}
-      aria-label={wishlisted ? "Remove from wishlist" : "Add to wishlist"}
-      title={wishlisted ? "Remove from wishlist" : "Add to wishlist"}
+      aria-label={owned ? "Remove from owned" : "Mark as owned"}
+      title={owned ? "Owned — remove" : "Add to owned"}
       className={
         className ??
         "flex h-8 w-8 items-center justify-center rounded-full text-muted transition-colors hover:text-accent"
       }
     >
-      <Heart
+      <Bookmark
         className={`${size === "sm" ? "h-4 w-4" : "h-5 w-5"} ${
-          wishlisted ? "fill-accent text-accent" : ""
+          owned ? "fill-accent text-accent" : ""
         }`}
       />
     </button>

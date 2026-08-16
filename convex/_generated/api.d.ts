@@ -13,6 +13,7 @@ import type * as auth from "../auth.js";
 import type * as bgg from "../bgg.js";
 import type * as bggSync from "../bggSync.js";
 import type * as chat from "../chat.js";
+import type * as collection from "../collection.js";
 import type * as contact from "../contact.js";
 import type * as crons from "../crons.js";
 import type * as email from "../email.js";
@@ -67,6 +68,7 @@ declare const fullApi: ApiFromModules<{
   bgg: typeof bgg;
   bggSync: typeof bggSync;
   chat: typeof chat;
+  collection: typeof collection;
   contact: typeof contact;
   crons: typeof crons;
   email: typeof email;
