@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import {
   useQuery,
@@ -79,6 +79,21 @@ function CollectionBody() {
       job.status,
     );
 
+  // Auto-load the next page when the sentinel nears the viewport (infinite scroll).
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el || status !== "CanLoadMore") return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) loadMore(24);
+      },
+      { rootMargin: "600px" },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [status, loadMore]);
+
   return (
     <>
       <div className="mb-4 flex flex-wrap gap-1.5">
@@ -151,16 +166,9 @@ function CollectionBody() {
               <GameCard key={game._id} game={game} index={i} />
             ))}
           </div>
-          {status === "CanLoadMore" && (
-            <button
-              onClick={() => loadMore(24)}
-              className={`mt-4 w-full ${buttonClasses("ghost", "md")}`}
-            >
-              Load more
-            </button>
-          )}
+          <div ref={sentinelRef} aria-hidden className="h-px" />
           {status === "LoadingMore" && (
-            <p className="mt-4 text-center text-sm text-muted">Loading…</p>
+            <p className="mt-8 text-center text-sm text-muted">Loading…</p>
           )}
         </>
       )}

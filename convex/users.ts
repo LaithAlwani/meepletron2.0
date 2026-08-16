@@ -1,15 +1,21 @@
-import { v } from "convex/values";
+import { v, ConvexError } from "convex/values";
 import { query, mutation, internalQuery, internalMutation } from "./_generated/server";
 import { getCurrentUser, requireUser, requireAdmin } from "./lib/auth";
 import { tokenLimitFor } from "./chat";
 import { finite } from "./lib/num";
 import { deleteUserAppData, deleteUserAndAuth } from "./lib/purge";
 
-/** The current user's profile (null when signed out). Reactive. */
+/** The current user's profile (null when signed out). Reactive. `avatarUrl`
+ *  resolves the uploaded avatar, falling back to the OAuth `image`. */
 export const me = query({
   args: {},
   handler: async (ctx) => {
-    return await getCurrentUser(ctx);
+    const user = await getCurrentUser(ctx);
+    if (!user) return null;
+    const avatarUrl = user.avatarStorageId
+      ? await ctx.storage.getUrl(user.avatarStorageId)
+      : (user.image ?? null);
+    return { ...user, avatarUrl };
   },
 });
 
@@ -79,6 +85,74 @@ export const updateProfile = mutation({
   handler: async (ctx, { name }) => {
     const user = await requireUser(ctx);
     await ctx.db.patch("users", user._id, { name: name.trim() || undefined });
+  },
+});
+
+/** A short-lived URL the client POSTs the avatar file to. */
+export const generateAvatarUploadUrl = mutation({
+  args: {},
+  handler: async (ctx) => {
+    await requireUser(ctx);
+    return await ctx.storage.generateUploadUrl();
+  },
+});
+
+/** Set the avatar from an uploaded image (validates type, frees the old one). */
+export const setAvatar = mutation({
+  args: { storageId: v.id("_storage") },
+  handler: async (ctx, { storageId }) => {
+    const user = await requireUser(ctx);
+    const meta = await ctx.db.system.get("_storage", storageId);
+    if (!meta || !(meta.contentType ?? "").startsWith("image/")) {
+      await ctx.storage.delete(storageId);
+      throw new ConvexError("That file isn't an image.");
+    }
+    const old = user.avatarStorageId;
+    await ctx.db.patch("users", user._id, { avatarStorageId: storageId });
+    if (old && old !== storageId) await ctx.storage.delete(old);
+  },
+});
+
+/** Remove the uploaded avatar (reverts to the OAuth image / initials). */
+export const removeAvatar = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const user = await requireUser(ctx);
+    if (user.avatarStorageId) await ctx.storage.delete(user.avatarStorageId);
+    await ctx.db.patch("users", user._id, { avatarStorageId: undefined });
+  },
+});
+
+/** Set (or clear) the current user's username — unique, 3–20 chars. */
+export const setUsername = mutation({
+  args: { username: v.string() },
+  handler: async (ctx, { username }) => {
+    const user = await requireUser(ctx);
+    const trimmed = username.trim();
+    if (!trimmed) {
+      await ctx.db.patch("users", user._id, {
+        username: undefined,
+        usernameLower: undefined,
+      });
+      return;
+    }
+    if (!/^[a-zA-Z0-9_.]{3,20}$/.test(trimmed)) {
+      throw new ConvexError(
+        "Usernames are 3–20 characters: letters, numbers, underscore or dot.",
+      );
+    }
+    const lower = trimmed.toLowerCase();
+    const clash = await ctx.db
+      .query("users")
+      .withIndex("by_username_lower", (q) => q.eq("usernameLower", lower))
+      .unique();
+    if (clash && clash._id !== user._id) {
+      throw new ConvexError("That username is taken.");
+    }
+    await ctx.db.patch("users", user._id, {
+      username: trimmed,
+      usernameLower: lower,
+    });
   },
 });
 

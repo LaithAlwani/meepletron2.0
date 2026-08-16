@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -15,8 +15,24 @@ import { api } from "@/convex/_generated/api";
 import type { Doc } from "@/convex/_generated/dataModel";
 import { useToast } from "@/components/ui/Toast";
 import { useConfirm } from "@/components/ui/Confirm";
+import { friendlyError } from "@/lib/friendlyError";
 import { InstallPrompt } from "@/components/InstallPrompt";
 import { Die } from "@/components/ui/icons";
+
+const CameraIcon = (
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className="h-4 w-4"
+  >
+    <path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3Z" />
+    <circle cx="12" cy="13" r="3" />
+  </svg>
+);
 
 const icon = "h-4 w-4";
 const CalendarIcon = (
@@ -129,10 +145,17 @@ function ProfileBody() {
     <div>
       {/* Avatar card */}
       <div className="mb-6 flex flex-col items-center rounded-2xl border border-border-muted bg-surface p-8 text-center shadow-sm">
-        <div className="mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-accent/15 text-3xl font-bold text-accent">
-          {isGuest ? <Die className="h-8 w-8" /> : initial}
-        </div>
+        <ProfileAvatar
+          avatarUrl={me.avatarUrl}
+          canEdit={!isGuest}
+          isGuest={isGuest}
+          initial={initial}
+          hasUpload={!!me.avatarStorageId}
+        />
         <h1 className="font-display text-xl font-extrabold text-foreground">{fullName}</h1>
+        {me.username && (
+          <p className="text-sm font-semibold text-accent">@{me.username}</p>
+        )}
         <p className="mt-0.5 text-sm text-subtle">{me.email ?? "—"}</p>
         <div className="mt-3 flex items-center gap-1.5 text-xs text-subtle">
           {CalendarIcon}
@@ -195,6 +218,118 @@ function ProfileBody() {
 
       {/* Danger zone — permanent account deletion (real accounts only) */}
       {!isGuest && <DangerZone />}
+    </div>
+  );
+}
+
+function ProfileAvatar({
+  avatarUrl,
+  canEdit,
+  isGuest,
+  initial,
+  hasUpload,
+}: {
+  avatarUrl: string | null;
+  canEdit: boolean;
+  isGuest: boolean;
+  initial: string;
+  hasUpload: boolean;
+}) {
+  const genUrl = useMutation(api.users.generateAvatarUploadUrl);
+  const setAvatar = useMutation(api.users.setAvatar);
+  const removeAvatar = useMutation(api.users.removeAvatar);
+  const toast = useToast();
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
+
+  async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // allow re-picking the same file
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      toast("Please choose an image", "error");
+      return;
+    }
+    setBusy(true);
+    try {
+      const url = await genUrl({});
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": file.type },
+        body: file,
+      });
+      if (!res.ok) throw new Error("upload failed");
+      const { storageId } = await res.json();
+      await setAvatar({ storageId });
+      toast("Photo updated", "success");
+    } catch (err) {
+      toast(friendlyError(err, "Couldn't upload that photo"), "error");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function remove() {
+    setBusy(true);
+    try {
+      await removeAvatar({});
+    } catch {
+      toast("Couldn't remove photo", "error");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="mb-4 flex flex-col items-center">
+      <div className="relative">
+        <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-full bg-accent/15 text-3xl font-bold text-accent">
+          {avatarUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={avatarUrl} alt="" className="h-full w-full object-cover" />
+          ) : isGuest ? (
+            <Die className="h-8 w-8" />
+          ) : (
+            initial
+          )}
+        </div>
+        {canEdit && (
+          <>
+            <button
+              type="button"
+              onClick={() => fileRef.current?.click()}
+              disabled={busy}
+              aria-label="Change photo"
+              title="Change photo"
+              className="absolute -bottom-1 -right-1 flex h-8 w-8 items-center justify-center rounded-full border-2 border-surface bg-accent text-accent-foreground shadow-md transition-opacity hover:opacity-90 disabled:opacity-60"
+            >
+              {busy ? (
+                <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />
+              ) : (
+                CameraIcon
+              )}
+            </button>
+            {/* accept=image/* lets mobile offer Camera / Photo Library / Files */}
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/*"
+              onChange={onFile}
+              className="hidden"
+            />
+          </>
+        )}
+      </div>
+      {canEdit && hasUpload && (
+        <button
+          type="button"
+          onClick={remove}
+          disabled={busy}
+          className="mt-2 text-xs font-medium text-subtle transition-colors hover:text-red-500 disabled:opacity-50"
+        >
+          Remove photo
+        </button>
+      )}
     </div>
   );
 }
@@ -285,16 +420,21 @@ function StatCard({
 
 function PersonalInfo({ me }: { me: Doc<"users"> }) {
   const updateProfile = useMutation(api.users.updateProfile);
+  const setUsername = useMutation(api.users.setUsername);
   const toast = useToast();
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [name, setName] = useState(me.name ?? "");
+  const [username, setUsernameInput] = useState(me.username ?? "");
 
   useEffect(() => {
     setName(me.name ?? "");
-  }, [me.name]);
+    setUsernameInput(me.username ?? "");
+  }, [me.name, me.username]);
 
-  const dirty = name !== (me.name ?? "");
+  const nameDirty = name !== (me.name ?? "");
+  const usernameDirty = username !== (me.username ?? "");
+  const dirty = nameDirty || usernameDirty;
   const inputCls =
     "w-full rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-accent/50 disabled:opacity-50";
 
@@ -305,11 +445,13 @@ function PersonalInfo({ me }: { me: Doc<"users"> }) {
     }
     setSaving(true);
     try {
-      await updateProfile({ name });
+      // Username first so a taken/invalid one blocks before the name is saved.
+      if (usernameDirty) await setUsername({ username });
+      if (nameDirty) await updateProfile({ name });
       toast("Profile updated", "success");
       setEditing(false);
-    } catch {
-      toast("Couldn't update profile", "error");
+    } catch (err) {
+      toast(friendlyError(err, "Couldn't update profile"), "error");
     } finally {
       setSaving(false);
     }
@@ -350,6 +492,37 @@ function PersonalInfo({ me }: { me: Doc<"users"> }) {
           )}
         </div>
         <div className="space-y-1">
+          <label className="text-xs font-medium text-muted">Username</label>
+          {editing ? (
+            <>
+              <div className="flex items-center gap-1">
+                <span className="text-sm text-subtle">@</span>
+                <input
+                  value={username}
+                  onChange={(e) => setUsernameInput(e.target.value)}
+                  disabled={saving}
+                  placeholder="username"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  className={inputCls}
+                />
+              </div>
+              <p className="text-[11px] text-subtle">
+                3–20 characters — letters, numbers, underscore or dot.
+              </p>
+            </>
+          ) : (
+            <p className="py-2 text-sm text-foreground">
+              {me.username ? (
+                `@${me.username}`
+              ) : (
+                <span className="text-subtle">—</span>
+              )}
+            </p>
+          )}
+        </div>
+        <div className="space-y-1">
           <label className="text-xs font-medium text-muted">Email</label>
           <p className="py-2 text-sm text-foreground">
             {me.email || <span className="text-subtle">—</span>}
@@ -362,6 +535,7 @@ function PersonalInfo({ me }: { me: Doc<"users"> }) {
           <button
             onClick={() => {
               setName(me.name ?? "");
+              setUsernameInput(me.username ?? "");
               setEditing(false);
             }}
             disabled={saving}

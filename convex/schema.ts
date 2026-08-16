@@ -33,6 +33,12 @@ export default defineSchema({
     isAnonymous: v.optional(v.boolean()),
     // --- our app fields ---
     role: v.optional(v.union(v.literal("user"), v.literal("admin"))),
+    // Public handle (unique, lowercased key). Shown on the profile; used more
+    // widely in later stages.
+    username: v.optional(v.string()),
+    usernameLower: v.optional(v.string()),
+    // Uploaded avatar in Convex storage; falls back to the OAuth `image` URL.
+    avatarStorageId: v.optional(v.id("_storage")),
     tokensUsedToday: v.optional(v.number()),
     tokensResetAt: v.optional(v.number()), // ms timestamp of the current budget window's start
     // Guest→account upgrade: a short-lived claim token set while anonymous, then
@@ -61,7 +67,8 @@ export default defineSchema({
   })
     .index("email", ["email"])
     .index("phone", ["phone"])
-    .index("by_upgrade_token", ["upgradeToken"]),
+    .index("by_upgrade_token", ["upgradeToken"])
+    .index("by_username_lower", ["usernameLower"]),
 
   // Board games + expansions unified. `isExpansion` + `parentId` discriminate.
   games: defineTable({
