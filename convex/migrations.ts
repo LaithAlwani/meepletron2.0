@@ -4,6 +4,32 @@ import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 
 /**
+ * One-off: delete collection rows that are in none of the four lists (own /
+ * wishlist / forTrade / prevOwned) — e.g. old want-to-play-only rows — so the
+ * collection only holds real memberships. Self-draining.
+ */
+export const pruneEmptyCollectionRows = internalMutation({
+  args: { cursor: v.optional(v.union(v.string(), v.null())) },
+  handler: async (ctx, { cursor }): Promise<void> => {
+    const page = await ctx.db
+      .query("bggCollection")
+      .paginate({ numItems: 500, cursor: cursor ?? null });
+    for (const r of page.page) {
+      if (!r.own && !r.wishlist && !r.forTrade && !r.prevOwned) {
+        await ctx.db.delete("bggCollection", r._id);
+      }
+    }
+    if (!page.isDone) {
+      await ctx.scheduler.runAfter(
+        0,
+        internal.migrations.pruneEmptyCollectionRows,
+        { cursor: page.continueCursor },
+      );
+    }
+  },
+});
+
+/**
  * One-off: fold existing want/preordered collection rows into the wishlist
  * (heart) — the raw want/preordered flags stay on the row so a future "Want" tab
  * can split them back out. Self-draining. (Preordered only lands on rows once a

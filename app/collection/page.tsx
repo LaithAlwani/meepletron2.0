@@ -13,53 +13,23 @@ import { api } from "@/convex/_generated/api";
 import { GameCard } from "@/components/boardgames/GameCard";
 import { buttonClasses } from "@/components/ui/Button";
 
-type Section = "all" | "owned" | "notOwned";
-type SubStatus = "want" | "wantToPlay" | "forTrade" | "prevOwned";
-type CountKey =
-  | "all"
-  | "owned"
-  | "notOwned"
-  | "ownedWantToPlay"
-  | "ownedForTrade"
-  | "notOwnedWant"
-  | "notOwnedPrevOwned";
+type Filter = "all" | "owned" | "wishlist" | "forTrade" | "prevOwned";
 
-const PRIMARY: { value: Section; label: string; count: CountKey }[] = [
-  { value: "all", label: "All", count: "all" },
-  { value: "owned", label: "Owned", count: "owned" },
-  { value: "notOwned", label: "Not owned", count: "notOwned" },
+const FILTERS: { value: Filter; label: string }[] = [
+  { value: "all", label: "All" },
+  { value: "owned", label: "Owned" },
+  { value: "wishlist", label: "Wishlist" },
+  { value: "forTrade", label: "For trade" },
+  { value: "prevOwned", label: "Previously owned" },
 ];
 
-const SUBS: Record<
-  "owned" | "notOwned",
-  { value: SubStatus | null; label: string; count: CountKey }[]
-> = {
-  owned: [
-    { value: null, label: "All", count: "owned" },
-    { value: "wantToPlay", label: "Want to play", count: "ownedWantToPlay" },
-    { value: "forTrade", label: "For trade", count: "ownedForTrade" },
-  ],
-  notOwned: [
-    { value: null, label: "All", count: "notOwned" },
-    { value: "want", label: "Want", count: "notOwnedWant" },
-    { value: "prevOwned", label: "Previously owned", count: "notOwnedPrevOwned" },
-  ],
+const EMPTY_HINT: Record<Filter, string> = {
+  all: "Add games to your collection from the library, or link BoardGameGeek.",
+  owned: "Mark games “Owned” from any card, or link BoardGameGeek.",
+  wishlist: "Add games to your Wishlist from any card, or link BoardGameGeek.",
+  forTrade: "Mark games “For trade” from any card, or on BoardGameGeek.",
+  prevOwned: "Mark games “Previously owned” from any card, or on BoardGameGeek.",
 };
-
-function emptyHint(section: Section, status: SubStatus | null): string {
-  if (status === "want") return "Heart games in the library to add them to Want.";
-  if (status === "wantToPlay")
-    return "Mark games “want to play” on the card or on BoardGameGeek.";
-  if (status === "forTrade")
-    return "Mark owned games “for trade” on the card or on BoardGameGeek.";
-  if (status === "prevOwned")
-    return "Mark games “previously owned” on the card or on BoardGameGeek.";
-  if (section === "owned")
-    return "Bookmark games you own, or link BoardGameGeek to import them.";
-  if (section === "notOwned")
-    return "Heart games you want, or link BoardGameGeek to import them.";
-  return "Heart or bookmark games in the library, or link BoardGameGeek.";
-}
 
 const gridClass = "grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4";
 
@@ -103,14 +73,13 @@ function CardSkeleton() {
 }
 
 function CollectionBody() {
-  const [section, setSection] = useState<Section>("all");
-  const [sub, setSub] = useState<SubStatus | null>(null);
+  const [filter, setFilter] = useState<Filter>("all");
   const account = useQuery(api.bggSync.myAccount);
   const jobs = useQuery(api.bggSync.myJobs);
   const counts = useQuery(api.bggSync.myCollectionCounts);
   const { results, status, loadMore } = usePaginatedQuery(
     api.bggSync.myCollection,
-    { section, status: sub ?? undefined },
+    { filter },
     { initialNumItems: 24 },
   );
 
@@ -136,67 +105,37 @@ function CollectionBody() {
     return () => io.disconnect();
   }, [status, loadMore]);
 
-  const subs = section === "all" ? null : SUBS[section];
-
   return (
     <>
-      {/* Primary: All / Owned / Not owned */}
-      <div className="-mx-4 mb-2 flex gap-1.5 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:px-0">
-        {PRIMARY.map((p) => (
+      <div className="-mx-4 mb-4 flex gap-1.5 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:px-0">
+        {FILTERS.map((f) => (
           <button
-            key={p.value}
-            onClick={() => {
-              setSection(p.value);
-              setSub(null);
-            }}
+            key={f.value}
+            onClick={() => setFilter(f.value)}
             className={`shrink-0 ${
-              section === p.value
+              filter === f.value
                 ? buttonClasses("primary", "sm")
                 : buttonClasses("ghost", "sm")
             }`}
           >
-            {p.label}
+            {f.label}
             {counts && (
               <span className="ml-1.5 tabular-nums opacity-60">
-                {counts[p.count]}
+                {counts[f.value]}
               </span>
             )}
           </button>
         ))}
       </div>
 
-      {/* Contextual sub-filters for the active section */}
-      {subs && (
-        <div className="-mx-4 mb-4 flex gap-1 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:px-0">
-          {subs.map((s) => (
-            <button
-              key={s.label}
-              onClick={() => setSub(s.value)}
-              className={`shrink-0 rounded-lg px-2.5 py-1 text-xs font-semibold transition-colors ${
-                sub === s.value
-                  ? "bg-accent/10 text-accent"
-                  : "text-muted hover:text-foreground"
-              }`}
-            >
-              {s.label}
-              {counts && (
-                <span className="ml-1 tabular-nums opacity-60">
-                  {counts[s.count]}
-                </span>
-              )}
-            </button>
-          ))}
-        </div>
-      )}
-
       {account === null && (
         <p className="mb-4 rounded-xl border border-dashed border-border px-4 py-3 text-sm text-muted">
-          Heart a game to add it to Want, or bookmark it as owned.{" "}
+          Add games to your collection from any card, or{" "}
           <Link
             href="/settings"
             className="font-semibold text-accent hover:underline"
           >
-            Link BoardGameGeek
+            link BoardGameGeek
           </Link>{" "}
           to import your whole collection.
         </p>
@@ -226,15 +165,13 @@ function CollectionBody() {
           <p className="font-medium">
             {syncing ? "Syncing…" : "Nothing here yet."}
           </p>
-          {!syncing && (
-            <p className="mt-1 text-sm">{emptyHint(section, sub)}</p>
-          )}
+          {!syncing && <p className="mt-1 text-sm">{EMPTY_HINT[filter]}</p>}
         </div>
       ) : (
         <>
           <div className={gridClass}>
             {results.map((game, i) => (
-              <GameCard key={game._id} game={game} index={i} showStatus />
+              <GameCard key={game._id} game={game} index={i} />
             ))}
           </div>
           <div ref={sentinelRef} aria-hidden className="h-px" />

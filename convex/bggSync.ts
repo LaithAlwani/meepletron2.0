@@ -277,32 +277,22 @@ export const myJobs = query({
 export const myCollectionCounts = query({
   args: {},
   handler: async (ctx) => {
-    const zero = {
-      all: 0,
-      owned: 0,
-      notOwned: 0,
-      ownedWantToPlay: 0,
-      ownedForTrade: 0,
-      notOwnedWant: 0,
-      notOwnedPrevOwned: 0,
-    };
+    const zero = { all: 0, owned: 0, wishlist: 0, forTrade: 0, prevOwned: 0 };
     const user = await getCurrentUser(ctx);
     if (!user) return zero;
     const rows = await ctx.db
       .query("bggCollection")
       .withIndex("by_user_and_sort_title", (q) => q.eq("userId", user._id))
       .take(5000);
-    const c = { ...zero, all: rows.length };
+    const c = { ...zero };
     for (const r of rows) {
-      if (r.own) {
-        c.owned++;
-        if (r.wantToPlay) c.ownedWantToPlay++;
-        if (r.forTrade) c.ownedForTrade++;
-      } else {
-        c.notOwned++;
-        if (r.wishlist) c.notOwnedWant++;
-        if (r.prevOwned) c.notOwnedPrevOwned++;
-      }
+      const inAny = r.own || r.wishlist || r.forTrade || r.prevOwned;
+      if (!inAny) continue;
+      c.all++;
+      if (r.own) c.owned++;
+      if (r.wishlist) c.wishlist++;
+      if (r.forTrade) c.forTrade++;
+      if (r.prevOwned) c.prevOwned++;
     }
     return c;
   },
@@ -311,29 +301,26 @@ export const myCollectionCounts = query({
 export const myCollection = query({
   args: {
     paginationOpts: paginationOptsValidator,
-    // Two-level filter: `section` splits owned vs not-owned (or all), `status`
-    // narrows to a BGG sub-status (want = the folded wishlist bucket).
-    section: v.optional(
-      v.union(v.literal("all"), v.literal("owned"), v.literal("notOwned")),
-    ),
-    status: v.optional(
+    // One of the four collection lists, or `all` (any of the four).
+    filter: v.optional(
       v.union(
-        v.literal("want"),
-        v.literal("wantToPlay"),
+        v.literal("all"),
+        v.literal("owned"),
+        v.literal("wishlist"),
         v.literal("forTrade"),
         v.literal("prevOwned"),
       ),
     ),
   },
-  handler: async (ctx, { paginationOpts, section, status }) => {
+  handler: async (ctx, { paginationOpts, filter }) => {
     const user = await getCurrentUser(ctx);
     if (!user) {
       return { page: [], isDone: true, continueCursor: "" };
     }
 
-    const STATUS_FIELD = {
-      want: "wishlist",
-      wantToPlay: "wantToPlay",
+    const FIELD = {
+      owned: "own",
+      wishlist: "wishlist",
       forTrade: "forTrade",
       prevOwned: "prevOwned",
     } as const;
@@ -343,14 +330,19 @@ export const myCollection = query({
       .withIndex("by_user_and_sort_title", (qq) => qq.eq("userId", user._id));
     // `.filter` doesn't reduce rows read, but a single user's collection is
     // bounded at a couple of thousand rows, so the scan stays cheap.
-    if (section === "owned") {
-      q = q.filter((qq) => qq.eq(qq.field("own"), true));
-    } else if (section === "notOwned") {
-      q = q.filter((qq) => qq.eq(qq.field("own"), false));
-    }
-    if (status) {
-      const field = STATUS_FIELD[status];
+    if (filter && filter !== "all") {
+      const field = FIELD[filter];
       q = q.filter((qq) => qq.eq(qq.field(field), true));
+    } else {
+      // `all` = in at least one of the four lists.
+      q = q.filter((qq) =>
+        qq.or(
+          qq.eq(qq.field("own"), true),
+          qq.eq(qq.field("wishlist"), true),
+          qq.eq(qq.field("forTrade"), true),
+          qq.eq(qq.field("prevOwned"), true),
+        ),
+      );
     }
 
     const result = await q.paginate(paginationOpts);
@@ -636,14 +628,33 @@ export const upsertCollectionItems = internalMutation({
     let createdCount = 0;
     const titles: string[] = [];
     for (const item of items) {
+      // The four collection flags are the user's to edit after the first import —
+      // never let a re-sync clobber them. So they're stripped from the metadata
+      // patch; a brand-new row is seeded with the BGG status, folding
+      // want / want-to-buy / preordered into wishlist.
+      const { own, wishlist, forTrade, prevOwned, ...meta } = item;
+      const seededWishlist =
+        wishlist ||
+        item.want ||
+        item.wantToBuy ||
+        item.preordered ||
+        undefined;
+      const inAnyList = own || seededWishlist || forTrade || prevOwned;
+
+      const existing = await ctx.db
+        .query("bggCollection")
+        .withIndex("by_user_and_bgg_id", (q) =>
+          q.eq("userId", job.userId).eq("bggId", item.bggId),
+        )
+        .unique();
+
+      // A brand-new item that's in none of the four lists (e.g. only "want to
+      // play") isn't part of the collection — skip it entirely.
+      if (!existing && !inAnyList) continue;
+
       const { gameId, created } = await linkOrCreateGame(ctx, item);
       if (created) createdCount++;
       titles.push(item.title);
-      // Own/wishlist are the user's to edit after the first import — never let a
-      // re-sync clobber them. So on an existing row we refresh metadata only (the
-      // raw status flags incl. want/preordered still update); a brand-new row is
-      // seeded with the BGG status, folding want + preordered into wishlist.
-      const { own, wishlist, ...meta } = item;
       const base = {
         ...meta,
         userId: job.userId,
@@ -651,18 +662,6 @@ export const upsertCollectionItems = internalMutation({
         sortTitle: item.title.toLowerCase(),
         syncedAt: job.runStartedAt,
       };
-      const seededWishlist =
-        wishlist ||
-        item.want ||
-        item.wantToBuy ||
-        item.preordered ||
-        undefined;
-      const existing = await ctx.db
-        .query("bggCollection")
-        .withIndex("by_user_and_bgg_id", (q) =>
-          q.eq("userId", job.userId).eq("bggId", item.bggId),
-        )
-        .unique();
       if (existing) {
         await ctx.db.patch("bggCollection", existing._id, base);
       } else {
@@ -670,6 +669,8 @@ export const upsertCollectionItems = internalMutation({
           ...base,
           own,
           wishlist: seededWishlist,
+          forTrade,
+          prevOwned,
         });
       }
     }

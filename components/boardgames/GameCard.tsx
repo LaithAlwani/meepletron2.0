@@ -2,20 +2,16 @@ import Link from "next/link";
 import { Users, Clock, Star } from "lucide-react";
 import type { GameWithMedia } from "@/convex/games";
 import { formatPlayTime } from "@/lib/format";
-import { FavoriteToggle } from "./FavoriteToggle";
-import { BookmarkToggle } from "./BookmarkToggle";
-import { StatusMenu } from "./StatusMenu";
+import { CollectionButton } from "./CollectionButton";
+import { CollectionTags } from "./CollectionTags";
 import { Die } from "@/components/ui/icons";
 
 export function GameCard({
   game,
   index = 0,
-  showStatus = false,
 }: {
   game: GameWithMedia;
   index?: number;
-  /** Show the editable BGG sub-status badge (used on the collection page). */
-  showStatus?: boolean;
 }) {
   const players =
     game.minPlayers && game.maxPlayers
@@ -70,11 +66,10 @@ export function GameCard({
         )}
       </div>
 
-      {showStatus && (
-        <div className="absolute left-2 top-2 z-20">
-          <StatusMenu gameId={game._id} />
-        </div>
-      )}
+      {/* Read-only tags: which of your collection lists this game is in. */}
+      <div className="pointer-events-none absolute left-2 top-2 z-20">
+        <CollectionTags gameId={game._id} />
+      </div>
 
       <div className="flex flex-1 flex-col p-3">
         <h3 className="font-display line-clamp-2 font-bold leading-snug">
@@ -105,9 +100,8 @@ export function GameCard({
                 {rating.toFixed(1)}
               </span>
             )}
-            <div className="pointer-events-auto relative z-20 flex items-center gap-0.5">
-              <FavoriteToggle gameId={game._id} size="sm" className={iconBtn} />
-              <BookmarkToggle gameId={game._id} size="sm" className={iconBtn} />
+            <div className="pointer-events-auto relative z-20 flex items-center">
+              <CollectionButton gameId={game._id} size="sm" className={iconBtn} />
             </div>
           </div>
         </div>

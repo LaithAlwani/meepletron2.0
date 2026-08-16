@@ -2,8 +2,8 @@ import Link from "next/link";
 import { Star } from "lucide-react";
 import type { GameWithMedia } from "@/convex/games";
 import { formatPlayTime } from "@/lib/format";
-import { FavoriteToggle } from "./FavoriteToggle";
-import { BookmarkToggle } from "./BookmarkToggle";
+import { CollectionButton } from "./CollectionButton";
+import { CollectionTags } from "./CollectionTags";
 import { Die } from "@/components/ui/icons";
 
 export function GameListItem({ game }: { game: GameWithMedia }) {
@@ -45,19 +45,19 @@ export function GameListItem({ game }: { game: GameWithMedia }) {
         </div>
       </Link>
 
-      {/* avg + toggles, beside the title */}
-      <div className="flex shrink-0 items-center gap-0.5">
+      {/* tags + collection button, beside the title */}
+      <div className="flex shrink-0 items-center gap-1.5">
+        <CollectionTags gameId={game._id} />
         {rating != null && (
           <span
-            className="mr-0.5 inline-flex items-center gap-0.5 text-xs font-bold text-accent"
+            className="inline-flex items-center gap-0.5 text-xs font-bold text-accent"
             title={`BoardGameGeek average ${rating.toFixed(1)} / 10`}
           >
             <Star className="h-3 w-3 fill-current" />
             {rating.toFixed(1)}
           </span>
         )}
-        <FavoriteToggle gameId={game._id} size="sm" className={iconBtn} />
-        <BookmarkToggle gameId={game._id} size="sm" className={iconBtn} />
+        <CollectionButton gameId={game._id} size="sm" className={iconBtn} />
       </div>
     </div>
   );

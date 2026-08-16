@@ -5,22 +5,16 @@ import type { Doc, Id } from "./_generated/dataModel";
 import { getCurrentUser, requireUser } from "./lib/auth";
 
 /**
- * Collection status toggles. Every game the user has any relationship with is one
- * `bggCollection` row; the boolean status flags are the source of truth — the BGG
- * sync seeds them on import, the user edits them freely afterwards. The two
- * primary toggles are Owned (`own`, bookmark) and Want (`wishlist`, heart — which
- * folds BGG want/want-to-buy/preordered in at import); the sub-statuses are
- * wantToPlay / forTrade / prevOwned. A row with no flag left is deleted.
+ * Collection status. A game the user has any relationship with is one
+ * `bggCollection` row with four editable boolean flags — **Owned** (`own`),
+ * **Wishlist** (`wishlist`, which folds BGG want / want-to-buy / preordered in at
+ * import), **For trade** (`forTrade`) and **Previously owned** (`prevOwned`). The
+ * BGG sync seeds them; the "Add to collection" menu edits them. A row with none
+ * of the four left is deleted.
  */
 
-/** All editable status flags on a collection row. */
-const STATUS_KEYS = [
-  "own",
-  "wishlist",
-  "wantToPlay",
-  "forTrade",
-  "prevOwned",
-] as const;
+/** The four collection status flags. */
+const STATUS_KEYS = ["own", "wishlist", "forTrade", "prevOwned"] as const;
 type StatusKey = (typeof STATUS_KEYS)[number];
 
 /** A row is worth keeping while it still carries any status flag. */
@@ -88,36 +82,13 @@ async function setFlags(
   }
 }
 
-/** Heart → Want (the merged wishlist bucket). Returns the new state. */
-export const toggleWishlist = mutation({
-  args: { gameId: v.id("games") },
-  handler: async (ctx, { gameId }): Promise<boolean> => {
-    const user = await requireUser(ctx);
-    const row = await findRow(ctx, user._id, gameId);
-    const next = !row?.wishlist;
-    await setFlags(ctx, gameId, { wishlist: next });
-    return next;
-  },
-});
-
-/** Bookmark → Owned. Returns the new state. */
-export const toggleOwned = mutation({
-  args: { gameId: v.id("games") },
-  handler: async (ctx, { gameId }): Promise<boolean> => {
-    const user = await requireUser(ctx);
-    const row = await findRow(ctx, user._id, gameId);
-    const next = !row?.own;
-    await setFlags(ctx, gameId, { own: next });
-    return next;
-  },
-});
-
-/** Set one of the editable sub-statuses (want to play / for trade / prev owned). */
+/** Set one of the four collection statuses on/off — the "Add to collection" menu. */
 export const setStatus = mutation({
   args: {
     gameId: v.id("games"),
     key: v.union(
-      v.literal("wantToPlay"),
+      v.literal("own"),
+      v.literal("wishlist"),
       v.literal("forTrade"),
       v.literal("prevOwned"),
     ),
@@ -128,7 +99,7 @@ export const setStatus = mutation({
   },
 });
 
-/** The current user's full status for a game (drives the toggles + status menu). */
+/** The current user's collection status for a game (drives the button + tags). */
 export const state = query({
   args: { gameId: v.id("games") },
   handler: async (
@@ -136,15 +107,13 @@ export const state = query({
     { gameId },
   ): Promise<{
     owned: boolean;
-    want: boolean;
-    wantToPlay: boolean;
+    wishlist: boolean;
     forTrade: boolean;
     prevOwned: boolean;
   }> => {
     const zero = {
       owned: false,
-      want: false,
-      wantToPlay: false,
+      wishlist: false,
       forTrade: false,
       prevOwned: false,
     };
@@ -154,8 +123,7 @@ export const state = query({
     if (!row) return zero;
     return {
       owned: !!row.own,
-      want: !!row.wishlist,
-      wantToPlay: !!row.wantToPlay,
+      wishlist: !!row.wishlist,
       forTrade: !!row.forTrade,
       prevOwned: !!row.prevOwned,
     };

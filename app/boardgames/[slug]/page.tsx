@@ -17,9 +17,8 @@ import {
 } from "lucide-react";
 import { api } from "@/convex/_generated/api";
 import { formatPlayTime } from "@/lib/format";
-import { FavoriteToggle } from "@/components/boardgames/FavoriteToggle";
-import { BookmarkToggle } from "@/components/boardgames/BookmarkToggle";
-import { StatusMenu } from "@/components/boardgames/StatusMenu";
+import { CollectionButton } from "@/components/boardgames/CollectionButton";
+import { CollectionTags } from "@/components/boardgames/CollectionTags";
 import { BackgroundCover } from "@/components/boardgames/BackgroundCover";
 import { SimilarGames } from "@/components/boardgames/SimilarGames";
 import { InlineAsk } from "@/components/boardgames/InlineAsk";
@@ -344,16 +343,19 @@ export default function GameDetailPage({
                       by {game.designers.join(", ")}
                     </p>
                   )}
+                  <CollectionTags
+                    gameId={gameId}
+                    size="md"
+                    className="mt-2"
+                  />
                 </div>
               </div>
 
               {/* Quick actions */}
               <div className="mt-4 flex flex-wrap items-center gap-2">
-                <FavoriteToggle gameId={gameId} className={actionCls} />
-                <BookmarkToggle gameId={gameId} className={actionCls} />
-                <StatusMenu
+                <CollectionButton
                   gameId={gameId}
-                  variant="button"
+                  size="md"
                   className={actionCls}
                 />
                 <button
