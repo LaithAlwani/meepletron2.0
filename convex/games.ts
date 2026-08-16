@@ -11,7 +11,7 @@ import type { Doc, Id } from "./_generated/dataModel";
 import { internal } from "./_generated/api";
 import { requireAdmin } from "./lib/auth";
 import { slugify, slugifyUnique } from "./lib/slug";
-import { buildSearchText } from "./lib/gameSearch";
+import { buildSearchText, gameNameMatchScore } from "./lib/gameSearch";
 import { bggStatsValidator } from "./lib/bggStats";
 
 /** Resolve a game's storage ids into signed URLs for the client. */
@@ -96,6 +96,41 @@ export const searchPaginated = query({
       ...result,
       page: await Promise.all(relevant.map((g) => withMedia(ctx, g))),
     };
+  },
+});
+
+/**
+ * Fuzzy-resolve a free-text game name to base-game candidates, best match first.
+ * Unlike `searchPaginated` (an exact full-text index for the library grid), this
+ * is tolerant of spacing, punctuation and typos — "lord's of water deep" →
+ * "Lords of Waterdeep" — so the global assistant can suggest a game even when the
+ * user doesn't spell the title exactly. Scans base games (~a few hundred) and
+ * ranks by a normalized edit-distance / token score.
+ */
+export const resolveByName = query({
+  args: { term: v.string(), limit: v.optional(v.number()) },
+  handler: async (ctx, { term, limit }) => {
+    const q = term.trim();
+    if (q.length < 2) return [];
+    const games = await ctx.db
+      .query("games")
+      .withIndex("by_isStub_and_isExpansion", (qi) =>
+        qi.eq("isStub", false).eq("isExpansion", false),
+      )
+      .take(1000);
+    const ranked = games
+      .map((g) => ({ g, score: gameNameMatchScore(q, g.title) }))
+      // 0.5 keeps close spellings/typos ("waterdeep", "catn") while dropping
+      // unrelated titles.
+      .filter((s) => s.score >= 0.5)
+      .sort((a, b) => b.score - a.score);
+    // Only surface runners-up that are near the best match, so a clear winner
+    // ("blod rage" → Blood Rage) isn't padded with weak, confusing suggestions.
+    const top = ranked[0]?.score ?? 0;
+    const scored = ranked
+      .filter((s) => s.score >= Math.max(0.5, top - 0.18))
+      .slice(0, Math.max(1, Math.min(limit ?? 3, 8)));
+    return await Promise.all(scored.map((s) => withMedia(ctx, s.g)));
   },
 });
 
