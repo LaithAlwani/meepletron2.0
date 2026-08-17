@@ -33,9 +33,9 @@ async function resolveCandidates(
   if (q.length < 2) return [];
   // Fuzzy resolver: tolerant of spacing/punctuation/typos so a loosely-typed
   // name still resolves ("lord's of water deep" → "Lords of Waterdeep").
-  const matches = await ctx.runQuery(api.games.resolveByName, { term: q, limit: 3 });
+  const matches = await ctx.runQuery(api.games.resolveByName, { term: q, limit: 5 });
   const out: GameCandidate[] = [];
-  for (const g of matches.slice(0, 3)) {
+  for (const g of matches.slice(0, 5)) {
     const sources = await ctx.runQuery(api.games.chatSources, { gameId: g._id });
     out.push({
       _id: g._id,

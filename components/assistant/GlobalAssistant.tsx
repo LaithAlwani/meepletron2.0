@@ -6,13 +6,14 @@ import {
   useLayoutEffect,
   useRef,
   useState,
+  type ReactNode,
 } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import ReactMarkdown from "react-markdown";
-import { useQuery, useAction, useConvexAuth } from "convex/react";
+import { useQuery, useAction, useConvex, useConvexAuth } from "convex/react";
 import { useAuthActions, useAuthToken } from "@convex-dev/auth/react";
-import { Bot, Sparkles, X } from "lucide-react";
+import { Bot, Sparkles, X, Dices, BookOpen } from "lucide-react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { stripIconBrackets } from "@/components/chat/MessageBubble";
@@ -30,12 +31,107 @@ type Candidate = {
   thumbnailUrl: string | null;
   hasRulebooks: boolean;
 };
+type RecGame = {
+  _id: Id<"games">;
+  slug: string;
+  title: string;
+  imageUrl: string | null;
+  thumbnailUrl: string | null;
+  detail: string;
+  chattable: boolean;
+};
 type Item =
   | { kind: "user"; text: string }
   | { kind: "assistant"; text: string }
   | { kind: "note"; text: string }
   | { kind: "candidates"; candidates: Candidate[] }
-  | { kind: "noChat"; candidate: Candidate };
+  | { kind: "noChat"; candidate: Candidate }
+  | { kind: "recs"; games: RecGame[]; source: "owned" | "library" };
+
+type TimeVal = "quick" | "standard" | "epic";
+type CompVal = "light" | "medium" | "heavy";
+type Flow = {
+  step: "players" | "time" | "complexity" | "source";
+  players?: number | null;
+  time?: TimeVal | null;
+  complexity?: CompVal | null;
+};
+
+const PLAYER_OPTS: { label: string; value: number | null }[] = [
+  { label: "1", value: 1 },
+  { label: "2", value: 2 },
+  { label: "3", value: 3 },
+  { label: "4", value: 4 },
+  { label: "5", value: 5 },
+  { label: "6+", value: 6 },
+  { label: "Any", value: null },
+];
+const TIME_OPTS: { label: string; value: TimeVal | null }[] = [
+  { label: "≤30 min", value: "quick" },
+  { label: "30–90 min", value: "standard" },
+  { label: "90+ min", value: "epic" },
+  { label: "Any", value: null },
+];
+const COMP_OPTS: { label: string; value: CompVal | null }[] = [
+  { label: "Light", value: "light" },
+  { label: "Medium", value: "medium" },
+  { label: "Heavy", value: "heavy" },
+  { label: "Any", value: null },
+];
+
+function playersEcho(v: number | null): string {
+  if (v == null) return "Any number of players";
+  return v === 6 ? "6+ players" : `${v} player${v === 1 ? "" : "s"}`;
+}
+
+/** A tappable pill used for the recommend wizard's option chips. */
+function Chip({
+  onClick,
+  disabled,
+  children,
+}: {
+  onClick: () => void;
+  disabled?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className="rounded-full border border-border bg-surface px-3 py-1.5 text-xs font-semibold text-foreground transition-colors hover:border-accent/50 hover:bg-surface-2 disabled:opacity-50"
+    >
+      {children}
+    </button>
+  );
+}
+
+/** A large menu row (icon + title + subtitle) for the quick-start menu. */
+function MenuButton({
+  icon,
+  title,
+  subtitle,
+  onClick,
+}: {
+  icon: ReactNode;
+  title: string;
+  subtitle: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className="flex w-full items-center gap-3 rounded-xl border border-border bg-surface p-2.5 text-left transition-colors hover:border-accent/50 hover:bg-surface-2"
+    >
+      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-accent/12 text-accent">
+        {icon}
+      </div>
+      <span className="min-w-0 flex-1">
+        <span className="block text-sm font-semibold">{title}</span>
+        <span className="block text-[11px] text-subtle">{subtitle}</span>
+      </span>
+    </button>
+  );
+}
 
 /** Strip icon tokens + inline [n] citation markers for the compact bubble view. */
 function cleanAnswer(s: string): string {
@@ -55,6 +151,8 @@ export function GlobalAssistant() {
   const [items, setItems] = useState<Item[]>([]);
   const [streaming, setStreaming] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [flow, setFlow] = useState<Flow | null>(null);
+  const convex = useConvex();
   const generalHistory = useRef<{ role: "user" | "assistant"; content: string }[]>([]);
   const pending = useRef<string | null>(null);
 
@@ -70,7 +168,7 @@ export function GlobalAssistant() {
   useLayoutEffect(() => {
     const el = scrollRef.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [items, streaming, open]);
+  }, [items, streaming, open, flow]);
 
   // Body scroll lock while the panel is open.
   useEffect(() => {
@@ -205,16 +303,78 @@ export function GlobalAssistant() {
     void process(text);
   }
 
-  function openGame(c: Candidate) {
+  function goChat(slug: string) {
     if (busy) return;
     setOpen(false);
-    router.push(`/boardgames/${c.slug}/chat`);
+    router.push(`/boardgames/${slug}/chat`);
   }
 
-  function openGamePage(c: Candidate) {
+  function goGame(slug: string) {
     if (busy) return;
     setOpen(false);
-    router.push(`/boardgames/${c.slug}`);
+    router.push(`/boardgames/${slug}`);
+  }
+
+  // --- quick-start menu actions ---
+  function startRecommend() {
+    ensureGuest();
+    setFlow({ step: "players" });
+  }
+
+  function askRules() {
+    push({
+      kind: "note",
+      text: "Sure — which game? Type its name below and I'll pull it up.",
+    });
+  }
+
+  function presetGeneral() {
+    send("What can I do in Meepletron?");
+  }
+
+  /** Fetch + render recommendations, falling back to the library if the owned
+   *  source can't be used. */
+  async function runRecommend(
+    source: "owned" | "library",
+    players: number | null,
+    time: TimeVal | null,
+    complexity: CompVal | null,
+  ) {
+    setFlow(null);
+    setBusy(true);
+    try {
+      const argsFor = (src: "owned" | "library") => ({
+        source: src,
+        players: players ?? undefined,
+        time: time ?? undefined,
+        complexity: complexity ?? undefined,
+      });
+      let res = await convex.query(api.games.recommend, argsFor(source));
+      let effective: "owned" | "library" = source;
+      if (source === "owned" && res.issue) {
+        push({
+          kind: "note",
+          text:
+            res.issue === "signin"
+              ? "Sign in and link your BoardGameGeek account to get picks from your own games. Here are library picks for now:"
+              : "You don't have any owned games synced yet — here are picks from the library:",
+        });
+        res = await convex.query(api.games.recommend, argsFor("library"));
+        effective = "library";
+      }
+      if (res.games.length === 0) {
+        push({
+          kind: "note",
+          text: "I couldn't find a good match for those settings. Try loosening one of them.",
+        });
+      } else {
+        push({ kind: "recs", games: res.games, source: effective });
+      }
+    } catch {
+      push({ kind: "note", text: "Something went wrong getting recommendations." });
+    } finally {
+      setBusy(false);
+    }
   }
 
   if (hidden) return null;
@@ -268,16 +428,36 @@ export function GlobalAssistant() {
               ref={scrollRef}
               className="themed-scroll flex-1 space-y-3 overflow-y-auto px-3 py-3"
             >
-              {items.length === 0 && (
-                <div className="mt-6 text-center text-sm text-muted">
-                  <p className="font-medium text-foreground">
-                    Hi! I&apos;m your Meepletron assistant.
-                  </p>
-                  <p className="mt-1">
-                    Ask me how anything in the app works. Name a game and
-                    I&apos;ll pull it up so you can open its chat and ask about
-                    the rules.
-                  </p>
+              {items.length === 0 && !flow && (
+                <div className="mt-2 space-y-3">
+                  <div className="px-1 text-sm text-muted">
+                    <p className="font-medium text-foreground">
+                      Hi! I&apos;m your Meepletron assistant.
+                    </p>
+                    <p className="mt-0.5">
+                      Pick an option — or just type a question.
+                    </p>
+                  </div>
+                  <div className="space-y-2">
+                    <MenuButton
+                      icon={<Dices className="h-4.5 w-4.5" />}
+                      title="Help me pick a game"
+                      subtitle="By players, length & complexity"
+                      onClick={startRecommend}
+                    />
+                    <MenuButton
+                      icon={<BookOpen className="h-4.5 w-4.5" />}
+                      title="Ask about a game's rules"
+                      subtitle="Find a game and open its chat"
+                      onClick={askRules}
+                    />
+                    <MenuButton
+                      icon={<Sparkles className="h-4.5 w-4.5" />}
+                      title="What can Meepletron do?"
+                      subtitle="How the app works"
+                      onClick={presetGeneral}
+                    />
+                  </div>
                 </div>
               )}
 
@@ -322,7 +502,7 @@ export function GlobalAssistant() {
                         page?
                       </p>
                       <button
-                        onClick={() => openGamePage(c)}
+                        onClick={() => goGame(c.slug)}
                         disabled={busy}
                         className="flex w-full items-center gap-2.5 rounded-xl border border-border bg-surface p-2 text-left transition-colors hover:border-accent/50 hover:bg-surface-2 disabled:opacity-50"
                       >
@@ -352,6 +532,51 @@ export function GlobalAssistant() {
                     </div>
                   );
                 }
+                if (it.kind === "recs") {
+                  return (
+                    <div key={i} className="space-y-1.5">
+                      <p className="px-1 text-xs text-muted">
+                        {it.source === "owned"
+                          ? "From your collection — tap one to see it:"
+                          : "From the library — tap one to see it:"}
+                      </p>
+                      {it.games.map((g) => (
+                        <button
+                          key={g._id}
+                          onClick={() => goGame(g.slug)}
+                          disabled={busy}
+                          className="flex w-full items-center gap-2.5 rounded-xl border border-border bg-surface p-2 text-left transition-colors hover:border-accent/50 hover:bg-surface-2 disabled:opacity-50"
+                        >
+                          <div className="h-10 w-10 shrink-0 overflow-hidden rounded-lg bg-surface-2">
+                            {(g.thumbnailUrl ?? g.imageUrl) ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img
+                                src={g.thumbnailUrl ?? g.imageUrl ?? ""}
+                                alt=""
+                                className="h-full w-full object-cover"
+                              />
+                            ) : (
+                              <div className="flex h-full w-full items-center justify-center text-subtle">
+                                <Die className="h-5 w-5" />
+                              </div>
+                            )}
+                          </div>
+                          <span className="min-w-0 flex-1">
+                            <span className="font-display block truncate text-sm font-bold">
+                              {g.title}
+                            </span>
+                            <span className="flex items-center gap-1 text-[11px] text-subtle">
+                              {g.detail}
+                              {g.chattable && (
+                                <span className="text-accent">· can chat</span>
+                              )}
+                            </span>
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  );
+                }
                 // candidates
                 return (
                   <div key={i} className="space-y-1.5">
@@ -363,7 +588,7 @@ export function GlobalAssistant() {
                     {it.candidates.map((c) => (
                       <button
                         key={c._id}
-                        onClick={() => openGame(c)}
+                        onClick={() => goChat(c.slug)}
                         disabled={busy}
                         className="flex w-full items-center gap-2.5 rounded-xl border border-border bg-surface p-2 text-left transition-colors hover:border-accent/50 hover:bg-surface-2 disabled:opacity-50"
                       >
@@ -404,6 +629,109 @@ export function GlobalAssistant() {
                       <ThinkingIndicator />
                     )}
                   </div>
+                </div>
+              )}
+
+              {/* Recommend wizard — clickable options, one step at a time. */}
+              {flow && (
+                <div className="msg-in space-y-2">
+                  <p className="px-1 text-xs text-muted">
+                    {flow.step === "players"
+                      ? "How many players?"
+                      : flow.step === "time"
+                        ? "How long do you want to play?"
+                        : flow.step === "complexity"
+                          ? "How heavy should it be?"
+                          : "Where should I pick from?"}
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {flow.step === "players" &&
+                      PLAYER_OPTS.map((o) => (
+                        <Chip
+                          key={o.label}
+                          disabled={busy}
+                          onClick={() => {
+                            push({ kind: "user", text: playersEcho(o.value) });
+                            setFlow({ step: "time", players: o.value });
+                          }}
+                        >
+                          {o.label}
+                        </Chip>
+                      ))}
+                    {flow.step === "time" &&
+                      TIME_OPTS.map((o) => (
+                        <Chip
+                          key={o.label}
+                          disabled={busy}
+                          onClick={() => {
+                            push({ kind: "user", text: o.label });
+                            setFlow({
+                              step: "complexity",
+                              players: flow.players,
+                              time: o.value,
+                            });
+                          }}
+                        >
+                          {o.label}
+                        </Chip>
+                      ))}
+                    {flow.step === "complexity" &&
+                      COMP_OPTS.map((o) => (
+                        <Chip
+                          key={o.label}
+                          disabled={busy}
+                          onClick={() => {
+                            push({ kind: "user", text: o.label });
+                            setFlow({
+                              step: "source",
+                              players: flow.players,
+                              time: flow.time,
+                              complexity: o.value,
+                            });
+                          }}
+                        >
+                          {o.label}
+                        </Chip>
+                      ))}
+                    {flow.step === "source" && (
+                      <>
+                        <Chip
+                          disabled={busy}
+                          onClick={() => {
+                            push({ kind: "user", text: "From my collection" });
+                            void runRecommend(
+                              "owned",
+                              flow.players ?? null,
+                              flow.time ?? null,
+                              flow.complexity ?? null,
+                            );
+                          }}
+                        >
+                          My games
+                        </Chip>
+                        <Chip
+                          disabled={busy}
+                          onClick={() => {
+                            push({ kind: "user", text: "From the library" });
+                            void runRecommend(
+                              "library",
+                              flow.players ?? null,
+                              flow.time ?? null,
+                              flow.complexity ?? null,
+                            );
+                          }}
+                        >
+                          The library
+                        </Chip>
+                      </>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => setFlow(null)}
+                    className="px-1 text-[11px] text-subtle transition-colors hover:text-foreground"
+                  >
+                    Cancel
+                  </button>
                 </div>
               )}
             </div>

@@ -9,7 +9,7 @@ import {
 } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
 import { internal } from "./_generated/api";
-import { requireAdmin } from "./lib/auth";
+import { requireAdmin, getCurrentUser } from "./lib/auth";
 import { slugify, slugifyUnique } from "./lib/slug";
 import { buildSearchText, gameNameMatchScore } from "./lib/gameSearch";
 import { bggStatsValidator } from "./lib/bggStats";
@@ -124,12 +124,13 @@ export const resolveByName = query({
       // unrelated titles.
       .filter((s) => s.score >= 0.5)
       .sort((a, b) => b.score - a.score);
-    // Only surface runners-up that are near the best match, so a clear winner
-    // ("blod rage" → Blood Rage) isn't padded with weak, confusing suggestions.
+    // Surface runners-up that are reasonably near the best match, so genuinely
+    // similar names ("ticket to ride", the Catan family) all show — but a clear
+    // winner ("blod rage" → Blood Rage) isn't padded with weak matches.
     const top = ranked[0]?.score ?? 0;
     const scored = ranked
-      .filter((s) => s.score >= Math.max(0.5, top - 0.18))
-      .slice(0, Math.max(1, Math.min(limit ?? 3, 8)));
+      .filter((s) => s.score >= Math.max(0.5, top - 0.25))
+      .slice(0, Math.max(1, Math.min(limit ?? 5, 8)));
     return await Promise.all(scored.map((s) => withMedia(ctx, s.g)));
   },
 });
@@ -333,6 +334,127 @@ export const chatEnabledGames = query({
       : games;
     filtered.sort((a, b) => b._creationTime - a._creationTime);
     return await Promise.all(filtered.map((g) => withMedia(ctx, g)));
+  },
+});
+
+type Complexity = "light" | "medium" | "heavy";
+
+/** BGG weight bands → light (≤2) / medium (≤3) / heavy (>3). */
+function matchesComplexity(g: Doc<"games">, complexity?: Complexity): boolean {
+  if (!complexity) return true;
+  const w = g.bgg?.weight;
+  if (w == null) return false; // can't honor a complexity filter without a weight
+  if (complexity === "light") return w <= 2;
+  if (complexity === "medium") return w > 2 && w <= 3;
+  return w > 3;
+}
+
+/** Compact "2–4p · 60 min · Medium" line for a recommendation card. */
+function recDetail(g: Doc<"games">): string {
+  const parts: string[] = [];
+  if (g.minPlayers != null && g.maxPlayers != null) {
+    parts.push(
+      g.minPlayers === g.maxPlayers
+        ? `${g.minPlayers}p`
+        : `${g.minPlayers}–${g.maxPlayers}p`,
+    );
+  }
+  const t = g.maxPlayTime ?? g.minPlayTime;
+  if (t) parts.push(`${t} min`);
+  const w = g.bgg?.weight;
+  if (w != null) parts.push(w <= 2 ? "Light" : w <= 3 ? "Medium" : "Heavy");
+  return parts.join(" · ");
+}
+
+/** Does this game's player poll mark `players` as its best count? (soft ranking) */
+function isBestAt(g: Doc<"games">, players: number): boolean {
+  const poll = g.bgg?.playerPoll;
+  if (!poll) return false;
+  const entry = poll.find((p) => p.count === players);
+  if (!entry) return false;
+  return entry.best >= entry.recommended && entry.best > entry.notRecommended;
+}
+
+/**
+ * "What should I play?" — recommend games for a player count / time / complexity,
+ * drawn either from the user's owned collection or the whole library. Ranks by
+ * BGG rating, nudging games the community rates best at that player count. Returns
+ * an `issue` when the owned source can't be used (guest, or empty collection) so
+ * the client can steer to the library instead.
+ */
+export const recommend = query({
+  args: {
+    source: v.union(v.literal("owned"), v.literal("library")),
+    players: v.optional(v.number()),
+    time: v.optional(
+      v.union(v.literal("quick"), v.literal("standard"), v.literal("epic")),
+    ),
+    complexity: v.optional(
+      v.union(v.literal("light"), v.literal("medium"), v.literal("heavy")),
+    ),
+  },
+  handler: async (ctx, { source, players, time, complexity }) => {
+    let pool: Doc<"games">[] = [];
+    let issue: null | "signin" | "no-collection" = null;
+
+    if (source === "owned") {
+      const user = await getCurrentUser(ctx);
+      if (!user) {
+        issue = "signin";
+      } else {
+        const rows = await ctx.db
+          .query("bggCollection")
+          .withIndex("by_user_and_sort_title", (q) => q.eq("userId", user._id))
+          .collect();
+        const owned = rows.filter((r) => r.own && r.gameId && !r.isExpansion);
+        if (owned.length === 0) {
+          issue = "no-collection";
+        } else {
+          const games = await Promise.all(
+            owned.map((r) => ctx.db.get("games", r.gameId as Id<"games">)),
+          );
+          pool = games.filter(
+            (g): g is Doc<"games"> => !!g && !g.isExpansion && !g.isStub,
+          );
+        }
+      }
+    } else {
+      pool = await ctx.db
+        .query("games")
+        .withIndex("by_isStub_and_isExpansion", (q) =>
+          q.eq("isStub", false).eq("isExpansion", false),
+        )
+        .take(1000);
+    }
+
+    const matched = pool.filter(
+      (g) =>
+        matchesLibraryFilters(g, players, time, undefined) &&
+        matchesComplexity(g, complexity),
+    );
+    matched.sort((a, b) => {
+      const bonus = (g: Doc<"games">) =>
+        (g.bgg?.rating ?? 0) + (players != null && isBestAt(g, players) ? 0.5 : 0);
+      return bonus(b) - bonus(a);
+    });
+
+    const chatIds = await chatEnabledBaseIds(ctx);
+    const top = matched.slice(0, 8);
+    const games = await Promise.all(
+      top.map(async (g) => {
+        const withM = await withMedia(ctx, g);
+        return {
+          _id: g._id,
+          slug: g.slug,
+          title: g.title,
+          imageUrl: withM.imageUrl,
+          thumbnailUrl: withM.thumbnailUrl,
+          detail: recDetail(g),
+          chattable: chatIds.has(g._id),
+        };
+      }),
+    );
+    return { issue, games };
   },
 });
 
