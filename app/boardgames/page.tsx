@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { usePaginatedQuery, useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { Search, List, LayoutGrid } from "lucide-react";
+import { Search, List, LayoutGrid, Bot } from "lucide-react";
 import { GameCard } from "@/components/boardgames/GameCard";
 import { GameListItem } from "@/components/boardgames/GameListItem";
 import { PreviewCard, PreviewRow } from "@/components/boardgames/PreviewCard";
@@ -11,7 +11,12 @@ import { useBggSearch } from "@/components/boardgames/useBggSearch";
 
 type View = "grid" | "list";
 type TimeFilter = "quick" | "standard" | "epic";
-type Filters = { players: number | null; time: TimeFilter | null; hasExpansions: boolean };
+type Filters = {
+  players: number | null;
+  time: TimeFilter | null;
+  hasExpansions: boolean;
+  chatOnly: boolean;
+};
 
 const PLAYER_OPTIONS = [1, 2, 3, 4, 5, 6];
 const TIME_OPTIONS: { value: TimeFilter; label: string }[] = [
@@ -19,7 +24,12 @@ const TIME_OPTIONS: { value: TimeFilter; label: string }[] = [
   { value: "standard", label: "30–90 min" },
   { value: "epic", label: "90+ min" },
 ];
-const EMPTY_FILTERS: Filters = { players: null, time: null, hasExpansions: false };
+const EMPTY_FILTERS: Filters = {
+  players: null,
+  time: null,
+  hasExpansions: false,
+  chatOnly: false,
+};
 
 // Persisted per browser tab so returning from a detail page lands you back where
 // you were — same filters/search, same number of pages loaded, same scroll.
@@ -64,6 +74,7 @@ export default function BoardgamesPage() {
   const [term, setTerm] = useState("");
   const [debounced, setDebounced] = useState("");
   const searching = debounced.length >= 2;
+  const chatOnly = filters.chatOnly;
 
   // When set (on return from a detail page), the list loads pages until it has
   // `count` items again, then scrolls back to `scrollY`.
@@ -111,7 +122,7 @@ export default function BoardgamesPage() {
 
   const browse = usePaginatedQuery(
     api.games.browsePaginated,
-    searching
+    searching || chatOnly
       ? "skip"
       : {
           players: filters.players ?? undefined,
@@ -122,19 +133,33 @@ export default function BoardgamesPage() {
   );
   const search = usePaginatedQuery(
     api.games.searchPaginated,
-    searching ? { term: debounced } : "skip",
+    searching && !chatOnly ? { term: debounced } : "skip",
     { initialNumItems: 24 },
   );
 
   const browseTotal = useQuery(
     api.games.browseCount,
-    searching
+    searching || chatOnly
       ? "skip"
       : {
           players: filters.players ?? undefined,
           time: filters.time ?? undefined,
           hasExpansions: filters.hasExpansions || undefined,
         },
+  );
+
+  // Chat-ready view: a single (non-paginated) query returning the whole small
+  // curated set of games Meepletron can chat about, filtered + searched.
+  const chatGames = useQuery(
+    api.games.chatEnabledGames,
+    chatOnly
+      ? {
+          term: searching ? debounced : undefined,
+          players: filters.players ?? undefined,
+          time: filters.time ?? undefined,
+          hasExpansions: filters.hasExpansions || undefined,
+        }
+      : "skip",
   );
 
   const logSearch = useMutation(api.search.logSearch);
@@ -144,15 +169,19 @@ export default function BoardgamesPage() {
   }, [debounced, searching, logSearch]);
 
   const active = searching ? search : browse;
-  const loadingFirst = active.status === "LoadingFirstPage";
-  const results = active.results;
+  const results = chatOnly ? (chatGames ?? []) : active.results;
+  const loadingFirst = chatOnly
+    ? chatGames === undefined
+    : active.status === "LoadingFirstPage";
 
-  // Wider search: games we don't have yet, from BoardGameGeek (deduped).
+  // Wider search: games we don't have yet, from BoardGameGeek (deduped). The
+  // chat-ready view is local-only — those games can't be chatted with — so we
+  // don't offer BGG imports there.
   const catalogBggIds = new Set(
     results.map((g) => g.bggId).filter((x): x is string => !!x),
   );
   const { results: bggResults, pending: bggPending } = useBggSearch(
-    debounced,
+    chatOnly ? "" : debounced,
     catalogBggIds,
   );
 
@@ -179,6 +208,13 @@ export default function BoardgamesPage() {
   // once the items render the page is tall enough), then jump to the saved Y.
   useEffect(() => {
     if (!restoreTarget) return;
+    // Chat-ready view isn't paginated — just wait for its single query, then jump.
+    if (chatOnly) {
+      if (chatGames === undefined) return;
+      requestAnimationFrame(() => window.scrollTo(0, restoreTarget.scrollY));
+      setRestoreTarget(null);
+      return;
+    }
     if (results.length < restoreTarget.count && status === "CanLoadMore") {
       loadMore(24);
       return;
@@ -188,7 +224,7 @@ export default function BoardgamesPage() {
     const y = restoreTarget.scrollY;
     requestAnimationFrame(() => window.scrollTo(0, y));
     setRestoreTarget(null);
-  }, [restoreTarget, results.length, status, loadMore]);
+  }, [restoreTarget, results.length, status, loadMore, chatOnly, chatGames]);
 
   // Snapshot the list state whenever we navigate away (the component unmounts on
   // a client-side route change), so a later return can replay it.
@@ -215,7 +251,23 @@ export default function BoardgamesPage() {
   }, []);
 
   const activeFilterCount =
-    (filters.players ? 1 : 0) + (filters.time ? 1 : 0) + (filters.hasExpansions ? 1 : 0);
+    (filters.players ? 1 : 0) +
+    (filters.time ? 1 : 0) +
+    (filters.hasExpansions ? 1 : 0) +
+    (filters.chatOnly ? 1 : 0);
+
+  // Count shown next to the title. Chat-ready + search are exact; browse uses
+  // the server count and gets a "+" while more pages can still load.
+  const canLoadMore =
+    active.status === "CanLoadMore" || active.status === "LoadingMore";
+  let countLabel: string | null = null;
+  if (chatOnly) {
+    if (chatGames !== undefined) countLabel = String(results.length);
+  } else if (searching) {
+    if (results.length > 0) countLabel = `${results.length}${canLoadMore ? "+" : ""}`;
+  } else if (browseTotal !== undefined) {
+    countLabel = String(browseTotal);
+  }
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8">
@@ -227,18 +279,9 @@ export default function BoardgamesPage() {
           </p>
           <h1 className="font-display text-3xl font-extrabold tracking-tight sm:text-4xl">
             Board games
-            {(searching
-              ? results.length > 0
-              : browseTotal !== undefined) && (
+            {countLabel !== null && (
               <span className="ml-2.5 align-middle text-base font-bold text-subtle">
-                {searching
-                  ? `${results.length}${
-                      active.status === "CanLoadMore" ||
-                      active.status === "LoadingMore"
-                        ? "+"
-                        : ""
-                    }`
-                  : browseTotal}
+                {countLabel}
               </span>
             )}
           </h1>
@@ -272,6 +315,16 @@ export default function BoardgamesPage() {
 
       {/* Filters */}
       <div className="-mx-4 mb-4 flex items-center gap-2 overflow-x-auto px-4 pb-3 sm:mx-0 sm:px-0">
+        <FilterChip
+          active={filters.chatOnly}
+          onClick={() => setFilters((f) => ({ ...f, chatOnly: !f.chatOnly }))}
+        >
+          <span className="inline-flex items-center gap-1">
+            <Bot className="h-3.5 w-3.5" />
+            Chat-ready
+          </span>
+        </FilterChip>
+        <span className="mx-0.5 h-4 w-px shrink-0 bg-border" />
         <span className="shrink-0 text-xs font-medium text-subtle">Players</span>
         {PLAYER_OPTIONS.map((p) => (
           <FilterChip
@@ -348,7 +401,9 @@ export default function BoardgamesPage() {
             <p className="font-semibold">
               {searching
                 ? `No results for “${debounced}”`
-                : "No games match these filters"}
+                : chatOnly
+                  ? "No chat-ready games match"
+                  : "No games match these filters"}
             </p>
             {!searching && activeFilterCount > 0 && (
               <button
@@ -382,10 +437,15 @@ export default function BoardgamesPage() {
             </div>
           )}
 
-          {/* Invisible sentinel — scrolling near it auto-loads the next page. */}
-          <div ref={sentinelRef} aria-hidden className="h-px" />
-          {active.status === "LoadingMore" && (
-            <p className="mt-8 text-center text-sm text-muted">Loading…</p>
+          {/* Invisible sentinel — scrolling near it auto-loads the next page.
+              The chat-ready view isn't paginated, so it has no sentinel. */}
+          {!chatOnly && (
+            <>
+              <div ref={sentinelRef} aria-hidden className="h-px" />
+              {active.status === "LoadingMore" && (
+                <p className="mt-8 text-center text-sm text-muted">Loading…</p>
+              )}
+            </>
           )}
         </>
       )}

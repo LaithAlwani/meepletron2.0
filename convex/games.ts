@@ -244,6 +244,99 @@ export const browseCount = query({
 });
 
 /**
+ * Base-game ids whose family (the base game itself or any of its expansions)
+ * has at least one ingested rulebook — i.e. the games Meepletron can actually
+ * chat about. "download" add-ons don't count. Scans rulebooks (~a few hundred).
+ */
+async function chatEnabledBaseIds(ctx: QueryCtx): Promise<Set<Id<"games">>> {
+  const rulebooks = await ctx.db.query("rulebooks").collect();
+  const withRules = new Set<Id<"games">>();
+  for (const rb of rulebooks) {
+    if (rb.isIngested && (rb.kind ?? "rulebook") !== "download") {
+      withRules.add(rb.gameId);
+    }
+  }
+  const baseIds = new Set<Id<"games">>();
+  for (const gid of withRules) {
+    const g = await ctx.db.get("games", gid);
+    if (!g) continue;
+    baseIds.add(g.isExpansion && g.parentId ? g.parentId : g._id);
+  }
+  return baseIds;
+}
+
+type LibraryTime = "quick" | "standard" | "epic";
+
+/** JS mirror of browsePaginated's players/time/expansions filter. */
+function matchesLibraryFilters(
+  g: Doc<"games">,
+  players?: number,
+  time?: LibraryTime,
+  hasExpansions?: boolean,
+): boolean {
+  if (players != null) {
+    if (
+      g.minPlayers == null ||
+      g.maxPlayers == null ||
+      g.minPlayers > players ||
+      g.maxPlayers < players
+    ) {
+      return false;
+    }
+  }
+  if (time === "quick" && !(g.maxPlayTime != null && g.maxPlayTime <= 30)) return false;
+  if (
+    time === "standard" &&
+    !(g.maxPlayTime != null && g.maxPlayTime > 30 && g.maxPlayTime <= 90)
+  ) {
+    return false;
+  }
+  if (time === "epic" && !(g.maxPlayTime != null && g.maxPlayTime > 90)) return false;
+  if (hasExpansions && !g.hasExpansions) return false;
+  return true;
+}
+
+/**
+ * Every base game Meepletron can chat about (family has an ingested rulebook),
+ * newest first, with the same optional players/time/expansions filters and
+ * search term as the library grid. The chat-ready set is small (curated), so
+ * this returns the whole filtered list in one shot — no pagination needed.
+ */
+export const chatEnabledGames = query({
+  args: {
+    term: v.optional(v.string()),
+    players: v.optional(v.number()),
+    time: v.optional(
+      v.union(v.literal("quick"), v.literal("standard"), v.literal("epic")),
+    ),
+    hasExpansions: v.optional(v.boolean()),
+  },
+  handler: async (ctx, { term, players, time, hasExpansions }) => {
+    const baseIds = await chatEnabledBaseIds(ctx);
+    const games: Doc<"games">[] = [];
+    for (const id of baseIds) {
+      const g = await ctx.db.get("games", id);
+      // Stubs/expansions never qualify as a chattable library entry.
+      if (!g || g.isStub || g.isExpansion) continue;
+      if (!matchesLibraryFilters(g, players, time, hasExpansions)) continue;
+      games.push(g);
+    }
+    // Optional search: keep rows whose blob contains every typed term (matches
+    // searchPaginated's relevance rule).
+    const trimmed = (term ?? "").trim().toLowerCase();
+    const terms = trimmed.split(/\s+/).filter(Boolean);
+    const filtered = terms.length
+      ? games.filter((g) => {
+          const hay = (g.searchText ?? g.title).toLowerCase();
+          return terms.every((t) => hay.includes(t));
+        })
+      : games;
+    filtered.sort((a, b) => b._creationTime - a._creationTime);
+    return await Promise.all(filtered.map((g) => withMedia(ctx, g)));
+  },
+});
+
+/**
  * Games similar to `gameId`, ranked by shared mechanics/categories (+ a small
  * bonus for shared designers). Base games only; excludes the game itself. Cheap
  * full scan over base games (~a few hundred).

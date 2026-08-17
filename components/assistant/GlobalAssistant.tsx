@@ -34,7 +34,8 @@ type Item =
   | { kind: "user"; text: string }
   | { kind: "assistant"; text: string }
   | { kind: "note"; text: string }
-  | { kind: "candidates"; candidates: Candidate[] };
+  | { kind: "candidates"; candidates: Candidate[] }
+  | { kind: "noChat"; candidate: Candidate };
 
 /** Strip icon tokens + inline [n] citation markers for the compact bubble view. */
 function cleanAnswer(s: string): string {
@@ -157,16 +158,23 @@ export function GlobalAssistant() {
         if (result.mode === "switch") {
           // A game was named — surface it as clickable covers that route to the
           // game's own chat page. The bubble itself never answers game rules.
+          // Only games we can actually chat with (an ingested rulebook) are
+          // clickable; a match with no rules is acknowledged but not offered.
           const cands = result.candidates;
-          if (cands.length === 0) {
+          const chattable = cands.filter((c) => c.hasRulebooks);
+          if (chattable.length > 0) {
+            push({ kind: "candidates", candidates: chattable });
+          } else if (cands.length > 0) {
+            // We have the game but can't chat about it yet — offer to take the
+            // user to its page instead of dead-ending.
+            push({ kind: "noChat", candidate: cands[0] });
+          } else {
             push({
               kind: "note",
               text: result.gameName
                 ? `I don't have "${result.gameName}" in the library yet.`
                 : "Which game are you after? Tell me its name and I'll pull it up.",
             });
-          } else {
-            push({ kind: "candidates", candidates: cands });
           }
         } else {
           await answerGeneral(text);
@@ -201,6 +209,12 @@ export function GlobalAssistant() {
     if (busy) return;
     setOpen(false);
     router.push(`/boardgames/${c.slug}/chat`);
+  }
+
+  function openGamePage(c: Candidate) {
+    if (busy) return;
+    setOpen(false);
+    router.push(`/boardgames/${c.slug}`);
   }
 
   if (hidden) return null;
@@ -293,6 +307,51 @@ export function GlobalAssistant() {
                     </p>
                   );
                 }
+                if (it.kind === "noChat") {
+                  const c = it.candidate;
+                  const cover = c.thumbnailUrl ?? c.imageUrl;
+                  return (
+                    <div key={i} className="space-y-1.5">
+                      <p className="px-1 text-xs text-muted">
+                        We have{" "}
+                        <span className="font-semibold text-foreground">
+                          {c.title}
+                        </span>{" "}
+                        in the library, but its rules haven&apos;t been added
+                        yet, so I can&apos;t chat about it. Want to open its
+                        page?
+                      </p>
+                      <button
+                        onClick={() => openGamePage(c)}
+                        disabled={busy}
+                        className="flex w-full items-center gap-2.5 rounded-xl border border-border bg-surface p-2 text-left transition-colors hover:border-accent/50 hover:bg-surface-2 disabled:opacity-50"
+                      >
+                        <div className="h-10 w-10 shrink-0 overflow-hidden rounded-lg bg-surface-2">
+                          {cover ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={cover}
+                              alt=""
+                              className="h-full w-full object-cover"
+                            />
+                          ) : (
+                            <div className="flex h-full w-full items-center justify-center text-subtle">
+                              <Die className="h-5 w-5" />
+                            </div>
+                          )}
+                        </div>
+                        <span className="min-w-0 flex-1">
+                          <span className="font-display block truncate text-sm font-bold">
+                            {c.title}
+                          </span>
+                          <span className="text-[11px] text-subtle">
+                            View game →
+                          </span>
+                        </span>
+                      </button>
+                    </div>
+                  );
+                }
                 // candidates
                 return (
                   <div key={i} className="space-y-1.5">
@@ -327,9 +386,7 @@ export function GlobalAssistant() {
                             {c.title}
                           </span>
                           <span className="text-[11px] text-subtle">
-                            {c.hasRulebooks
-                              ? "Open chat →"
-                              : "no rulebook yet · open anyway"}
+                            Open chat →
                           </span>
                         </span>
                       </button>
