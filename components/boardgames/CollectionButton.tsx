@@ -31,7 +31,7 @@ export function CollectionButton({
 }: {
   gameId: Id<"games">;
   className?: string;
-  size?: "sm" | "md";
+  size?: "sm" | "md" | "lg";
 }) {
   const { isAuthenticated } = useConvexAuth();
   const state = useQuery(
@@ -140,9 +140,9 @@ export function CollectionButton({
         }
       >
         <Bookmark
-          className={`${size === "sm" ? "h-4 w-4" : "h-5 w-5"} ${
-            inCollection ? "fill-accent text-accent" : ""
-          }`}
+          className={`${
+            size === "sm" ? "h-4 w-4" : size === "lg" ? "h-6 w-6" : "h-5 w-5"
+          } ${inCollection ? "fill-accent text-accent" : ""}`}
         />
       </button>
       {open &&

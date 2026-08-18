@@ -23,9 +23,6 @@ export function GameCard({
   const cover = game.thumbnailUrl ?? game.imageUrl ?? "";
   const rating = game.bgg?.rating;
 
-  const iconBtn =
-    "flex h-7 w-7 items-center justify-center rounded-md text-muted transition-colors hover:text-accent";
-
   return (
     <div
       style={{ animationDelay: `${Math.min(index, 10) * 40}ms` }}
@@ -64,10 +61,18 @@ export function GameCard({
         )}
       </Link>
 
-      {/* Read-only tags: which of your collection lists this game is in.
-          Flush in the top-right corner, prominent. */}
-      <div className="pointer-events-none absolute right-0 top-0 z-20 flex justify-end">
-        <CollectionTags gameId={game._id} size="lg" />
+      {/* Read-only tags: which of your collection lists this game is in. */}
+      <div className="pointer-events-none absolute left-2 top-2 z-20">
+        <CollectionTags gameId={game._id} />
+      </div>
+
+      {/* Add-to-collection bookmark — flush in the top-right corner, prominent. */}
+      <div className="absolute right-0 top-0 z-20">
+        <CollectionButton
+          gameId={game._id}
+          size="lg"
+          className="flex h-11 w-11 items-center justify-center rounded-bl-xl rounded-tr-2xl bg-surface/85 text-muted shadow-sm backdrop-blur transition-colors hover:text-accent"
+        />
       </div>
 
       <div className="flex flex-1 flex-col p-3">
@@ -94,18 +99,15 @@ export function GameCard({
               </span>
             )}
           </div>
-          <div className="flex shrink-0 items-center gap-0.5">
-            {rating != null && (
-              <span
-                className="mr-0.5 inline-flex items-center gap-0.5 text-[11px] font-bold text-accent"
-                title={`BoardGameGeek average ${rating.toFixed(1)} / 10`}
-              >
-                <Star className="h-3 w-3 fill-current" />
-                {rating.toFixed(1)}
-              </span>
-            )}
-            <CollectionButton gameId={game._id} size="sm" className={iconBtn} />
-          </div>
+          {rating != null && (
+            <span
+              className="inline-flex shrink-0 items-center gap-0.5 text-[11px] font-bold text-accent"
+              title={`BoardGameGeek average ${rating.toFixed(1)} / 10`}
+            >
+              <Star className="h-3 w-3 fill-current" />
+              {rating.toFixed(1)}
+            </span>
+          )}
         </div>
       </div>
     </div>

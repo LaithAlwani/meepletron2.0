@@ -139,6 +139,15 @@ export default function AllBoardgamesPage() {
         </div>
       </div>
 
+      {activeCount > 0 && (
+        <button
+          onClick={clear}
+          className="mb-4 text-sm font-semibold text-accent hover:underline"
+        >
+          Clear all filters
+        </button>
+      )}
+
       {/* Content */}
       {loadingFirst ? (
         <div className={gridClass}>

@@ -6,7 +6,9 @@ import { usePaginatedQuery, useQuery } from "convex/react";
 import { Search, SlidersHorizontal, ArrowRight } from "lucide-react";
 import { api } from "@/convex/_generated/api";
 import { GameCard } from "@/components/boardgames/GameCard";
+import { PreviewCard } from "@/components/boardgames/PreviewCard";
 import { CardRail } from "@/components/boardgames/CardRail";
+import { useBggSearch } from "@/components/boardgames/useBggSearch";
 import { FilterDrawer } from "@/components/boardgames/FilterDrawer";
 import { useLibraryFilters } from "@/components/boardgames/useLibraryFilters";
 import { CollectionSection } from "@/components/collection/CollectionSection";
@@ -14,7 +16,7 @@ import { CollectionSection } from "@/components/collection/CollectionSection";
 const cellClass = "w-40 shrink-0 snap-start sm:w-44";
 
 export default function BoardgamesPage() {
-  const { term, setTerm, filters, setFilters, clear, args, activeCount } =
+  const { term, setTerm, debounced, searching, filters, setFilters, clear, args, activeCount } =
     useLibraryFilters();
   const [drawerOpen, setDrawerOpen] = useState(false);
 
@@ -24,6 +26,17 @@ export default function BoardgamesPage() {
   const total = useQuery(api.games.libraryCount, args);
 
   const loadingFirst = status === "LoadingFirstPage";
+
+  // When the local library turns up thin (< 10 matches), reach out to
+  // BoardGameGeek for more — same "not in our library yet" cards as /all.
+  const thin = !loadingFirst && results.length < 10;
+  const catalogBggIds = new Set(
+    results.map((g) => g.bggId).filter((x): x is string => !!x),
+  );
+  const { results: bggResults, pending: bggPending } = useBggSearch(
+    searching && thin ? debounced : "",
+    catalogBggIds,
+  );
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8">
@@ -69,6 +82,15 @@ export default function BoardgamesPage() {
         </div>
       </div>
 
+      {activeCount > 0 && (
+        <button
+          onClick={clear}
+          className="mb-4 text-sm font-semibold text-accent hover:underline"
+        >
+          Clear all filters
+        </button>
+      )}
+
       {/* Board games rail */}
       <section className="mb-10">
         <div className="mb-3 flex items-center justify-between">
@@ -93,18 +115,25 @@ export default function BoardgamesPage() {
               />
             ))}
           </div>
-        ) : results.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-border p-10 text-center text-muted">
-            <p className="font-medium">No games match.</p>
-            {activeCount > 0 && (
-              <button
-                onClick={clear}
-                className="mt-1 text-sm text-accent hover:underline"
-              >
-                Clear filters
-              </button>
-            )}
-          </div>
+        ) : results.length === 0 && bggResults.length === 0 ? (
+          bggPending ? (
+            <div className="flex items-center gap-3 py-10 text-center text-muted">
+              <span className="h-5 w-5 animate-spin rounded-full border-2 border-accent border-t-transparent" />
+              <p className="text-sm">Searching BoardGameGeek…</p>
+            </div>
+          ) : (
+            <div className="rounded-2xl border border-dashed border-border p-10 text-center text-muted">
+              <p className="font-medium">No games match.</p>
+              {activeCount > 0 && (
+                <button
+                  onClick={clear}
+                  className="mt-1 text-sm text-accent hover:underline"
+                >
+                  Clear filters
+                </button>
+              )}
+            </div>
+          )
         ) : (
           <CardRail>
             {results.slice(0, 20).map((game, i) => (
@@ -112,6 +141,12 @@ export default function BoardgamesPage() {
                 <GameCard game={game} index={i} />
               </li>
             ))}
+            {thin &&
+              bggResults.map((hit, i) => (
+                <li key={hit.bggId} className={cellClass}>
+                  <PreviewCard hit={hit} index={results.length + i} />
+                </li>
+              ))}
           </CardRail>
         )}
       </section>
