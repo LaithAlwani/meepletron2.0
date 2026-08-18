@@ -28,10 +28,15 @@ export function CollectionButton({
   gameId,
   className,
   size = "sm",
+  solidIdle = false,
 }: {
   gameId: Id<"games">;
   className?: string;
   size?: "sm" | "md" | "lg";
+  // When not in any list, render a solid (filled with currentColor) bookmark
+  // instead of an outline — used on the card cover where a filled shape reads
+  // better over artwork.
+  solidIdle?: boolean;
 }) {
   const { isAuthenticated } = useConvexAuth();
   const state = useQuery(
@@ -142,7 +147,13 @@ export function CollectionButton({
         <Bookmark
           className={`${
             size === "sm" ? "h-4 w-4" : size === "lg" ? "h-6 w-6" : "h-5 w-5"
-          } ${inCollection ? "fill-accent text-accent" : ""}`}
+          } ${
+            inCollection
+              ? "fill-accent text-accent"
+              : solidIdle
+                ? "fill-current"
+                : ""
+          }`}
         />
       </button>
       {open &&
