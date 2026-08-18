@@ -72,7 +72,7 @@ export function GameCard({
           shape touching the top border (the negative top offsets the icon's own
           transparent top padding). Cancels the card's hover lift so it stays
           anchored. */}
-      <div className="absolute right-0 -top-1 z-20 transition-transform duration-200 group-hover:translate-y-1">
+      <div className="absolute right-0 -top-[3px] z-20 transition-transform duration-200 group-hover:translate-y-1">
         <CollectionButton
           gameId={game._id}
           size="lg"

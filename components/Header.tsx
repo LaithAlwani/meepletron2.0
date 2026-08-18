@@ -31,7 +31,7 @@ const NAV = [
 function Brand() {
   return (
     <Link
-      href="/boardgames"
+      href="/"
       aria-label="Meepletron home"
       className="flex items-center gap-2"
     >
@@ -41,7 +41,7 @@ function Brand() {
         width={32}
         height={32}
         priority
-        className="h-8 w-8 rounded-lg"
+        className="h-8 w-8"
       />
       <span className="font-display text-xl font-extrabold tracking-tight">
         meepletron
