@@ -75,7 +75,6 @@ export function GameCard({
         <CollectionButton
           gameId={game._id}
           size="md"
-          solidIdle
           className="flex h-8 w-8 items-center justify-center rounded-full bg-black/35 text-white backdrop-blur-sm transition-colors hover:bg-black/55 hover:text-white"
         />
       </div>

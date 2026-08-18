@@ -5,11 +5,7 @@ import { Footer } from "./Footer";
 
 export function SiteFooter() {
   const pathname = usePathname();
-  // Hide the footer on the full-height chat page.
-  if (/^\/boardgames\/[^/]+\/chat/.test(pathname ?? "")) return null;
-  // The tuckbox generator is a full-view tool.
-  if (pathname === "/tuckbox") return null;
-  // The "who goes first" tool is a full-screen touch tool.
-  if (pathname === "/who-goes-first") return null;
+  // The footer only appears on the home / landing route.
+  if (pathname !== "/") return null;
   return <Footer />;
 }

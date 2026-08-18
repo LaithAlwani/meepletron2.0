@@ -56,16 +56,18 @@ function CollectionRows() {
 
   if (counts.all === 0) {
     return (
-      <div className="rounded-2xl border border-dashed border-border p-6 text-center text-muted">
+      <div className="p-6 text-center text-muted">
         <p className="font-medium">{syncing ? "Syncing…" : "Nothing here yet."}</p>
         {!syncing && (
-          <p className="mt-1 text-sm">
-            Add games from the library, or{" "}
-            <Link href="/settings" className="font-semibold text-accent hover:underline">
+          <>
+            <p className="mt-1 text-sm">Add games from the library, or</p>
+            <Link
+              href="/settings"
+              className="mt-1 inline-block text-sm font-semibold text-accent hover:underline"
+            >
               link BoardGameGeek
             </Link>
-            .
-          </p>
+          </>
         )}
       </div>
     );

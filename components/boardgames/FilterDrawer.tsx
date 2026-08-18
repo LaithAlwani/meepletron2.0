@@ -152,10 +152,10 @@ export function FilterDrawer({
       <div
         aria-hidden
         onClick={onClose}
-        className="fixed inset-0 z-50 bg-foreground/30 backdrop-blur-[1px]"
+        className="fixed inset-0 z-70 bg-foreground/30 backdrop-blur-[1px]"
       />
       {/* Bottom sheet on mobile; right-hand side drawer on desktop. */}
-      <div className="animate-in fixed inset-x-0 bottom-0 z-50 flex max-h-[82vh] flex-col rounded-t-2xl border border-border bg-background shadow-2xl sm:inset-y-0 sm:left-auto sm:right-0 sm:max-h-none sm:w-[24rem] sm:rounded-none sm:rounded-l-2xl">
+      <div className="animate-in fixed inset-x-0 bottom-0 z-70 flex max-h-[82vh] flex-col rounded-t-2xl border border-border bg-background shadow-2xl sm:inset-y-0 sm:left-auto sm:right-0 sm:max-h-none sm:w-96 sm:rounded-none sm:rounded-l-2xl">
         <div className="flex items-center justify-between border-b border-border px-4 py-3">
           <h2 className="font-display text-lg font-bold">Filters</h2>
           <div className="flex items-center gap-1">

@@ -42,13 +42,15 @@ export default function BoardgamesPage() {
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8">
-      {/* Header */}
-      <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+      {/* Header — desktop keeps the title on the left with a compact search +
+          filter on the right (same line); mobile centers the label and drops
+          the search/filter into a full-width row below. */}
+      <div className="mb-4 sm:mb-5 sm:flex sm:items-end sm:justify-between sm:gap-4">
         <div>
-          <p className="mb-1 text-[11px] font-bold uppercase tracking-[0.18em] text-accent">
+          <p className="mb-1 text-center text-[11px] font-bold uppercase tracking-[0.18em] text-accent sm:text-left">
             The library
           </p>
-          <h1 className="font-display text-3xl font-extrabold tracking-tight sm:text-4xl">
+          <h1 className="font-display hidden text-3xl font-extrabold tracking-tight sm:block sm:text-4xl">
             Board games
             {total !== undefined && (
               <span className="ml-2.5 align-middle text-base font-bold text-subtle">
@@ -58,8 +60,8 @@ export default function BoardgamesPage() {
           </h1>
         </div>
 
-        <div className="flex items-center gap-2">
-          <div className="relative flex-1 sm:w-72">
+        <div className="mt-4 flex items-center gap-2 sm:mt-0 sm:shrink-0">
+          <div className="relative flex-1 sm:w-64">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-subtle" />
             <input
               type="search"
@@ -96,13 +98,25 @@ export default function BoardgamesPage() {
 
       {/* Board games rail */}
       <section className="mb-10">
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="font-display text-lg font-bold">
-            {activeCount > 0 || term ? "Matches" : "Browse"}
+        <div className="mb-3 flex items-end justify-between">
+          <h2 className="font-display text-2xl font-extrabold tracking-tight sm:text-lg sm:font-bold">
+            {/* Mobile promotes this to the page title ("Board games" + count);
+                desktop keeps its original small "Browse" section label. */}
+            <span className="sm:hidden">
+              {activeCount > 0 || term ? "Matches" : "Board games"}
+            </span>
+            <span className="hidden sm:inline">
+              {activeCount > 0 || term ? "Matches" : "Browse"}
+            </span>
+            {total !== undefined && (
+              <span className="ml-2 align-middle text-base font-bold text-subtle sm:hidden">
+                {total}
+              </span>
+            )}
           </h2>
           <Link
             href="/boardgames/all"
-            className="inline-flex items-center gap-1 text-sm font-semibold text-accent hover:underline"
+            className="inline-flex items-center gap-1 pb-1 text-sm font-semibold text-accent hover:underline"
           >
             View all
             <ArrowRight className="h-3.5 w-3.5" />

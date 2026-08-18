@@ -13,13 +13,12 @@ import { MediaRow } from "@/components/boardgames/MediaRow";
 import { relativeTime } from "@/lib/format";
 import { buttonClasses } from "@/components/ui/Button";
 import { Skeleton } from "@/components/ui/Surface";
+import { PageTitle } from "@/components/ui/PageTitle";
 
 export default function ChatsPage() {
   return (
     <div className="mx-auto max-w-3xl px-4 py-8">
-      <h1 className="font-display mb-5 text-3xl font-extrabold tracking-tight">
-        Your chats
-      </h1>
+      <PageTitle className="mb-5">Chats</PageTitle>
       <AuthLoading>
         <ChatsSkeleton />
       </AuthLoading>
