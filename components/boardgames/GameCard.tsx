@@ -64,9 +64,10 @@ export function GameCard({
         )}
       </Link>
 
-      {/* Read-only tags: which of your collection lists this game is in. */}
-      <div className="pointer-events-none absolute left-2 top-2 z-20">
-        <CollectionTags gameId={game._id} />
+      {/* Read-only tags: which of your collection lists this game is in.
+          Flush in the top-right corner, prominent. */}
+      <div className="pointer-events-none absolute right-0 top-0 z-20 flex justify-end">
+        <CollectionTags gameId={game._id} size="lg" />
       </div>
 
       <div className="flex flex-1 flex-col p-3">

@@ -24,7 +24,7 @@ export function CollectionTags({
   className,
 }: {
   gameId: Id<"games">;
-  size?: "sm" | "md";
+  size?: "sm" | "md" | "lg";
   className?: string;
 }) {
   const { isAuthenticated } = useConvexAuth();
@@ -37,9 +37,11 @@ export function CollectionTags({
   if (active.length === 0) return null;
 
   const pill =
-    size === "md"
-      ? "px-2 py-0.5 text-xs"
-      : "px-1.5 py-0.5 text-[10px]";
+    size === "lg"
+      ? "px-3.5 py-2 text-base"
+      : size === "md"
+        ? "px-2 py-0.5 text-xs"
+        : "px-1.5 py-0.5 text-[10px]";
 
   return (
     <div className={`flex flex-wrap gap-1 ${className ?? ""}`}>

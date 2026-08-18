@@ -5,7 +5,7 @@ export type CollFilter = "owned" | "wishlist" | "forTrade" | "prevOwned";
 
 export type CollStatus = {
   filter: CollFilter;
-  slug: string; // URL segment for /collection/<slug>
+  slug: string; // URL segment for /boardgames/collection/<slug>
   title: string;
   icon: LucideIcon;
   empty: string;

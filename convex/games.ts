@@ -251,6 +251,125 @@ export const browseCount = query({
   },
 });
 
+// ---------------------------------------------------------------------------
+// Unified library browse — one query behind the /boardgames rows + /boardgames/all
+// grid. Supports players / time / expansions / chat-ready plus genre (category)
+// and mechanic filters and a search term. Genre/mechanic are array-contains,
+// which Convex indexes can't express, so this scans base games (~a few hundred)
+// and filters in JS; media is resolved only for the returned page.
+// ---------------------------------------------------------------------------
+
+const libraryFilterArgs = {
+  term: v.optional(v.string()),
+  players: v.optional(v.number()),
+  time: v.optional(
+    v.union(v.literal("quick"), v.literal("standard"), v.literal("epic")),
+  ),
+  hasExpansions: v.optional(v.boolean()),
+  chatOnly: v.optional(v.boolean()),
+  categories: v.optional(v.array(v.string())),
+  mechanics: v.optional(v.array(v.string())),
+};
+
+type LibraryFilters = {
+  term?: string;
+  players?: number;
+  time?: LibraryTime;
+  hasExpansions?: boolean;
+  chatOnly?: boolean;
+  categories?: string[];
+  mechanics?: string[];
+};
+
+/** True when the game has ANY of the selected values (empty selection = no filter). */
+function hasAnyValue(gameVals: string[], selected: string[] | undefined): boolean {
+  if (!selected || selected.length === 0) return true;
+  const set = new Set(gameVals.map((v) => v.trim().toLowerCase()));
+  return selected.some((s) => set.has(s.trim().toLowerCase()));
+}
+
+/** Base games matching every active library filter, newest first. */
+async function filteredLibrary(
+  ctx: QueryCtx,
+  f: LibraryFilters,
+): Promise<Doc<"games">[]> {
+  const base = await ctx.db
+    .query("games")
+    .withIndex("by_isStub_and_isExpansion", (q) =>
+      q.eq("isStub", false).eq("isExpansion", false),
+    )
+    .order("desc")
+    .take(2000);
+  const chatIds = f.chatOnly ? await chatEnabledBaseIds(ctx) : null;
+  const terms = (f.term ?? "").trim().toLowerCase().split(/\s+/).filter(Boolean);
+  return base.filter((g) => {
+    if (!matchesLibraryFilters(g, f.players, f.time, f.hasExpansions)) return false;
+    if (chatIds && !chatIds.has(g._id)) return false;
+    if (!hasAnyValue(g.categories, f.categories)) return false;
+    if (!hasAnyValue(g.gameMechanics, f.mechanics)) return false;
+    if (terms.length) {
+      const hay = (g.searchText ?? g.title).toLowerCase();
+      if (!terms.every((t) => hay.includes(t))) return false;
+    }
+    return true;
+  });
+}
+
+/** Paginated library browse (offset cursor) with all filters + search applied. */
+export const libraryGames = query({
+  args: { paginationOpts: paginationOptsValidator, ...libraryFilterArgs },
+  handler: async (ctx, { paginationOpts, ...f }) => {
+    const filtered = await filteredLibrary(ctx, f);
+    const offset = Number(paginationOpts.cursor ?? "0") || 0;
+    const end = offset + paginationOpts.numItems;
+    const slice = filtered.slice(offset, end);
+    return {
+      page: await Promise.all(slice.map((g) => withMedia(ctx, g))),
+      isDone: end >= filtered.length,
+      continueCursor: String(end),
+    };
+  },
+});
+
+/** Exact count for the current library filters (drives the header total). */
+export const libraryCount = query({
+  args: libraryFilterArgs,
+  handler: async (ctx, f) => {
+    const filtered = await filteredLibrary(ctx, f);
+    return filtered.length;
+  },
+});
+
+/** Distinct genres (categories) + mechanics for the filter drawer, most common first. */
+export const filterFacets = query({
+  args: {},
+  handler: async (ctx) => {
+    const base = await ctx.db
+      .query("games")
+      .withIndex("by_isStub_and_isExpansion", (q) =>
+        q.eq("isStub", false).eq("isExpansion", false),
+      )
+      .take(2000);
+    const tally = (pick: (g: Doc<"games">) => string[]) => {
+      const counts = new Map<string, number>();
+      for (const g of base) {
+        for (const raw of pick(g)) {
+          const label = raw.trim();
+          if (label) counts.set(label, (counts.get(label) ?? 0) + 1);
+        }
+      }
+      return [...counts.entries()]
+        .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+        .slice(0, 40)
+        .map(([label]) => label);
+    };
+    return {
+      categories: tally((g) => g.categories),
+      mechanics: tally((g) => g.gameMechanics),
+    };
+  },
+});
+
 /**
  * Base-game ids whose family (the base game itself or any of its expansions)
  * has at least one ingested rulebook — i.e. the games Meepletron can actually

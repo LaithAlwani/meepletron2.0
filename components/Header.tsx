@@ -13,7 +13,6 @@ import {
   LayoutGrid,
   Scissors,
   MessageCircle,
-  Bookmark,
   Trophy,
   LogIn,
 } from "lucide-react";
@@ -27,7 +26,6 @@ const NAV = [
   { href: "/tuckbox", label: "Tuckbox", icon: Scissors },
   { href: "/top-games", label: "Top Games", icon: Trophy },
   { href: "/chats", label: "Chats", icon: MessageCircle },
-  { href: "/collection", label: "Collection", icon: Bookmark },
 ];
 
 function Brand() {

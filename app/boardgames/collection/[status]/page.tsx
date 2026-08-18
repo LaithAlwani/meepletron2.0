@@ -29,11 +29,11 @@ export default function CollectionListPage({
   return (
     <div className="mx-auto max-w-6xl px-4 py-8">
       <Link
-        href="/collection"
+        href="/boardgames"
         className="mb-3 inline-flex items-center gap-1 text-sm font-medium text-muted transition-colors hover:text-foreground"
       >
         <ChevronLeft className="h-4 w-4" />
-        Collection
+        Library
       </Link>
       <h1 className="font-display mb-5 flex items-center gap-2 text-3xl font-extrabold tracking-tight">
         <status.icon className="h-6 w-6 text-accent" />
