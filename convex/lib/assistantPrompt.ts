@@ -24,26 +24,26 @@ Rules:
 - Never invent Meepletron features that aren't listed above.
 - Be concise, warm, and helpful. Use plain language.`;
 
-/** Classification prompt for routing a message: switch game / follow-up / general. */
+/** Classification prompt for routing a message: name a game / recommend / general. */
 export function buildRouterPrompt(
-  currentGameTitle: string | null,
+  _currentGameTitle: string | null,
   message: string,
 ): string {
   return `You route messages for a board-game assistant. Decide what the user wants.
 
-Current game in focus: ${currentGameTitle ? `"${currentGameTitle}"` : "none"}.
 User message:
 """
 ${message}
 """
 
 Choose one "mode":
-- "switch": the user names or clearly refers to a SPECIFIC board game to talk about — a different game than the one in focus, or there is no game in focus yet. Put just the game's title in "gameName".
-- "current": a follow-up question about the game already in focus. Only valid when a game is in focus AND the user did not name a different game.
-- "general": a question about the Meepletron app itself, or board-gaming chit-chat that isn't about one specific game's rules.
+- "switch": the user names or clearly refers to a SPECIFIC board game (to look it up, or to ask about its rules). Put just the game's title in "gameName".
+- "recommend": the user wants help CHOOSING what to play or a game suggestion, without naming a specific game — e.g. "pick a game for me", "what should I play", "recommend something", "suggest a game for 4 players", "surprise me", "choose for me".
+- "general": a question about the Meepletron app itself, or board-gaming chit-chat that isn't a rules question about one specific game and isn't a request for a recommendation.
 
 Guidance:
-- A rules-style question that mentions a game name is "switch" (with that game's name), even if a game is already in focus.
-- If no game is in focus and the message is a rules question, prefer "switch" and extract the most likely game name.
+- A rules-style question that mentions a game name is "switch" (with that game's name).
+- "pick/choose/recommend/suggest a game" WITHOUT a specific title is always "recommend", even right after talking about another game.
+- If the message is a rules question with no clear game name, prefer "switch" and extract the most likely game name.
 - "gameName" must be only the game's title — no extra words, no punctuation.`;
 }

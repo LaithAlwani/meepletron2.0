@@ -100,14 +100,14 @@ export const searchPaginated = query({
 });
 
 /**
- * Fuzzy-resolve a free-text game name to base-game candidates, best match first.
- * Unlike `searchPaginated` (an exact full-text index for the library grid), this
- * is tolerant of spacing, punctuation and typos — "lord's of water deep" →
- * "Lords of Waterdeep" — so the global assistant can suggest a game even when the
- * user doesn't spell the title exactly. Scans base games (~a few hundred) and
- * ranks by a normalized edit-distance / token score.
+ * Fuzzy-resolve a free-text game name to base-game candidates for the assistant,
+ * best match first. Tolerant of spacing, punctuation and typos ("lord's of water
+ * deep" → "Lords of Waterdeep", "blook" → Blood Rage / Blokus) so a loosely-typed
+ * name still resolves. Returns a generous ranked list (with a `hasRulebooks` flag)
+ * that the bubble shows a few at a time, revealing more when the user says none of
+ * them fit. Scans base games (~a few hundred).
  */
-export const resolveByName = query({
+export const assistantResolve = query({
   args: { term: v.string(), limit: v.optional(v.number()) },
   handler: async (ctx, { term, limit }) => {
     const q = term.trim();
@@ -118,20 +118,27 @@ export const resolveByName = query({
         qi.eq("isStub", false).eq("isExpansion", false),
       )
       .take(1000);
+    const chatIds = await chatEnabledBaseIds(ctx);
+    // 0.4 is deliberately loose: it keeps more distant matches around so the
+    // "show more options" path has something to reveal. Best matches sort first.
     const ranked = games
       .map((g) => ({ g, score: gameNameMatchScore(q, g.title) }))
-      // 0.5 keeps close spellings/typos ("waterdeep", "catn") while dropping
-      // unrelated titles.
-      .filter((s) => s.score >= 0.5)
-      .sort((a, b) => b.score - a.score);
-    // Surface runners-up that are reasonably near the best match, so genuinely
-    // similar names ("ticket to ride", the Catan family) all show — but a clear
-    // winner ("blod rage" → Blood Rage) isn't padded with weak matches.
-    const top = ranked[0]?.score ?? 0;
-    const scored = ranked
-      .filter((s) => s.score >= Math.max(0.5, top - 0.25))
-      .slice(0, Math.max(1, Math.min(limit ?? 5, 8)));
-    return await Promise.all(scored.map((s) => withMedia(ctx, s.g)));
+      .filter((s) => s.score >= 0.4)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, Math.max(1, Math.min(limit ?? 12, 20)));
+    return await Promise.all(
+      ranked.map(async ({ g }) => {
+        const m = await withMedia(ctx, g);
+        return {
+          _id: g._id,
+          slug: g.slug,
+          title: g.title,
+          imageUrl: m.imageUrl,
+          thumbnailUrl: m.thumbnailUrl,
+          hasRulebooks: chatIds.has(g._id),
+        };
+      }),
+    );
   },
 });
 

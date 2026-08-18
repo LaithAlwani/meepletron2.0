@@ -44,9 +44,18 @@ type Item =
   | { kind: "user"; text: string }
   | { kind: "assistant"; text: string }
   | { kind: "note"; text: string }
-  | { kind: "candidates"; candidates: Candidate[] }
   | { kind: "noChat"; candidate: Candidate }
   | { kind: "recs"; games: RecGame[]; source: "owned" | "library" };
+
+/** An in-progress "did you mean…" resolution the user can page through. */
+type Picker = { term: string; pool: Candidate[]; shown: number };
+
+/** Did the user reject the current suggestions (so we should show more)? */
+function isRejection(text: string): boolean {
+  return /^(no|nope|nah|not (these|it|them|that)|none|none of (these|them)|other(s)?|different|more|show more|neither|wrong)\b/i.test(
+    text.trim(),
+  );
+}
 
 type TimeVal = "quick" | "standard" | "epic";
 type CompVal = "light" | "medium" | "heavy";
@@ -152,6 +161,7 @@ export function GlobalAssistant() {
   const [streaming, setStreaming] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [flow, setFlow] = useState<Flow | null>(null);
+  const [picker, setPicker] = useState<Picker | null>(null);
   const convex = useConvex();
   const generalHistory = useRef<{ role: "user" | "assistant"; content: string }[]>([]);
   const pending = useRef<string | null>(null);
@@ -168,7 +178,7 @@ export function GlobalAssistant() {
   useLayoutEffect(() => {
     const el = scrollRef.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [items, streaming, open, flow]);
+  }, [items, streaming, open, flow, picker]);
 
   // Body scroll lock while the panel is open.
   useEffect(() => {
@@ -253,25 +263,33 @@ export function GlobalAssistant() {
       setBusy(true);
       try {
         const result = await route({ text });
-        if (result.mode === "switch") {
-          // A game was named — surface it as clickable covers that route to the
-          // game's own chat page. The bubble itself never answers game rules.
-          // Only games we can actually chat with (an ingested rulebook) are
-          // clickable; a match with no rules is acknowledged but not offered.
-          const cands = result.candidates;
-          const chattable = cands.filter((c) => c.hasRulebooks);
+        if (result.mode === "recommend") {
+          // Wants a suggestion — start the click-through picker wizard.
+          push({
+            kind: "note",
+            text: "Sure — a few quick taps and I'll suggest something:",
+          });
+          ensureGuest();
+          setFlow({ step: "players" });
+        } else if (result.mode === "switch") {
+          // A game was named — resolve to covers the user pages through. Only
+          // games we can chat with (an ingested rulebook) are offered; a match
+          // with no rules is acknowledged but not offered.
+          const term = result.gameName ?? text;
+          const pool = await convex.query(api.games.assistantResolve, { term });
+          const chattable = pool.filter((c) => c.hasRulebooks);
           if (chattable.length > 0) {
-            push({ kind: "candidates", candidates: chattable });
-          } else if (cands.length > 0) {
-            // We have the game but can't chat about it yet — offer to take the
-            // user to its page instead of dead-ending.
-            push({ kind: "noChat", candidate: cands[0] });
+            setPicker({
+              term,
+              pool: chattable,
+              shown: Math.min(3, chattable.length),
+            });
+          } else if (pool.length > 0) {
+            push({ kind: "noChat", candidate: pool[0] });
           } else {
             push({
               kind: "note",
-              text: result.gameName
-                ? `I don't have "${result.gameName}" in the library yet.`
-                : "Which game are you after? Tell me its name and I'll pull it up.",
+              text: `I don't have "${term}" in the library yet. Try another name, or ask me to pick a game for you.`,
             });
           }
         } else {
@@ -281,7 +299,7 @@ export function GlobalAssistant() {
         setBusy(false);
       }
     },
-    [route, answerGeneral, push],
+    [route, answerGeneral, push, convex, ensureGuest],
   );
 
   // Flush a queued message once auth (guest) is ready.
@@ -295,12 +313,42 @@ export function GlobalAssistant() {
 
   function send(text: string) {
     push({ kind: "user", text });
+    // "no" / "none of these" while covers are showing → reveal more options.
+    if (picker && isRejection(text)) {
+      showMorePicker();
+      return;
+    }
+    if (picker) setPicker(null); // a fresh query dismisses the stale suggestions
     if (!inputReady) {
       pending.current = text;
       ensureGuest();
       return;
     }
     void process(text);
+  }
+
+  function showMorePicker() {
+    if (!picker) return;
+    if (picker.shown >= picker.pool.length) {
+      push({
+        kind: "note",
+        text: `That's all I have for "${picker.term}". Try a different name, or ask me to pick a game for you.`,
+      });
+      setPicker(null);
+      return;
+    }
+    setPicker({
+      ...picker,
+      shown: Math.min(picker.shown + 3, picker.pool.length),
+    });
+  }
+
+  function dismissPicker() {
+    setPicker(null);
+    push({
+      kind: "note",
+      text: "No problem — tell me another game name, or ask me to pick a game for you.",
+    });
   }
 
   function goChat(slug: string) {
@@ -318,6 +366,7 @@ export function GlobalAssistant() {
   // --- quick-start menu actions ---
   function startRecommend() {
     ensureGuest();
+    setPicker(null);
     setFlow({ step: "players" });
   }
 
@@ -532,8 +581,8 @@ export function GlobalAssistant() {
                     </div>
                   );
                 }
-                if (it.kind === "recs") {
-                  return (
+                // recs
+                return (
                     <div key={i} className="space-y-1.5">
                       <p className="px-1 text-xs text-muted">
                         {it.source === "owned"
@@ -576,48 +625,6 @@ export function GlobalAssistant() {
                       ))}
                     </div>
                   );
-                }
-                // candidates
-                return (
-                  <div key={i} className="space-y-1.5">
-                    <p className="px-1 text-xs text-muted">
-                      {it.candidates.length === 1
-                        ? "Tap to open its chat:"
-                        : "Did you mean one of these? Tap to open its chat:"}
-                    </p>
-                    {it.candidates.map((c) => (
-                      <button
-                        key={c._id}
-                        onClick={() => goChat(c.slug)}
-                        disabled={busy}
-                        className="flex w-full items-center gap-2.5 rounded-xl border border-border bg-surface p-2 text-left transition-colors hover:border-accent/50 hover:bg-surface-2 disabled:opacity-50"
-                      >
-                        <div className="h-10 w-10 shrink-0 overflow-hidden rounded-lg bg-surface-2">
-                          {(c.thumbnailUrl ?? c.imageUrl) ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img
-                              src={c.thumbnailUrl ?? c.imageUrl ?? ""}
-                              alt=""
-                              className="h-full w-full object-cover"
-                            />
-                          ) : (
-                            <div className="flex h-full w-full items-center justify-center text-subtle">
-                              <Die className="h-5 w-5" />
-                            </div>
-                          )}
-                        </div>
-                        <span className="min-w-0 flex-1">
-                          <span className="font-display block truncate text-sm font-bold">
-                            {c.title}
-                          </span>
-                          <span className="text-[11px] text-subtle">
-                            Open chat →
-                          </span>
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                );
               })}
 
               {streaming !== null && (
@@ -732,6 +739,58 @@ export function GlobalAssistant() {
                   >
                     Cancel
                   </button>
+                </div>
+              )}
+
+              {/* Game picker — covers the user pages through ("show more"). */}
+              {picker && (
+                <div className="msg-in space-y-1.5">
+                  <p className="px-1 text-xs text-muted">
+                    {picker.pool.length === 1
+                      ? "Found this — tap to open its chat:"
+                      : "Did you mean one of these? Tap to open its chat:"}
+                  </p>
+                  {picker.pool.slice(0, picker.shown).map((c) => (
+                    <button
+                      key={c._id}
+                      onClick={() => goChat(c.slug)}
+                      disabled={busy}
+                      className="flex w-full items-center gap-2.5 rounded-xl border border-border bg-surface p-2 text-left transition-colors hover:border-accent/50 hover:bg-surface-2 disabled:opacity-50"
+                    >
+                      <div className="h-10 w-10 shrink-0 overflow-hidden rounded-lg bg-surface-2">
+                        {(c.thumbnailUrl ?? c.imageUrl) ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={c.thumbnailUrl ?? c.imageUrl ?? ""}
+                            alt=""
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          <div className="flex h-full w-full items-center justify-center text-subtle">
+                            <Die className="h-5 w-5" />
+                          </div>
+                        )}
+                      </div>
+                      <span className="min-w-0 flex-1">
+                        <span className="font-display block truncate text-sm font-bold">
+                          {c.title}
+                        </span>
+                        <span className="text-[11px] text-subtle">
+                          Open chat →
+                        </span>
+                      </span>
+                    </button>
+                  ))}
+                  <div className="flex flex-wrap gap-1.5 pt-0.5">
+                    {picker.shown < picker.pool.length && (
+                      <Chip disabled={busy} onClick={showMorePicker}>
+                        Show more
+                      </Chip>
+                    )}
+                    <Chip disabled={busy} onClick={dismissPicker}>
+                      None of these
+                    </Chip>
+                  </div>
                 </div>
               )}
             </div>

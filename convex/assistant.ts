@@ -1,101 +1,53 @@
 import { v } from "convex/values";
 import { generateObject } from "ai";
 import { z } from "zod";
-import { action, internalMutation, type ActionCtx } from "./_generated/server";
-import { api } from "./_generated/api";
-import type { Id } from "./_generated/dataModel";
+import { action, internalMutation } from "./_generated/server";
 import { CHAT_MODEL } from "./rag";
 import { buildRouterPrompt } from "./lib/assistantPrompt";
 import { finite } from "./lib/num";
 
 /**
  * The global assistant's router + usage accounting. Streaming answers themselves
- * go through the `/chat` (per-game, grounded) and `/assistant` (general) HTTP
- * actions; this file just decides where a message should go and resolves the
- * game the user named into confirmable candidates.
+ * go through the `/assistant` (general) HTTP action; this file just classifies a
+ * message. Resolving a named game into confirmable covers (and paginating "show
+ * more") is done client-side against `games.assistantResolve`.
  */
 
-type GameCandidate = {
-  _id: Id<"games">;
-  slug: string;
-  title: string;
-  imageUrl: string | null;
-  thumbnailUrl: string | null;
-  hasRulebooks: boolean;
-};
-
-/** Resolve a free-text game name to up to 3 catalogue candidates (+ chat-ability). */
-async function resolveCandidates(
-  ctx: ActionCtx,
-  term: string,
-): Promise<GameCandidate[]> {
-  const q = term.trim();
-  if (q.length < 2) return [];
-  // Fuzzy resolver: tolerant of spacing/punctuation/typos so a loosely-typed
-  // name still resolves ("lord's of water deep" → "Lords of Waterdeep").
-  const matches = await ctx.runQuery(api.games.resolveByName, { term: q, limit: 5 });
-  const out: GameCandidate[] = [];
-  for (const g of matches.slice(0, 5)) {
-    const sources = await ctx.runQuery(api.games.chatSources, { gameId: g._id });
-    out.push({
-      _id: g._id,
-      slug: g.slug,
-      title: g.title,
-      imageUrl: g.imageUrl,
-      thumbnailUrl: g.thumbnailUrl,
-      hasRulebooks: sources.some((s) => s.rulebooks.length > 0),
-    });
-  }
-  return out;
-}
-
 type RouteResult = {
-  mode: "switch" | "current" | "general";
+  mode: "switch" | "recommend" | "general";
   gameName?: string;
-  candidates: GameCandidate[];
 };
 
 /**
- * Classify a message: switch to a named game, follow up on the current game, or
- * a general Meepletron question. On "switch" it also resolves the game name into
- * candidate cards the client can auto-open (one match) or offer to pick (several).
+ * Classify a message: name a specific game (`switch`, with `gameName`), ask for
+ * a recommendation (`recommend`), or a general Meepletron question (`general`).
  */
 export const route = action({
   args: { text: v.string(), currentGameId: v.optional(v.id("games")) },
-  handler: async (ctx, { text, currentGameId }): Promise<RouteResult> => {
-    let currentTitle: string | null = null;
-    if (currentGameId) {
-      const g = await ctx.runQuery(api.games.getById, { gameId: currentGameId });
-      currentTitle = g?.title ?? null;
-    }
-
-    let mode: RouteResult["mode"] = currentGameId ? "current" : "general";
+  handler: async (ctx, { text }): Promise<RouteResult> => {
+    let mode: RouteResult["mode"] = "general";
     let gameName: string | undefined;
     try {
       const { object } = await generateObject({
         model: CHAT_MODEL,
         schema: z.object({
-          mode: z.enum(["switch", "current", "general"]),
+          mode: z.enum(["switch", "recommend", "general"]),
           gameName: z.string().optional(),
         }),
-        prompt: buildRouterPrompt(currentTitle, text),
+        prompt: buildRouterPrompt(null, text),
         temperature: 0,
         providerOptions: { google: { thinkingConfig: { thinkingBudget: 0 } } },
       });
       mode = object.mode;
       gameName = object.gameName?.trim() || undefined;
     } catch {
-      // Model hiccup: with no current game, treat the message as a game name.
-      if (!currentGameId) {
-        mode = "switch";
-        gameName = text;
-      }
+      // Model hiccup: treat the message as a game name to look up.
+      mode = "switch";
+      gameName = text;
     }
 
-    if (mode !== "switch") return { mode, candidates: [] };
-
-    const term = (gameName ?? text).trim();
-    return { mode: "switch", gameName: term, candidates: await resolveCandidates(ctx, term) };
+    if (mode === "switch") return { mode, gameName: (gameName ?? text).trim() };
+    return { mode };
   },
 });
 
