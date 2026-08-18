@@ -66,12 +66,13 @@ export function GameCard({
         <CollectionTags gameId={game._id} />
       </div>
 
-      {/* Add-to-collection bookmark — flush in the top-right corner, prominent. */}
+      {/* Add-to-collection bookmark — flush in the top-right corner, hanging
+          from the top edge (no background, no top padding). */}
       <div className="absolute right-0 top-0 z-20">
         <CollectionButton
           gameId={game._id}
           size="lg"
-          className="flex h-11 w-11 items-center justify-center rounded-bl-xl rounded-tr-2xl bg-surface/85 text-muted shadow-sm backdrop-blur transition-colors hover:text-accent"
+          className="flex items-start justify-center px-2 pb-1.5 pt-0 text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.5)] transition-colors hover:text-accent"
         />
       </div>
 
