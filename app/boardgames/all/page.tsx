@@ -48,7 +48,9 @@ export default function AllBoardgamesPage() {
     args,
     { initialNumItems: 24 },
   );
-  const total = useQuery(api.games.libraryCount, args);
+  // Skip the exact count while searching — it's a full-catalogue scan; show the
+  // running result count instead.
+  const total = useQuery(api.games.libraryCount, searching ? "skip" : args);
 
   const logSearch = useMutation(api.search.logSearch);
   useEffect(() => {
@@ -94,11 +96,18 @@ export default function AllBoardgamesPage() {
       <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <h1 className="font-display text-3xl font-extrabold tracking-tight sm:text-4xl">
           All board games
-          {total !== undefined && (
+          {searching ? (
+            results.length > 0 && (
+              <span className="ml-2.5 align-middle text-base font-bold text-subtle">
+                {results.length}
+                {status === "CanLoadMore" || status === "LoadingMore" ? "+" : ""}
+              </span>
+            )
+          ) : total !== undefined ? (
             <span className="ml-2.5 align-middle text-base font-bold text-subtle">
               {total}
             </span>
-          )}
+          ) : null}
         </h1>
 
         <div className="flex items-center gap-2">
@@ -114,12 +123,13 @@ export default function AllBoardgamesPage() {
           </div>
           <button
             onClick={() => setDrawerOpen(true)}
-            className="relative flex h-11 shrink-0 items-center gap-1.5 rounded-xl border border-border bg-surface px-3.5 text-sm font-semibold text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
+            aria-label="Filters"
+            title="Filters"
+            className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-border bg-surface text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
           >
-            <SlidersHorizontal className="h-4 w-4" />
-            <span className="hidden sm:inline">Filters</span>
+            <SlidersHorizontal className="h-4.5 w-4.5" />
             {activeCount > 0 && (
-              <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-accent px-1 text-[11px] font-bold text-accent-foreground">
+              <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-accent px-1 text-[11px] font-bold text-accent-foreground">
                 {activeCount}
               </span>
             )}

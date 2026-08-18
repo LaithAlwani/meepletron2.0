@@ -23,7 +23,9 @@ export default function BoardgamesPage() {
   const { results, status } = usePaginatedQuery(api.games.libraryGames, args, {
     initialNumItems: 20,
   });
-  const total = useQuery(api.games.libraryCount, args);
+  // Skip the exact count while searching — it's a full-catalogue scan, and the
+  // search path already shows a live result count.
+  const total = useQuery(api.games.libraryCount, searching ? "skip" : args);
 
   const loadingFirst = status === "LoadingFirstPage";
 
@@ -69,12 +71,13 @@ export default function BoardgamesPage() {
           </div>
           <button
             onClick={() => setDrawerOpen(true)}
-            className="relative flex h-11 shrink-0 items-center gap-1.5 rounded-xl border border-border bg-surface px-3.5 text-sm font-semibold text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
+            aria-label="Filters"
+            title="Filters"
+            className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-border bg-surface text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
           >
-            <SlidersHorizontal className="h-4 w-4" />
-            Filters
+            <SlidersHorizontal className="h-4.5 w-4.5" />
             {activeCount > 0 && (
-              <span className="ml-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-accent px-1 text-[11px] font-bold text-accent-foreground">
+              <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-accent px-1 text-[11px] font-bold text-accent-foreground">
                 {activeCount}
               </span>
             )}

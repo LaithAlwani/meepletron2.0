@@ -65,4 +65,14 @@ crons.cron(
   {},
 );
 
+// Recompute the denormalized "similar games" ranking once a day (off-peak), so
+// the detail page reads a handful of ids instead of scanning the catalogue on
+// every view.
+crons.daily(
+  "recompute similar games",
+  { hourUTC: 4, minuteUTC: 0 },
+  internal.games.recomputeSimilarGames,
+  {},
+);
+
 export default crons;

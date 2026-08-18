@@ -52,6 +52,26 @@ export const list = query({
   },
 });
 
+/**
+ * Slugs of every indexable game detail page, for the sitemap — non-stub base
+ * games AND expansions (both have their own detail page). No media, so it stays
+ * cheap even at a few thousand rows.
+ */
+export const sitemapSlugs = query({
+  args: {},
+  handler: async (ctx) => {
+    const games = await ctx.db
+      .query("games")
+      .withIndex("by_isStub_and_isExpansion", (q) => q.eq("isStub", false))
+      .take(10000);
+    return games.map((g) => ({
+      slug: g.slug,
+      updatedAt: g._creationTime,
+      isExpansion: g.isExpansion,
+    }));
+  },
+});
+
 /** Paginated base-game library. */
 export const listPaginated = query({
   args: { paginationOpts: paginationOptsValidator },
@@ -315,10 +335,93 @@ async function filteredLibrary(
   });
 }
 
-/** Paginated library browse (offset cursor) with all filters + search applied. */
+/** Does this filter set need the full-catalogue JS scan (array-contains / chat)? */
+function needsLibraryScan(f: LibraryFilters): boolean {
+  return (
+    (f.categories?.length ?? 0) > 0 ||
+    (f.mechanics?.length ?? 0) > 0 ||
+    !!f.chatOnly
+  );
+}
+
+/**
+ * Paginated library browse. For the common case (players / time / expansions /
+ * search only) this is **index-backed** and reads roughly one page of docs. Genre
+ * / mechanic / chat-ready filters are array-contains / joins that Convex can't
+ * index, so those fall back to the full-catalogue scan (offset cursor).
+ */
 export const libraryGames = query({
   args: { paginationOpts: paginationOptsValidator, ...libraryFilterArgs },
   handler: async (ctx, { paginationOpts, ...f }) => {
+    if (!needsLibraryScan(f)) {
+      const trimmed = (f.term ?? "").trim();
+      const searching = trimmed.length >= 2;
+      const needsFilter =
+        f.players != null || f.time != null || !!f.hasExpansions;
+
+      const base = searching
+        ? ctx.db
+            .query("games")
+            .withSearchIndex("search_text", (s) =>
+              s
+                .search("searchText", trimmed)
+                .eq("isExpansion", false)
+                .eq("isStub", false),
+            )
+        : ctx.db
+            .query("games")
+            .withIndex("by_isStub_and_isExpansion", (i) =>
+              i.eq("isStub", false).eq("isExpansion", false),
+            )
+            .order("desc");
+
+      // players / time / expansions apply during pagination, so we read only
+      // enough rows to fill the page instead of the whole catalogue.
+      const q = needsFilter
+        ? base.filter((e) => {
+            const conds = [];
+            if (f.players != null) {
+              conds.push(
+                e.and(
+                  e.lte(e.field("minPlayers"), f.players),
+                  e.gte(e.field("maxPlayers"), f.players),
+                ),
+              );
+            }
+            if (f.time === "quick") conds.push(e.lte(e.field("maxPlayTime"), 30));
+            else if (f.time === "standard")
+              conds.push(
+                e.and(
+                  e.gt(e.field("maxPlayTime"), 30),
+                  e.lte(e.field("maxPlayTime"), 90),
+                ),
+              );
+            else if (f.time === "epic")
+              conds.push(e.gt(e.field("maxPlayTime"), 90));
+            if (f.hasExpansions) conds.push(e.eq(e.field("hasExpansions"), true));
+            return e.and(...conds);
+          })
+        : base;
+
+      const result = await q.paginate(paginationOpts);
+
+      // The full-text index is typo-tolerant; keep only rows containing every
+      // typed term (mirrors searchPaginated's relevance rule).
+      let page = result.page;
+      if (searching) {
+        const terms = trimmed.toLowerCase().split(/\s+/).filter(Boolean);
+        page = page.filter((g) => {
+          const hay = (g.searchText ?? g.title).toLowerCase();
+          return terms.every((t) => hay.includes(t));
+        });
+      }
+      return {
+        ...result,
+        page: await Promise.all(page.map((g) => withMedia(ctx, g))),
+      };
+    }
+
+    // Scan path — genre / mechanic / chat-ready filters.
     const filtered = await filteredLibrary(ctx, f);
     const offset = Number(paginationOpts.cursor ?? "0") || 0;
     const end = offset + paginationOpts.numItems;
@@ -584,51 +687,110 @@ export const recommend = query({
   },
 });
 
+// ---------------------------------------------------------------------------
+// Similar games. Ranked by shared mechanics/categories (+ a small designer
+// bonus). The ranking is denormalized onto each base game (games.similarIds) by
+// a daily cron so the detail page reads ~6 ids instead of scanning the whole
+// catalogue on every view.
+// ---------------------------------------------------------------------------
+
+type SimFeat = {
+  id: Id<"games">;
+  cats: Set<string>;
+  mechs: Set<string>;
+  designers: Set<string>;
+};
+
+const normStr = (s: string) => s.trim().toLowerCase();
+
+function toSimFeat(g: Doc<"games">): SimFeat {
+  return {
+    id: g._id,
+    cats: new Set(g.categories.map(normStr)),
+    mechs: new Set(g.gameMechanics.map(normStr)),
+    designers: new Set(g.designers.map(normStr)),
+  };
+}
+
+/** Best-first similar base-game ids for `base`, excluding itself. */
+function rankSimilar(base: SimFeat, others: SimFeat[], limit: number): Id<"games">[] {
+  if (base.cats.size === 0 && base.mechs.size === 0) return [];
+  const scored: { id: Id<"games">; score: number }[] = [];
+  for (const c of others) {
+    if (c.id === base.id) continue;
+    let score = 0;
+    for (const x of c.mechs) if (base.mechs.has(x)) score += 2;
+    for (const x of c.cats) if (base.cats.has(x)) score += 1.5;
+    for (const x of c.designers) if (base.designers.has(x)) score += 1;
+    if (score > 0) scored.push({ id: c.id, score });
+  }
+  scored.sort((a, b) => b.score - a.score);
+  return scored.slice(0, limit).map((s) => s.id);
+}
+
 /**
- * Games similar to `gameId`, ranked by shared mechanics/categories (+ a small
- * bonus for shared designers). Base games only; excludes the game itself. Cheap
- * full scan over base games (~a few hundred).
+ * Games similar to `gameId`. Reads the precomputed `similarIds` (daily cron) and
+ * fetches just those — a handful of doc reads instead of a full-catalogue scan.
+ * Falls back to the scan only for games not yet computed (e.g. brand-new ones).
  */
 export const similarGames = query({
   args: { gameId: v.id("games"), limit: v.optional(v.number()) },
   handler: async (ctx, { gameId, limit }) => {
     const game = await ctx.db.get("games", gameId);
     if (!game) return [];
-    // Score against the base game of the family.
     const base =
       game.isExpansion && game.parentId
         ? ((await ctx.db.get("games", game.parentId)) ?? game)
         : game;
+    const cap = Math.max(1, Math.min(limit ?? 6, 12));
 
-    const norm = (s: string) => s.trim().toLowerCase();
-    const cats = new Set(base.categories.map(norm));
-    const mechs = new Set(base.gameMechanics.map(norm));
-    const designers = new Set(base.designers.map(norm));
-    if (cats.size === 0 && mechs.size === 0) return [];
+    // Fast path: precomputed list.
+    if (base.similarIds) {
+      const docs = await Promise.all(
+        base.similarIds.slice(0, cap).map((id) => ctx.db.get("games", id)),
+      );
+      const valid = docs.filter(
+        (g): g is Doc<"games"> => !!g && !g.isStub && !g.isExpansion,
+      );
+      return await Promise.all(valid.map((g) => withMedia(ctx, g)));
+    }
 
-    // Stub games (auto-created by BGG collection sync) carry no categories or
-    // mechanics, so they'd score zero anyway — but they'd still eat the take().
+    // Fallback (not yet computed): scan the catalogue once.
     const candidates = await ctx.db
       .query("games")
       .withIndex("by_isStub_and_isExpansion", (q) =>
         q.eq("isStub", false).eq("isExpansion", false),
       )
-      .take(1000);
+      .take(2000);
+    const ids = rankSimilar(toSimFeat(base), candidates.map(toSimFeat), cap);
+    const byId = new Map(candidates.map((c) => [c._id, c] as const));
+    const picked = ids
+      .map((id) => byId.get(id))
+      .filter((g): g is Doc<"games"> => !!g);
+    return await Promise.all(picked.map((g) => withMedia(ctx, g)));
+  },
+});
 
-    const scored = candidates
-      .filter((c) => c._id !== base._id)
-      .map((c) => {
-        let score = 0;
-        for (const x of c.gameMechanics) if (mechs.has(norm(x))) score += 2;
-        for (const x of c.categories) if (cats.has(norm(x))) score += 1.5;
-        for (const x of c.designers) if (designers.has(norm(x))) score += 1;
-        return { c, score };
-      })
-      .filter((s) => s.score > 0)
-      .sort((a, b) => b.score - a.score)
-      .slice(0, Math.max(1, Math.min(limit ?? 6, 12)));
-
-    return await Promise.all(scored.map((s) => withMedia(ctx, s.c)));
+/**
+ * Recompute + store `similarIds` for every base game. Reads the catalogue once
+ * and scores in memory (O(n²), fine for the few hundred base games), so the
+ * per-view scan becomes a once-a-day job. Run by a cron; also runnable manually.
+ */
+export const recomputeSimilarGames = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const games = await ctx.db
+      .query("games")
+      .withIndex("by_isStub_and_isExpansion", (q) =>
+        q.eq("isStub", false).eq("isExpansion", false),
+      )
+      .take(2000);
+    const feats = games.map(toSimFeat);
+    for (let i = 0; i < games.length; i++) {
+      const ids = rankSimilar(feats[i], feats, 12);
+      await ctx.db.patch("games", games[i]._id, { similarIds: ids });
+    }
+    return { updated: games.length };
   },
 });
 

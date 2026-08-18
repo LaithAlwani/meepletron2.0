@@ -112,6 +112,10 @@ export default defineSchema({
     searchText: v.optional(v.string()),
     // Denormalized: does this base game have ≥1 expansion? For the library filter.
     hasExpansions: v.optional(v.boolean()),
+    // Denormalized "similar games" (base-game ids, best-first), recomputed by a
+    // daily cron. Lets the detail page read ~6 ids instead of scanning the whole
+    // catalogue on every view. Absent until the first recompute.
+    similarIds: v.optional(v.array(v.id("games"))),
     // DEPRECATED, unused. The chat-ready gating is gone; this bare optional
     // field lingers only so a prod schema push doesn't fail on docs that still
     // carry it. Run migrations:clearChatReady against prod, then drop this line.

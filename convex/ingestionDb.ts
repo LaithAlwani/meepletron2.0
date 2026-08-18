@@ -368,9 +368,14 @@ export const finalizeCommit = internalMutation({
       completionTokens: 0,
       totalTokens: embedTokens,
     });
-    // Refresh the derived detail-page content (FAQ, glossary, components) from
-    // the freshly-ingested rulebook. Both resolve to the base game's family.
-    if (rb) {
+    // Generate the derived detail-page content (FAQ, glossary, reminders) from
+    // the freshly-ingested rulebook — but ONLY the first time this rulebook is
+    // ingested. Each of these runs several vector searches + LLM calls, so we
+    // don't re-run them on a re-ingest of already-committed content (an admin can
+    // force a refresh from the game's admin page). `rb` is the pre-patch doc, so
+    // `isIngested === true` means it was already ingested before this commit.
+    const firstIngest = !!rb && rb.isIngested !== true;
+    if (rb && firstIngest) {
       await ctx.scheduler.runAfter(0, internal.faqs.generateForGame, {
         gameId: rb.gameId,
       });

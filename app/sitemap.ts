@@ -1,9 +1,18 @@
 import type { MetadataRoute } from "next";
+import { unstable_cache } from "next/cache";
+import { fetchQuery } from "convex/nextjs";
+import { api } from "@/convex/_generated/api";
 import { SITE_URL } from "@/lib/site";
 
-// Public, indexable routes. Game detail pages are client-rendered without their
-// own metadata today, so they're intentionally omitted until they get proper
-// per-page SEO; add them here (e.g. via a Convex slug query) when they do.
+// One day. The sitemap doesn't need to be fresher than this, and it caps how
+// often we touch Convex no matter how hard crawlers hit /sitemap.xml.
+const ONE_DAY = 86400;
+
+// Regenerate the whole sitemap route at most once a day. (Must be a literal —
+// Next statically analyses this segment config.)
+export const revalidate = 86400;
+
+// Static, public, indexable routes.
 const ROUTES: {
   path: string;
   changeFrequency: MetadataRoute.Sitemap[number]["changeFrequency"];
@@ -17,10 +26,37 @@ const ROUTES: {
   { path: "/terms-of-service", changeFrequency: "yearly", priority: 0.2 },
 ];
 
-export default function sitemap(): MetadataRoute.Sitemap {
-  return ROUTES.map((r) => ({
+// Cache the game-slug read in Next's data cache so the underlying Convex query
+// (which loads every non-stub game document) runs at most once per day — not
+// once per crawler request. This is the real bandwidth saver: the return payload
+// is tiny, but the query reads full game docs, so we don't want it on every hit.
+const getGameSlugs = unstable_cache(
+  () => fetchQuery(api.games.sitemapSlugs, {}),
+  ["sitemap-game-slugs"],
+  { revalidate: ONE_DAY },
+);
+
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+  const staticRoutes: MetadataRoute.Sitemap = ROUTES.map((r) => ({
     url: `${SITE_URL}${r.path}`,
     changeFrequency: r.changeFrequency,
     priority: r.priority,
   }));
+
+  // Per-game detail pages (base games + expansions) — each now has its own
+  // server metadata (app/boardgames/[slug]/layout.tsx), so they're indexable.
+  let gameRoutes: MetadataRoute.Sitemap = [];
+  try {
+    const games = await getGameSlugs();
+    gameRoutes = games.map((g) => ({
+      url: `${SITE_URL}/boardgames/${g.slug}`,
+      lastModified: new Date(g.updatedAt),
+      changeFrequency: "weekly",
+      priority: g.isExpansion ? 0.5 : 0.7,
+    }));
+  } catch {
+    // If Convex is unreachable at build/request time, still emit the static map.
+  }
+
+  return [...staticRoutes, ...gameRoutes];
 }
