@@ -6,9 +6,11 @@ import type { Id } from "@/convex/_generated/dataModel";
 import { Chip } from "@/components/ui/Surface";
 import { cn } from "@/lib/cn";
 import { topListTitle } from "@/lib/topGamesTitle";
+import { categoryLabel } from "@/convex/lib/topGamesCategories";
 
 export type TopListRow = {
   _id: Id<"topGamesLists">;
+  category: string;
   size: number;
   year: number;
   title: string | null;
@@ -100,6 +102,16 @@ export function ListCard({ list }: { list: TopListRow }) {
       </div>
 
       <div className="relative z-10">
+        {list.category !== "overall" && (
+          <span
+            className={cn(
+              "mb-0.5 block text-[10px] font-bold uppercase tracking-[0.14em]",
+              hasCollage ? "text-white/80 drop-shadow-sm" : "text-accent",
+            )}
+          >
+            {categoryLabel(list.category)}
+          </span>
+        )}
         <span
           className={cn(
             "font-display block truncate text-lg font-extrabold",

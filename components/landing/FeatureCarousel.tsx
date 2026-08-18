@@ -52,9 +52,9 @@ const FEATURES: Feature[] = [
   {
     key: "bgg",
     icon: RefreshCw,
-    title: "Sync your BoardGameGeek collection",
+    title: "Sync your BGG collection",
     tagline: "Your BGG shelf, mirrored into Meepletron.",
-    how: "Link your account under Settings → BoardGameGeek (we keep a session token, never your password) and hit Sync now. Your Owned, Wishlist, For trade and Previously owned lists fill in on the Collection tab, any game we don't have yet is added to the library with its cover and details, and a re-sync drops whatever you've since removed on BGG.",
+    how: "Link your account under Settings → BoardGameGeek (we keep a session token, never your password) and hit Sync now. Your Owned, Wishlist, For trade and Previously owned lists fill in on the Collection tab.",
     cta: { label: "Link BoardGameGeek", href: "/settings" },
   },
   {
@@ -86,7 +86,7 @@ const FEATURES: Feature[] = [
     icon: Sparkles,
     badge: "Beta",
     title: "Meepletron AI, on every page",
-    tagline: "The floating assistant that follows you around the site.",
+    tagline: "The floating assistant that follows you around.",
     how: "Tap the bubble in the bottom corner from any page. Ask a general board-game question, or name a game and it drops straight into that rulebook — without making you leave the page. Voice input works too.",
     cta: { label: "Try the assistant", assistant: true },
   },

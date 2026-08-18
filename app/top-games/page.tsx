@@ -14,11 +14,21 @@ import { buttonClasses } from "@/components/ui/Button";
 import { Skeleton } from "@/components/ui/Surface";
 import { Thumb } from "@/components/top-games/Thumb";
 import { ListCard } from "@/components/top-games/ListCard";
+import { CreateListDrawer } from "@/components/top-games/CreateListDrawer";
+import { SelectMenu } from "@/components/ui/SelectMenu";
 import { cn } from "@/lib/cn";
 import { PageTitle } from "@/components/ui/PageTitle";
+import {
+  TOP_CATEGORIES,
+  DEFAULT_CATEGORY,
+  categoryLabel,
+} from "@/convex/lib/topGamesCategories";
 
-const PRESETS = [10, 25, 50, 100];
 const CURRENT_YEAR = new Date().getFullYear();
+const CATEGORY_OPTIONS = TOP_CATEGORIES.map((c) => ({
+  value: c.key,
+  label: c.label,
+}));
 
 // The year stepper's chrome: a segmented "track" plus a spinner-stripping helper
 // for the number input (we drive it with steppers, so native arrows are noise).
@@ -28,25 +38,39 @@ const NO_SPIN =
 
 export default function TopGamesPage() {
   const [tab, setTab] = useState<"mine" | "community">("mine");
+  const [createOpen, setCreateOpen] = useState(false);
   return (
     <div className="mx-auto max-w-3xl px-4 py-8">
       <PageTitle className="mb-5">Top Games</PageTitle>
 
-      <div className="mb-6 flex gap-5">
-        {(["mine", "community"] as const).map((t) => (
-          <button
-            key={t}
-            onClick={() => setTab(t)}
-            aria-current={tab === t ? "page" : undefined}
-            className={cn(
-              "px-0.5 text-sm font-semibold transition-colors",
-              tab === t ? "text-accent" : "text-muted hover:text-foreground",
-            )}
-          >
-            {t === "mine" ? "My lists" : "Community"}
-          </button>
-        ))}
+      <div className="mb-6 flex items-center justify-between gap-4">
+        <div className="flex gap-5">
+          {(["mine", "community"] as const).map((t) => (
+            <button
+              key={t}
+              onClick={() => setTab(t)}
+              aria-current={tab === t ? "page" : undefined}
+              className={cn(
+                "px-0.5 text-sm font-semibold transition-colors",
+                tab === t ? "text-accent" : "text-muted hover:text-foreground",
+              )}
+            >
+              {t === "mine" ? "My lists" : "Community"}
+            </button>
+          ))}
+        </div>
+
+        <button
+          onClick={() => setCreateOpen(true)}
+          aria-label="Create list"
+          className={buttonClasses("primary", "md")}
+        >
+          <Plus className="h-4 w-4" />
+          <span className="hidden sm:inline">Create list</span>
+        </button>
       </div>
+
+      <CreateListDrawer open={createOpen} onClose={() => setCreateOpen(false)} />
 
       {tab === "mine" ? (
         <>
@@ -83,11 +107,6 @@ function MyLists() {
 
   return (
     <div className="space-y-6">
-      <Link href="/top-games/new" className={buttonClasses("primary", "md")}>
-        <Plus className="h-4 w-4" />
-        Create list
-      </Link>
-
       {lists === undefined ? (
         <Skeleton className="h-24 w-full" />
       ) : lists.length === 0 ? (
@@ -156,38 +175,35 @@ function YearStepper({
 /* -------------------------------------------------------------------------- */
 
 function Community() {
-  const [size, setSize] = useState(100);
+  const [category, setCategory] = useState<string>(DEFAULT_CATEGORY);
   const [year, setYear] = useState(CURRENT_YEAR);
-  const data = useQuery(api.topGames.community, { size, year });
+  const data = useQuery(api.topGames.community, { category, year });
 
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center gap-2">
-        {PRESETS.map((p) => (
-          <button
-            key={p}
-            type="button"
-            onClick={() => setSize(p)}
-            aria-pressed={size === p}
-            className={cn(
-              "rounded-full border px-3.5 py-2 text-xs font-bold tabular-nums transition-all",
-              size === p
-                ? "border-accent bg-accent text-accent-foreground shadow-sm"
-                : "border-border bg-surface text-muted hover:bg-surface-2 hover:text-foreground",
-            )}
-          >
-            Top {p}
-          </button>
-        ))}
-        <span className="mx-1 h-5 w-px shrink-0 bg-border" />
+        <SelectMenu
+          value={category}
+          onChange={setCategory}
+          aria-label="Category"
+          className="w-48"
+          options={CATEGORY_OPTIONS}
+        />
         <YearStepper year={year} onChange={setYear} />
       </div>
+
+      <p className="text-sm font-medium text-muted">
+        The community&apos;s top {categoryLabel(category).toLowerCase()} games —
+        combined from everyone&apos;s public lists.
+      </p>
 
       {data === undefined ? (
         <Skeleton className="h-40 w-full" />
       ) : data.items.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-border p-10 text-center text-muted">
-          <p className="font-medium">No public Top {size} lists for {year} yet.</p>
+          <p className="font-medium">
+            No public {categoryLabel(category)} lists for {year} yet.
+          </p>
           <p className="mt-1 text-sm">Be the first — finalize a list and make it public.</p>
         </div>
       ) : (

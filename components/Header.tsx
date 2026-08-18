@@ -76,7 +76,7 @@ export function Header() {
                 className={cn(
                   "flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold transition-colors",
                   active
-                    ? "bg-accent/10 text-accent"
+                    ? "text-accent"
                     : "text-muted hover:bg-surface-2 hover:text-foreground",
                 )}
               >
@@ -99,6 +99,8 @@ export function Header() {
               <UserMenu
                 initial={(me?.name || me?.email || "?").charAt(0).toUpperCase()}
                 avatarUrl={me?.avatarUrl}
+                name={me?.name || me?.email || "Account"}
+                username={me?.username}
                 isAdmin={isAdmin}
               />
             )}

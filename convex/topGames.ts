@@ -1,15 +1,22 @@
 import { v } from "convex/values";
 import { paginationOptsValidator } from "convex/server";
-import { query, mutation, type QueryCtx } from "./_generated/server";
+import {
+  query,
+  mutation,
+  internalMutation,
+  type QueryCtx,
+} from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
 import { getCurrentUser, requireUser } from "./lib/auth";
+import { DEFAULT_CATEGORY, isTopCategory } from "./lib/topGamesCategories";
 
 /**
  * Top Games — a user's ranked "Top N" list for a given year, with year-over-year
  * comparison (movement vs last year, New / Back tags, a 5-year position history,
  * and which games fell off), public sharing, and a community roll-up.
  *
- * A list is identified by (userId, size, year); at most one per triple. Entries
+ * A list is identified by (userId, category, size, year); at most one per tuple.
+ * Entries
  * live as a bounded inline array (index = rank − 1) so a reorder is one cheap
  * patch and a finalized list is a self-contained snapshot.
  *
@@ -23,6 +30,10 @@ const PRESET_SIZES = [10, 25, 50, 100];
 const HISTORY_YEARS = 5;
 /** Public lists a single community roll-up will read — a hard, surfaced cap. */
 const COMMUNITY_LIST_CAP = 200;
+/** Each list contributes its top N to the roll-up, so all sizes count equally. */
+const COMMUNITY_WINDOW = 25;
+/** How many aggregated games the community roll-up returns. */
+const COMMUNITY_TOP = 25;
 /** Honorable mentions kept when a list is finalized (the overflow past `size`). */
 const HM_KEPT = 5;
 /** Honorable-mention candidates allowed while a list is still a draft. */
@@ -137,6 +148,7 @@ async function priorLists(
     .filter(
       (r) =>
         r._id !== list._id &&
+        (r.category ?? DEFAULT_CATEGORY) === (list.category ?? DEFAULT_CATEGORY) &&
         r.status === "finalized" &&
         r.year < list.year &&
         (!publicOnly || r.visibility === "public"),
@@ -228,6 +240,7 @@ async function computeList(
 function listMeta(list: ListDoc) {
   return {
     _id: list._id,
+    category: list.category ?? DEFAULT_CATEGORY,
     size: list.size,
     year: list.year,
     title: list.title ?? null,
@@ -317,19 +330,26 @@ export const listMine = query({
   },
 });
 
-/** Create a draft list for (size, year). Surfaces an existing one instead of duping. */
+/**
+ * Create a draft list for (category, size, year). Surfaces an existing one for
+ * that triple instead of duping.
+ */
 export const create = mutation({
   args: {
+    category: v.optional(v.string()),
     size: v.number(),
     year: v.number(),
     title: v.optional(v.string()),
-    seedFromListId: v.optional(v.id("topGamesLists")),
   },
   handler: async (
     ctx,
-    { size, year, title, seedFromListId },
+    { category, size, year, title },
   ): Promise<{ listId: Id<"topGamesLists">; existed: boolean }> => {
     const user = await requireUser(ctx);
+    const cat = category ?? DEFAULT_CATEGORY;
+    if (!isTopCategory(cat)) {
+      throw new Error("Pick a valid category.");
+    }
     if (!PRESET_SIZES.includes(size)) {
       throw new Error("Pick a list size of 10, 25, 50, or 100.");
     }
@@ -339,28 +359,25 @@ export const create = mutation({
 
     const existing = await ctx.db
       .query("topGamesLists")
-      .withIndex("by_user_size_year", (q) =>
-        q.eq("userId", user._id).eq("size", size).eq("year", year),
+      .withIndex("by_user_category_size_year", (q) =>
+        q
+          .eq("userId", user._id)
+          .eq("category", cat)
+          .eq("size", size)
+          .eq("year", year),
       )
       .unique();
     if (existing) return { listId: existing._id, existed: true };
 
-    let entries: ListDoc["entries"] = [];
-    if (seedFromListId) {
-      const seed = await ctx.db.get("topGamesLists", seedFromListId);
-      if (seed && seed.userId === user._id) {
-        entries = seed.entries.slice(0, size);
-      }
-    }
-
     const listId = await ctx.db.insert("topGamesLists", {
       userId: user._id,
+      category: cat,
       size,
       year,
       title: title?.trim() || undefined,
       status: "draft",
       visibility: "private",
-      entries,
+      entries: [],
       updatedAt: Date.now(),
     });
     return { listId, existed: false };
@@ -458,6 +475,25 @@ export const setVisibility = mutation({
       throw new Error("Finalize the list before making it public.");
     }
     await ctx.db.patch("topGamesLists", id, { visibility, updatedAt: Date.now() });
+  },
+});
+
+/**
+ * One-off backfill: stamp the default category on any list created before the
+ * category field existed. Safe to re-run (only patches missing values).
+ */
+export const backfillCategory = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const rows = await ctx.db.query("topGamesLists").collect();
+    let patched = 0;
+    for (const r of rows) {
+      if (r.category === undefined) {
+        await ctx.db.patch("topGamesLists", r._id, { category: DEFAULT_CATEGORY });
+        patched++;
+      }
+    }
+    return { patched };
   },
 });
 
@@ -644,18 +680,21 @@ export const publicCollectionPage = query({
 });
 
 /**
- * Community Top N for a (size, year): a Borda-style roll-up of every public
- * list. Each list awards a game `size − rank + 1` points; games are ranked by
+ * Community Top games for a (category, year): a Borda-style roll-up of every
+ * public list in that category, regardless of each list's own size. Each list
+ * contributes its top `COMMUNITY_WINDOW` games, awarding `WINDOW − rank + 1`
+ * points, so a Top 10 and a Top 100 count on the same scale. Games are ranked by
  * total points, then appearances, then average rank. Reads at most
  * COMMUNITY_LIST_CAP lists (surfaced to the UI). Public — works signed out.
  */
 export const community = query({
-  args: { size: v.number(), year: v.number() },
-  handler: async (ctx, { size, year }) => {
+  args: { category: v.optional(v.string()), year: v.number() },
+  handler: async (ctx, { category, year }) => {
+    const cat = category ?? DEFAULT_CATEGORY;
     const lists = await ctx.db
       .query("topGamesLists")
-      .withIndex("by_visibility_size_year", (q) =>
-        q.eq("visibility", "public").eq("size", size).eq("year", year),
+      .withIndex("by_visibility_category_year", (q) =>
+        q.eq("visibility", "public").eq("category", cat).eq("year", year),
       )
       .take(COMMUNITY_LIST_CAP);
 
@@ -664,10 +703,12 @@ export const community = query({
       { title: string; points: number; appearances: number; rankSum: number }
     >();
     for (const list of lists) {
-      // Only the ranked top `size` count toward the community — not honorable mentions.
-      list.entries.slice(0, list.size).forEach((e, i) => {
+      // Each list's ranked top games (up to the shared window) count — not its
+      // honorable mentions, and never more than COMMUNITY_WINDOW entries.
+      const cutoff = Math.min(list.size, COMMUNITY_WINDOW);
+      list.entries.slice(0, cutoff).forEach((e, i) => {
         const rank = i + 1;
-        const points = size - rank + 1;
+        const points = COMMUNITY_WINDOW - rank + 1;
         const cur = agg.get(e.gameId);
         if (cur) {
           cur.points += points;
@@ -699,7 +740,7 @@ export const community = query({
           b.appearances - a.appearances ||
           a.avgRank - b.avgRank,
       )
-      .slice(0, size);
+      .slice(0, COMMUNITY_TOP);
 
     const items = await Promise.all(
       ranked.map(async (r, i) => ({
@@ -713,7 +754,7 @@ export const community = query({
     );
 
     return {
-      size,
+      category: cat,
       year,
       listsCounted: lists.length,
       capped: lists.length >= COMMUNITY_LIST_CAP,

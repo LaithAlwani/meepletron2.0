@@ -41,16 +41,15 @@ export default function BoardgamesPage() {
   );
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-8">
-      {/* Header — desktop keeps the title on the left with a compact search +
-          filter on the right (same line); mobile centers the label and drops
-          the search/filter into a full-width row below. */}
+    <div className="mx-auto max-w-3xl px-4 py-8">
+      {/* Header — the title sits on the left; a compact search + filter share the
+          line on desktop, dropping into a full-width row below on mobile. */}
       <div className="mb-4 sm:mb-5 sm:flex sm:items-end sm:justify-between sm:gap-4">
         <div>
-          <p className="mb-1 text-center text-[11px] font-bold uppercase tracking-[0.18em] text-accent sm:text-left">
+          <p className="mb-1 hidden text-[11px] font-bold uppercase tracking-[0.18em] text-accent sm:block">
             The library
           </p>
-          <h1 className="font-display hidden text-3xl font-extrabold tracking-tight sm:block sm:text-4xl">
+          <h1 className="font-display text-2xl font-extrabold tracking-tight text-foreground sm:text-4xl">
             Board games
             {total !== undefined && (
               <span className="ml-2.5 align-middle text-base font-bold text-subtle">
@@ -99,20 +98,8 @@ export default function BoardgamesPage() {
       {/* Board games rail */}
       <section className="mb-10">
         <div className="mb-3 flex items-end justify-between">
-          <h2 className="font-display text-2xl font-extrabold tracking-tight sm:text-lg sm:font-bold">
-            {/* Mobile promotes this to the page title ("Board games" + count);
-                desktop keeps its original small "Browse" section label. */}
-            <span className="sm:hidden">
-              {activeCount > 0 || term ? "Matches" : "Board games"}
-            </span>
-            <span className="hidden sm:inline">
-              {activeCount > 0 || term ? "Matches" : "Browse"}
-            </span>
-            {total !== undefined && (
-              <span className="ml-2 align-middle text-base font-bold text-subtle sm:hidden">
-                {total}
-              </span>
-            )}
+          <h2 className="font-display text-lg font-bold tracking-tight">
+            {activeCount > 0 || term ? "Matches" : "Browse"}
           </h2>
           <Link
             href="/boardgames/all"

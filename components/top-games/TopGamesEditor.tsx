@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useMutation, useAction } from "convex/react";
-import { GripVertical, X, Search, Plus, Check, Star } from "lucide-react";
+import { GripVertical, X, Search, Plus, Check, Star, Trash2 } from "lucide-react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { useGameSearch } from "@/components/boardgames/useGameSearch";
@@ -13,6 +14,7 @@ import { useToast } from "@/components/ui/Toast";
 import { useConfirm } from "@/components/ui/Confirm";
 import { cn } from "@/lib/cn";
 import { topListTitle } from "@/lib/topGamesTitle";
+import { categoryLabel } from "@/convex/lib/topGamesCategories";
 import { useReorder } from "./useReorder";
 
 type Row = {
@@ -43,12 +45,14 @@ function arrayMove<T>(arr: T[], from: number, to: number): T[] {
 
 export function TopGamesEditor({
   listId,
+  category,
   size,
   year,
   title,
   items,
 }: {
   listId: Id<"topGamesLists">;
+  category: string;
   size: number;
   year: number;
   title: string | null;
@@ -56,9 +60,11 @@ export function TopGamesEditor({
 }) {
   const toast = useToast();
   const confirm = useConfirm();
+  const router = useRouter();
   const setEntries = useMutation(api.topGames.setEntries);
   const finalizeList = useMutation(api.topGames.finalize);
   const renameList = useMutation(api.topGames.rename);
+  const removeList = useMutation(api.topGames.remove);
 
   const [rows, setRows] = useState<Row[]>(() =>
     items.map((it) => ({
@@ -73,8 +79,13 @@ export function TopGamesEditor({
   const [pitch, setPitch] = useState(0);
   const touched = useRef(false);
 
-  // The full title as it will display — the name is slotted between size + year.
-  const previewTitle = topListTitle(size, year, name);
+  // The full title as it will display — the name is slotted between size + year,
+  // falling back to the category label when the list is left unnamed.
+  const previewTitle = topListTitle(
+    size,
+    year,
+    name.trim() || (category === "overall" ? "" : categoryLabel(category)),
+  );
   const added = new Set(rows.map((r) => r.gameId));
   const mainCount = Math.min(rows.length, size);
   const hmCount = Math.max(0, rows.length - size);
@@ -181,10 +192,32 @@ export function TopGamesEditor({
     }
   }
 
+  async function onDelete() {
+    const ok = await confirm({
+      title: "Delete this draft?",
+      message: `“${previewTitle}” and everything in it will be permanently deleted. This can't be undone.`,
+      confirmText: "Delete list",
+      danger: true,
+    });
+    if (!ok) return;
+    try {
+      await removeList({ id: listId });
+      toast("Draft deleted.", "success");
+      router.push("/top-games");
+    } catch (e) {
+      toast(e instanceof Error ? e.message : "Couldn't delete the list.", "error");
+    }
+  }
+
   return (
     <div className="flex flex-col gap-6 lg:grid lg:grid-cols-[1fr_20rem]">
       {/* Ranked list */}
       <div className="order-2 min-w-0 lg:order-1">
+        {category !== "overall" && (
+          <p className="mb-2 text-xs font-bold uppercase tracking-[0.14em] text-accent">
+            {categoryLabel(category)}
+          </p>
+        )}
         <div className="mb-4 flex flex-wrap items-center gap-3">
           <Input
             value={name}
@@ -204,21 +237,26 @@ export function TopGamesEditor({
             )}
           </span>
           <SaveBadge state={saveState} />
-          <button
-            onClick={onFinalize}
-            className={buttonClasses("primary", "sm", "ml-auto")}
-          >
-            <Check className="h-4 w-4" />
-            Finalize
-          </button>
+          <div className="ml-auto flex items-center gap-2">
+            <button onClick={onFinalize} className={buttonClasses("primary", "sm")}>
+              <Check className="h-4 w-4" />
+              Finalize
+            </button>
+            <button
+              onClick={onDelete}
+              title="Delete draft"
+              aria-label="Delete draft"
+              className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-border bg-surface text-muted transition-all hover:border-red-200 hover:bg-red-50 hover:text-red-600 active:scale-[0.98] dark:hover:border-red-500/30 dark:hover:bg-red-500/10 dark:hover:text-red-400"
+            >
+              <Trash2 className="h-4.5 w-4.5" />
+            </button>
+          </div>
         </div>
 
-        {name.trim() && (
-          <p className="mb-4 -mt-1 px-1 text-xs text-muted">
-            Shows as{" "}
-            <span className="font-semibold text-foreground">{previewTitle}</span>
-          </p>
-        )}
+        <p className="mb-4 -mt-1 px-1 text-xs text-muted">
+          Shows as{" "}
+          <span className="font-semibold text-foreground">{previewTitle}</span>
+        </p>
 
         {rows.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-border p-10 text-center text-muted">

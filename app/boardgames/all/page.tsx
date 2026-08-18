@@ -83,7 +83,7 @@ export default function AllBoardgamesPage() {
   const loadingFirst = status === "LoadingFirstPage";
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-8">
+    <div className="mx-auto max-w-3xl px-4 py-8">
       <Link
         href="/boardgames"
         className="mb-3 inline-flex items-center gap-1 text-sm font-medium text-muted transition-colors hover:text-foreground"

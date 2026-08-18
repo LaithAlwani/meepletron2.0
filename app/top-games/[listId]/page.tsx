@@ -46,6 +46,7 @@ export default function TopListPage({
           </Link>
           <TopGamesEditor
             listId={data._id}
+            category={data.category}
             size={data.size}
             year={data.year}
             title={data.title}

@@ -516,6 +516,10 @@ export default defineSchema({
   // Identity is (userId, size, year): at most one row per triple.
   topGamesLists: defineTable({
     userId: v.id("users"),
+    // The kind of games this list ranks — see convex/lib/topGamesCategories.ts.
+    // Optional at the storage layer (added field); code always writes it and
+    // reads coalesce a missing value to the default "overall" category.
+    category: v.optional(v.string()),
     size: v.number(), // preset 10/25/50/100 or a custom int (3..250)
     year: v.number(), // the year this list represents
     title: v.optional(v.string()), // custom name; default "Top {size} · {year}"
@@ -530,8 +534,14 @@ export default defineSchema({
   })
     .index("by_user", ["userId"])
     .index("by_user_and_size", ["userId", "size"]) // owner history per size
-    .index("by_user_size_year", ["userId", "size", "year"]) // uniqueness + comparison
+    // Uniqueness: at most one list per (user, category, size, year).
+    .index("by_user_category_size_year", [
+      "userId",
+      "category",
+      "size",
+      "year",
+    ])
     .index("by_user_and_status", ["userId", "status"])
-    // Community roll-up + public browse across all users for a size/year.
-    .index("by_visibility_size_year", ["visibility", "size", "year"]),
+    // Community roll-up across all users for a category/year.
+    .index("by_visibility_category_year", ["visibility", "category", "year"]),
 });

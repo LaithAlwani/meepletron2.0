@@ -2,14 +2,15 @@
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useMutation } from "convex/react";
 import {
   ArrowUp,
   ArrowDown,
   Globe,
   Lock,
-  Link2,
   RotateCcw,
+  Trash2,
   Star,
   Trophy,
   Crown,
@@ -22,12 +23,13 @@ import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { Thumb } from "./Thumb";
 import { CoverScroller } from "./CoverScroller";
-import { buttonClasses } from "@/components/ui/Button";
+import { ShareButton } from "@/components/boardgames/ShareButton";
 import { useToast } from "@/components/ui/Toast";
 import { useConfirm } from "@/components/ui/Confirm";
 import { Chip } from "@/components/ui/Surface";
 import { cn } from "@/lib/cn";
 import { topListTitle } from "@/lib/topGamesTitle";
+import { categoryLabel } from "@/convex/lib/topGamesCategories";
 
 type TopTag = "same" | "moved" | "new" | "back" | null;
 
@@ -43,6 +45,7 @@ type Item = {
 
 export type TopListData = {
   _id: Id<"topGamesLists">;
+  category: string;
   size: number;
   year: number;
   title: string | null;
@@ -582,11 +585,19 @@ function RevealShow({
 
 /* -------------------------------------------------------------------------- */
 
+// Square icon buttons for the owner action row on a finalized list.
+const ICON_BTN =
+  "inline-flex h-9 w-9 items-center justify-center rounded-xl border border-border bg-surface text-foreground transition-all hover:bg-surface-2 active:scale-[0.98]";
+const DELETE_ICON_BTN =
+  "inline-flex h-9 w-9 items-center justify-center rounded-xl border border-border bg-surface text-muted transition-all hover:border-red-200 hover:bg-red-50 hover:text-red-600 active:scale-[0.98] dark:hover:border-red-500/30 dark:hover:bg-red-500/10 dark:hover:text-red-400";
+
 export function TopGamesView({ data }: { data: TopListData }) {
   const toast = useToast();
   const confirm = useConfirm();
+  const router = useRouter();
   const reopen = useMutation(api.topGames.reopen);
   const setVisibility = useMutation(api.topGames.setVisibility);
+  const remove = useMutation(api.topGames.remove);
   const [mode, setMode] = useState<"list" | "reveal">(() =>
     typeof window === "undefined"
       ? "reveal"
@@ -625,12 +636,20 @@ export function TopGamesView({ data }: { data: TopListData }) {
     }
   }
 
-  async function copyLink() {
+  async function onDelete() {
+    const ok = await confirm({
+      title: "Delete this list?",
+      message: `“${heading}” and its rankings will be permanently deleted. This can't be undone.`,
+      confirmText: "Delete list",
+      danger: true,
+    });
+    if (!ok) return;
     try {
-      await navigator.clipboard.writeText(window.location.href);
-      toast("Link copied.", "success");
-    } catch {
-      toast("Couldn't copy the link.", "error");
+      await remove({ id: data._id });
+      toast("List deleted.", "success");
+      router.push("/top-games");
+    } catch (e) {
+      toast(e instanceof Error ? e.message : "Couldn't delete the list.", "error");
     }
   }
 
@@ -641,7 +660,9 @@ export function TopGamesView({ data }: { data: TopListData }) {
         <div className="flex items-center gap-2 text-accent">
           <Trophy className="h-5 w-5" />
           <span className="text-sm font-bold uppercase tracking-[0.14em]">
-            Top {data.size} · {data.year}
+            Top {data.size}
+            {data.category !== "overall" && ` · ${categoryLabel(data.category)}`} ·{" "}
+            {data.year}
           </span>
         </div>
         <h1 className="font-display mt-1 text-3xl font-extrabold tracking-tight">
@@ -678,20 +699,41 @@ export function TopGamesView({ data }: { data: TopListData }) {
 
         {data.isOwner && (
           <div className="mt-4 flex flex-wrap gap-2">
-            <button onClick={onReopen} className={buttonClasses("ghost", "sm")}>
-              <RotateCcw className="h-4 w-4" />
-              Reopen to edit
+            <button
+              onClick={onReopen}
+              title="Reopen to edit"
+              aria-label="Reopen to edit"
+              className={ICON_BTN}
+            >
+              <RotateCcw className="h-4.5 w-4.5" />
             </button>
-            <button onClick={togglePublic} className={buttonClasses("ghost", "sm")}>
-              {isPublic ? <Lock className="h-4 w-4" /> : <Globe className="h-4 w-4" />}
-              {isPublic ? "Make private" : "Make public"}
+            <button
+              onClick={togglePublic}
+              title={isPublic ? "Make private" : "Make public"}
+              aria-label={isPublic ? "Make private" : "Make public"}
+              className={ICON_BTN}
+            >
+              {isPublic ? (
+                <Lock className="h-4.5 w-4.5" />
+              ) : (
+                <Globe className="h-4.5 w-4.5" />
+              )}
             </button>
             {isPublic && (
-              <button onClick={copyLink} className={buttonClasses("subtle", "sm")}>
-                <Link2 className="h-4 w-4" />
-                Copy link
-              </button>
+              <ShareButton
+                title={heading}
+                text={`${heading} — my Top Games list on Meepletron`}
+                className={ICON_BTN}
+              />
             )}
+            <button
+              onClick={onDelete}
+              title="Delete list"
+              aria-label="Delete list"
+              className={DELETE_ICON_BTN}
+            >
+              <Trash2 className="h-4.5 w-4.5" />
+            </button>
           </div>
         )}
       </div>

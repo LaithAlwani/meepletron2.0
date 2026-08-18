@@ -17,7 +17,7 @@ import { BggAccountCard } from "@/components/settings/BggAccountCard";
 
 export default function SettingsPage() {
   return (
-    <div className="mx-auto max-w-xl px-4 pb-16 pt-10">
+    <div className="mx-auto max-w-3xl px-4 pb-16 pt-10">
       <h1 className="mb-1 text-2xl font-bold">Settings</h1>
       <p className="mb-6 text-sm text-muted">
         These preferences are saved to your account.

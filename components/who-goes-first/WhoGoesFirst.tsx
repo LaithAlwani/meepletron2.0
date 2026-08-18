@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Smartphone, Users } from "lucide-react";
+import { X, Smartphone, Users } from "lucide-react";
 import { useCoarsePointer } from "@/lib/useCoarsePointer";
 
 const COUNTDOWN_MS = 3000;
@@ -157,8 +157,10 @@ export function WhoGoesFirst() {
   // ---- Desktop (fine pointer): show a nudge, keep the SEO heading. ----
   if (coarse === false) {
     return (
-      <main className="flex h-dvh flex-col items-center justify-center gap-5 bg-background px-6 text-center">
-        <BackButton onClick={() => router.push("/boardgames")} />
+      <main className="relative flex h-dvh flex-col items-center justify-center gap-5 bg-background px-6 text-center">
+        <div className="absolute right-4 top-[calc(env(safe-area-inset-top)+0.75rem)]">
+          <CloseButton onClick={() => router.push("/boardgames")} />
+        </div>
         <Smartphone className="h-12 w-12 text-accent" />
         <h1 className="font-display text-3xl font-bold text-foreground">
           Who Goes First?
@@ -192,22 +194,24 @@ export function WhoGoesFirst() {
         @keyframes wgf-fade { from { opacity: 0 } to { opacity: 1 } }
       `}</style>
 
-      {/* Top bar: back · title · live player count */}
-      <header className="absolute inset-x-0 top-0 z-30 flex items-center justify-between gap-2 px-3 pt-[calc(env(safe-area-inset-top)+0.75rem)]">
-        <BackButton
-          onClick={() =>
-            window.history.length > 1 ? router.back() : router.push("/boardgames")
-          }
-          onFlood={revealed}
-        />
+      {/* Top bar: title · live player count · close */}
+      <header className="absolute inset-x-0 top-0 z-30 flex items-center justify-between gap-2 px-4 pt-[calc(env(safe-area-inset-top)+0.75rem)]">
         <h1
-          className={`font-display text-base font-bold transition-colors sm:text-lg ${
+          className={`font-display text-2xl font-extrabold tracking-tight transition-colors ${
             revealed ? "text-white" : "text-foreground"
           }`}
         >
           Who Goes First?
         </h1>
-        <CountPill n={touches.length} onFlood={revealed} />
+        <div className="flex items-center gap-2">
+          <CountPill n={touches.length} onFlood={revealed} />
+          <CloseButton
+            onClick={() =>
+              window.history.length > 1 ? router.back() : router.push("/boardgames")
+            }
+            onFlood={revealed}
+          />
+        </div>
       </header>
 
       {/* Centered instruction while waiting for players (crawlable copy). */}
@@ -304,7 +308,7 @@ export function WhoGoesFirst() {
   );
 }
 
-function BackButton({
+function CloseButton({
   onClick,
   onFlood,
 }: {
@@ -314,15 +318,14 @@ function BackButton({
   return (
     <button
       onClick={onClick}
-      aria-label="Back"
+      aria-label="Close"
       className={
         onFlood
-          ? "flex items-center gap-1.5 rounded-xl bg-white/20 px-3 py-2 text-sm font-medium text-white backdrop-blur transition-colors hover:bg-white/30"
-          : "flex items-center gap-1.5 rounded-xl bg-surface/80 px-3 py-2 text-sm font-medium text-muted backdrop-blur transition-colors hover:bg-surface-2 hover:text-foreground"
+          ? "flex h-10 w-10 items-center justify-center rounded-xl bg-white/20 text-white backdrop-blur transition-colors hover:bg-white/30"
+          : "flex h-10 w-10 items-center justify-center rounded-xl bg-surface/80 text-muted backdrop-blur transition-colors hover:bg-surface-2 hover:text-foreground"
       }
     >
-      <ArrowLeft className="h-[18px] w-[18px]" />
-      Back
+      <X className="h-5 w-5" />
     </button>
   );
 }

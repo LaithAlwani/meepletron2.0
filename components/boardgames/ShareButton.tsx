@@ -5,23 +5,35 @@ import { Share2, Check } from "lucide-react";
 import { useToast } from "@/components/ui/Toast";
 
 /**
- * Share the current page: the native share sheet where available (mobile/PWA),
- * otherwise copy the link to the clipboard. `className` supplies the button
- * styling so it can match the surrounding action row.
+ * Share a page: the native share sheet where available (mobile/PWA), otherwise
+ * copy the link to the clipboard. Defaults to the current page, but `url`/`text`
+ * let it share any target. Pass `label` to show text beside the icon; omit it for
+ * an icon-only button. `className` supplies the styling so it matches its row.
  */
 export function ShareButton({
   title,
+  url,
+  text,
+  label,
   className,
 }: {
   title: string;
+  url?: string;
+  text?: string;
+  label?: string;
   className?: string;
 }) {
   const toast = useToast();
   const [copied, setCopied] = useState(false);
 
   async function onClick() {
-    const url = typeof window !== "undefined" ? window.location.href : "";
-    const data = { title, text: `${title} — rules & reference on Meepletron`, url };
+    const href =
+      url ?? (typeof window !== "undefined" ? window.location.href : "");
+    const data = {
+      title,
+      text: text ?? `${title} — rules & reference on Meepletron`,
+      url: href,
+    };
 
     if (typeof navigator !== "undefined" && navigator.share) {
       try {
@@ -35,12 +47,12 @@ export function ShareButton({
     }
 
     try {
-      await navigator.clipboard.writeText(url);
+      await navigator.clipboard.writeText(href);
       setCopied(true);
       toast("Link copied", "success");
       setTimeout(() => setCopied(false), 1600);
     } catch {
-      toast("Couldn't share this page", "error");
+      toast("Couldn't share", "error");
     }
   }
 
@@ -48,7 +60,7 @@ export function ShareButton({
     <button
       type="button"
       onClick={onClick}
-      aria-label="Share this game"
+      aria-label={label ? undefined : "Share"}
       title="Share"
       className={className}
     >
@@ -57,6 +69,7 @@ export function ShareButton({
       ) : (
         <Share2 className="h-4.5 w-4.5" />
       )}
+      {label}
     </button>
   );
 }

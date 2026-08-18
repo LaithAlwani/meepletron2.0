@@ -46,6 +46,7 @@ import type * as lib_pdf from "../lib/pdf.js";
 import type * as lib_prompts from "../lib/prompts.js";
 import type * as lib_purge from "../lib/purge.js";
 import type * as lib_slug from "../lib/slug.js";
+import type * as lib_topGamesCategories from "../lib/topGamesCategories.js";
 import type * as maintenance from "../maintenance.js";
 import type * as migrations from "../migrations.js";
 import type * as rag from "../rag.js";
@@ -104,6 +105,7 @@ declare const fullApi: ApiFromModules<{
   "lib/prompts": typeof lib_prompts;
   "lib/purge": typeof lib_purge;
   "lib/slug": typeof lib_slug;
+  "lib/topGamesCategories": typeof lib_topGamesCategories;
   maintenance: typeof maintenance;
   migrations: typeof migrations;
   rag: typeof rag;

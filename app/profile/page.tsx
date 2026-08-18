@@ -19,6 +19,8 @@ import { friendlyError } from "@/lib/friendlyError";
 import { InstallPrompt } from "@/components/InstallPrompt";
 import { Die } from "@/components/ui/icons";
 import { AvatarImg } from "@/components/ui/Avatar";
+import { PageTitle } from "@/components/ui/PageTitle";
+import { ShareButton } from "@/components/boardgames/ShareButton";
 import { cn } from "@/lib/cn";
 
 const CameraIcon = (
@@ -87,7 +89,8 @@ const StatThumbIcon = (
 export default function ProfilePage() {
   return (
     <div className="min-h-screen px-4 pb-16 pt-10">
-      <div className="mx-auto max-w-xl">
+      <div className="mx-auto max-w-3xl">
+        <PageTitle className="mb-6">Profile</PageTitle>
         <AuthLoading>
           <p className="text-center text-muted">Loading…</p>
         </AuthLoading>
@@ -193,7 +196,7 @@ function ProfileBody() {
       {!isGuest && <PublicProfileCard me={me} />}
 
       {/* Activity */}
-      <p className="mb-3 px-1 text-xs font-semibold uppercase tracking-widest text-subtle">
+      <p className="mb-2 px-1 text-xs font-semibold uppercase tracking-widest text-subtle">
         Activity
       </p>
       <div className="grid grid-cols-2 gap-3">
@@ -433,21 +436,23 @@ function DangerZone() {
   }
 
   return (
-    <div className="mt-6 rounded-2xl border border-red-200 bg-surface p-6 shadow-sm dark:border-red-500/30">
-      <p className="text-xs font-semibold uppercase tracking-widest text-red-600 dark:text-red-400">
+    <div className="mt-6">
+      <p className="mb-2 px-1 text-xs font-semibold uppercase tracking-widest text-red-600 dark:text-red-400">
         Danger Zone
       </p>
-      <p className="mt-2 text-sm text-muted">
-        Permanently delete your account and all associated data. This can&apos;t
-        be undone.
-      </p>
-      <button
-        onClick={handleDelete}
-        disabled={deleting}
-        className="mt-4 rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
-      >
-        {deleting ? "Deleting…" : "Delete account"}
-      </button>
+      <div className="rounded-2xl border border-red-200 bg-surface p-6 shadow-sm dark:border-red-500/30">
+        <p className="text-sm text-muted">
+          Permanently delete your account and all associated data. This
+          can&apos;t be undone.
+        </p>
+        <button
+          onClick={handleDelete}
+          disabled={deleting}
+          className="mt-4 rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+        >
+          {deleting ? "Deleting…" : "Delete account"}
+        </button>
+      </div>
     </div>
   );
 }
@@ -550,66 +555,61 @@ function PublicProfileCard({ me }: { me: Doc<"users"> }) {
     }
   }
 
-  async function copyLink() {
-    if (!username) return;
-    try {
-      await navigator.clipboard.writeText(
-        `${window.location.origin}/user/${username}`,
-      );
-      toast("Link copied", "success");
-    } catch {
-      toast("Couldn't copy link", "error");
-    }
-  }
-
   return (
-    <div className="mb-6 rounded-2xl border border-border-muted bg-surface p-6 shadow-sm">
-      <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-subtle">
+    <div className="mb-6">
+      <p className="mb-2 px-1 text-xs font-semibold uppercase tracking-widest text-subtle">
         Public profile
       </p>
 
-      {username ? (
-        <div className="mb-4 flex flex-wrap items-center gap-2 text-sm">
-          <span className="text-muted">Shareable at</span>
-          <Link
-            href={`/user/${username}`}
-            className="font-semibold text-accent hover:underline"
-          >
-            /user/{username}
-          </Link>
-          <button
-            onClick={copyLink}
-            className="rounded-lg border border-border px-2 py-1 text-xs font-medium text-muted transition-colors hover:bg-surface-2"
-          >
-            Copy link
-          </button>
-        </div>
-      ) : (
-        <p className="mb-4 text-sm text-muted">
-          Set a username above to get a shareable profile page.
-        </p>
-      )}
+      <div className="rounded-2xl border border-border-muted bg-surface p-6 shadow-sm">
+        {username ? (
+          <div className="mb-4 flex flex-wrap items-center gap-2 text-sm">
+            <span className="text-muted">Shareable at</span>
+            <Link
+              href={`/user/${username}`}
+              className="font-semibold text-accent hover:underline"
+            >
+              /user/{username}
+            </Link>
+            <ShareButton
+              title="My Meepletron profile"
+              text="Check out my board game profile on Meepletron"
+              url={
+                typeof window !== "undefined"
+                  ? `${window.location.origin}/user/${username}`
+                  : `/user/${username}`
+              }
+              label="Share"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-border px-2 py-1 text-xs font-medium text-muted transition-colors hover:bg-surface-2"
+            />
+          </div>
+        ) : (
+          <p className="mb-4 text-sm text-muted">
+            Set a username above to get a shareable profile page.
+          </p>
+        )}
 
-      <p className="mb-1 text-xs text-subtle">Choose what visitors can see:</p>
-      <div className="divide-y divide-border">
-        {SHARE_TOGGLES.map((t) => {
-          const checked = prefs[t.key] ?? t.def;
-          return (
-            <div key={t.key} className="flex items-center justify-between py-2.5">
-              <span className="text-sm text-foreground">{t.label}</span>
-              <Switch
-                checked={checked}
-                onChange={(v) => set(t.key, v)}
-                label={t.label}
-              />
-            </div>
-          );
-        })}
+        <p className="mb-1 text-xs text-subtle">Choose what visitors can see:</p>
+        <div className="divide-y divide-border">
+          {SHARE_TOGGLES.map((t) => {
+            const checked = prefs[t.key] ?? t.def;
+            return (
+              <div key={t.key} className="flex items-center justify-between py-2.5">
+                <span className="text-sm text-foreground">{t.label}</span>
+                <Switch
+                  checked={checked}
+                  onChange={(v) => set(t.key, v)}
+                  label={t.label}
+                />
+              </div>
+            );
+          })}
+        </div>
+        <p className="mt-3 text-[11px] text-subtle">
+          Top Games lists only appear if you&apos;ve made them public. Collections
+          come from your linked BoardGameGeek account.
+        </p>
       </div>
-      <p className="mt-3 text-[11px] text-subtle">
-        Top Games lists only appear if you&apos;ve made them public. Collections
-        come from your linked BoardGameGeek account.
-      </p>
     </div>
   );
 }
@@ -654,8 +654,8 @@ function PersonalInfo({ me }: { me: Doc<"users"> }) {
   }
 
   return (
-    <div className="mb-6 rounded-2xl border border-border-muted bg-surface p-6 shadow-sm">
-      <div className="mb-4 flex items-center justify-between">
+    <div className="mb-6">
+      <div className="mb-2 flex items-center justify-between px-1">
         <p className="text-xs font-semibold uppercase tracking-widest text-subtle">
           Personal Info
         </p>
@@ -670,7 +670,9 @@ function PersonalInfo({ me }: { me: Doc<"users"> }) {
         )}
       </div>
 
-      <div className="space-y-3">
+      <div className="rounded-2xl border border-border-muted bg-surface p-6 shadow-sm">
+        <div className="space-y-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div className="space-y-1">
           <label className="text-xs font-medium text-muted">Name</label>
           {editing ? (
@@ -718,6 +720,7 @@ function PersonalInfo({ me }: { me: Doc<"users"> }) {
             </p>
           )}
         </div>
+        </div>
         <div className="space-y-1">
           <label className="text-xs font-medium text-muted">Email</label>
           <p className="py-2 text-sm text-foreground">
@@ -748,6 +751,7 @@ function PersonalInfo({ me }: { me: Doc<"users"> }) {
           </button>
         </div>
       )}
+      </div>
     </div>
   );
 }
