@@ -146,7 +146,7 @@ export function CollectionButton({
       >
         <Bookmark
           className={`${
-            size === "sm" ? "h-4 w-4" : size === "lg" ? "h-6 w-6" : "h-5 w-5"
+            size === "sm" ? "h-4 w-4" : size === "lg" ? "h-16 w-16" : "h-5 w-5"
           } ${
             inCollection
               ? "fill-accent text-accent"

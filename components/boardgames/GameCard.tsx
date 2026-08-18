@@ -68,15 +68,16 @@ export function GameCard({
         <CollectionTags gameId={game._id} />
       </div>
 
-      {/* Add-to-collection bookmark — flush in the top-right corner, hanging
-          from the top edge (no background, no top padding). Cancels the card's
-          hover lift so it stays anchored. */}
-      <div className="absolute right-0 top-0 z-20 transition-transform duration-200 group-hover:translate-y-1">
+      {/* Add-to-collection bookmark — flush in the top-right corner, its visible
+          shape touching the top border (the negative top offsets the icon's own
+          transparent top padding). Cancels the card's hover lift so it stays
+          anchored. */}
+      <div className="absolute right-0 -top-1 z-20 transition-transform duration-200 group-hover:translate-y-1">
         <CollectionButton
           gameId={game._id}
           size="lg"
           solidIdle
-          className="flex items-start justify-center px-2 pb-1.5 pt-0 text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.5)] transition-colors hover:text-accent"
+          className="flex items-start justify-center px-1.5 pb-1.5 pt-0 text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.5)] transition-colors hover:text-accent"
         />
       </div>
 
