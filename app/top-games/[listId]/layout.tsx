@@ -36,7 +36,11 @@ export async function generateMetadata({
         description,
         type: "website",
       },
-      twitter: { card: "summary", title: `${title} · Meepletron`, description },
+      twitter: {
+        card: "summary_large_image",
+        title: `${title} · Meepletron`,
+        description,
+      },
     };
   } catch {
     return {};

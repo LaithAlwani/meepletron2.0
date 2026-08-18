@@ -213,15 +213,21 @@ function pickDir(id: string): RevealFrom {
 function Reveal({
   from,
   boom = false,
+  armed = true,
   children,
 }: {
   from: RevealFrom;
   boom?: boolean;
+  // When false, the card stays hidden and doesn't observe yet — so a row that's
+  // already on screen (e.g. while the honorable-mentions intro is centered)
+  // can't reveal early. It arms once the intro finishes.
+  armed?: boolean;
   children: ReactNode;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [shown, setShown] = useState(false);
   useEffect(() => {
+    if (!armed) return;
     const el = ref.current;
     if (!el) return;
     const obs = new IntersectionObserver(
@@ -237,7 +243,7 @@ function Reveal({
     );
     obs.observe(el);
     return () => obs.disconnect();
-  }, []);
+  }, [armed]);
   // Springy overshoot for the podium, smooth ease-out for the rest.
   const ease = boom ? "cubic-bezier(0.16, 1.42, 0.4, 1)" : "cubic-bezier(0.22, 1, 0.36, 1)";
   return (
@@ -548,12 +554,23 @@ function RevealShow({
       {honorable.length > 0 && (
         <HonorableReveal items={honorable} onDone={markDone} />
       )}
-      <p className="text-center text-xs font-bold uppercase tracking-[0.25em] text-subtle">
+      <p
+        className={cn(
+          "text-center text-xs font-bold uppercase tracking-[0.25em] text-subtle transition-opacity duration-500",
+          // Stays hidden until the honorable-mentions intro finishes, so the
+          // countdown cue doesn't show while they're still being revealed.
+          honorableDone ? "opacity-100" : "opacity-0",
+        )}
+      >
         The countdown ↓
       </p>
       {reversed.map((item) => (
         <div key={item.gameId} ref={item.rank === 1 ? firstRef : undefined}>
-          <Reveal from={pickDir(item.gameId)} boom={item.rank <= 3}>
+          <Reveal
+            from={pickDir(item.gameId)}
+            boom={item.rank <= 3}
+            armed={honorableDone}
+          >
             {item.rank <= 3 ? <PodiumCard item={item} /> : <RevealRow item={item} />}
           </Reveal>
         </div>

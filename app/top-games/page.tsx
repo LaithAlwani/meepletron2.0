@@ -29,6 +29,13 @@ const CATEGORY_OPTIONS = TOP_CATEGORIES.map((c) => ({
   value: c.key,
   label: c.label,
 }));
+const SIZE_OPTIONS = [
+  { value: 0, label: "Any size" },
+  { value: 10, label: "Top 10" },
+  { value: 25, label: "Top 25" },
+  { value: 50, label: "Top 50" },
+  { value: 100, label: "Top 100" },
+];
 
 // The year stepper's chrome: a segmented "track" plus a spinner-stripping helper
 // for the number input (we drive it with steppers, so native arrows are noise).
@@ -176,8 +183,13 @@ function YearStepper({
 
 function Community() {
   const [category, setCategory] = useState<string>(DEFAULT_CATEGORY);
+  const [sizeFilter, setSizeFilter] = useState(0); // 0 = any size
   const [year, setYear] = useState(CURRENT_YEAR);
-  const data = useQuery(api.topGames.community, { category, year });
+  const data = useQuery(api.topGames.community, {
+    category,
+    year,
+    size: sizeFilter || undefined,
+  });
 
   return (
     <div className="space-y-5">
@@ -186,8 +198,15 @@ function Community() {
           value={category}
           onChange={setCategory}
           aria-label="Category"
-          className="w-48"
+          className="w-44"
           options={CATEGORY_OPTIONS}
+        />
+        <SelectMenu
+          value={sizeFilter}
+          onChange={setSizeFilter}
+          aria-label="List size"
+          className="w-32"
+          options={SIZE_OPTIONS}
         />
         <YearStepper year={year} onChange={setYear} />
       </div>
@@ -202,7 +221,8 @@ function Community() {
       ) : data.items.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-border p-10 text-center text-muted">
           <p className="font-medium">
-            No public {categoryLabel(category)} lists for {year} yet.
+            No public {sizeFilter ? `Top ${sizeFilter} ` : ""}
+            {categoryLabel(category)} lists for {year} yet.
           </p>
           <p className="mt-1 text-sm">Be the first — finalize a list and make it public.</p>
         </div>

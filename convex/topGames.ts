@@ -688,15 +688,21 @@ export const publicCollectionPage = query({
  * COMMUNITY_LIST_CAP lists (surfaced to the UI). Public — works signed out.
  */
 export const community = query({
-  args: { category: v.optional(v.string()), year: v.number() },
-  handler: async (ctx, { category, year }) => {
+  args: {
+    category: v.optional(v.string()),
+    year: v.number(),
+    // Optional: restrict the roll-up to lists of a specific size (10/25/50/100).
+    size: v.optional(v.number()),
+  },
+  handler: async (ctx, { category, year, size }) => {
     const cat = category ?? DEFAULT_CATEGORY;
-    const lists = await ctx.db
+    const all = await ctx.db
       .query("topGamesLists")
       .withIndex("by_visibility_category_year", (q) =>
         q.eq("visibility", "public").eq("category", cat).eq("year", year),
       )
       .take(COMMUNITY_LIST_CAP);
+    const lists = size ? all.filter((l) => l.size === size) : all;
 
     const agg = new Map<
       Id<"games">,
@@ -756,8 +762,10 @@ export const community = query({
     return {
       category: cat,
       year,
+      size: size ?? null,
       listsCounted: lists.length,
-      capped: lists.length >= COMMUNITY_LIST_CAP,
+      // The cap applies to the pre-size-filter fetch; surface it when we hit it.
+      capped: all.length >= COMMUNITY_LIST_CAP,
       items,
     };
   },

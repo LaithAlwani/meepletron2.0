@@ -32,9 +32,22 @@ export function SelectMenu<T extends string | number>({
   "aria-label"?: string;
 }) {
   const [open, setOpen] = useState(false);
+  const [dropUp, setDropUp] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const btnRef = useRef<HTMLButtonElement>(null);
   const listId = useId();
   const selected = options.find((o) => o.value === value);
+
+  // Open upward when there isn't room below (e.g. near the bottom of a sheet).
+  function toggle() {
+    if (!open && btnRef.current) {
+      const rect = btnRef.current.getBoundingClientRect();
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const menuH = Math.min(options.length * 44 + 8, 240);
+      setDropUp(spaceBelow < menuH + 8 && rect.top > spaceBelow);
+    }
+    setOpen((v) => !v);
+  }
 
   useEffect(() => {
     if (!open) return;
@@ -67,8 +80,9 @@ export function SelectMenu<T extends string | number>({
   return (
     <div ref={ref} className={cn("relative", className)}>
       <button
+        ref={btnRef}
         type="button"
-        onClick={() => setOpen((v) => !v)}
+        onClick={toggle}
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-label={ariaLabel}
@@ -94,7 +108,10 @@ export function SelectMenu<T extends string | number>({
         <ul
           id={listId}
           role="listbox"
-          className="animate-in absolute left-0 right-0 z-20 mt-1.5 max-h-60 overflow-auto rounded-xl border border-border bg-surface p-1 shadow-xl"
+          className={cn(
+            "animate-in absolute left-0 right-0 z-20 max-h-60 overflow-auto rounded-xl border border-border bg-surface p-1 shadow-xl",
+            dropUp ? "bottom-full mb-1.5" : "top-full mt-1.5",
+          )}
         >
           {options.map((o) => {
             const active = o.value === value;
