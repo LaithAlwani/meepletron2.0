@@ -28,7 +28,6 @@ export function BottomNav() {
   const pathname = usePathname() ?? "";
   const me = useQuery(api.users.me);
   const hidden =
-    pathname === "/" ||
     pathname === "/auth" ||
     pathname === "/who-goes-first" ||
     /^\/boardgames\/[^/]+\/chat/.test(pathname);

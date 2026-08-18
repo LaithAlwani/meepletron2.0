@@ -19,6 +19,7 @@ import type { Id } from "@/convex/_generated/dataModel";
 import { stripIconBrackets } from "@/components/chat/MessageBubble";
 import { ChatInput } from "@/components/chat/ChatInput";
 import { ThinkingIndicator } from "@/components/chat/ThinkingIndicator";
+import { OPEN_ASSISTANT_EVENT } from "@/lib/assistant";
 import { Die } from "@/components/ui/icons";
 
 const SITE_URL = process.env.NEXT_PUBLIC_CONVEX_SITE_URL;
@@ -151,7 +152,6 @@ export function GlobalAssistant() {
   const pathname = usePathname() ?? "";
   const router = useRouter();
   const hidden =
-    pathname === "/" ||
     pathname === "/auth" ||
     pathname === "/who-goes-first" ||
     /^\/boardgames\/[^/]+\/chat/.test(pathname);
@@ -189,6 +189,14 @@ export function GlobalAssistant() {
       document.body.style.overflow = prev;
     };
   }, [open]);
+
+  // Anything on the page can pop the panel open (the landing page's "Ask the
+  // AI" buttons) without reaching in here.
+  useEffect(() => {
+    const onOpen = () => setOpen(true);
+    window.addEventListener(OPEN_ASSISTANT_EVENT, onOpen);
+    return () => window.removeEventListener(OPEN_ASSISTANT_EVENT, onOpen);
+  }, []);
 
   // Escape closes.
   useEffect(() => {
@@ -454,14 +462,19 @@ export function GlobalAssistant() {
           <div className="animate-in fixed bottom-0 left-0 z-50 flex h-[85dvh] w-full flex-col overflow-hidden rounded-t-2xl border border-border bg-background shadow-2xl sm:bottom-6 sm:left-auto sm:right-4 sm:h-128 sm:w-96 sm:rounded-2xl">
             {/* Header */}
             <div className="flex items-center gap-2.5 border-b border-border bg-surface px-3 py-2.5">
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-accent/12 text-accent">
-                <Sparkles className="h-4.5 w-4.5" />
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-lg">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src="/icons/icon-96x96.webp"
+                  alt=""
+                  className="h-full w-full object-contain"
+                />
               </div>
               <div className="min-w-0 flex-1">
                 <p className="font-display truncate text-sm font-bold leading-tight">
-                  Assistant
+                  Meepletron
                 </p>
-                <p className="text-[11px] text-muted">Ask about Meepletron</p>
+                <p className="text-[11px] text-muted">Your board-game assistant</p>
               </div>
               <button
                 onClick={() => setOpen(false)}

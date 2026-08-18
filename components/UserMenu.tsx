@@ -53,7 +53,7 @@ export function UserMenu({
     touchOnly?: boolean;
   }[] = [
     { href: "/profile", label: "Profile", icon: User },
-    { href: "/tuckbox", label: "Tuckbox", icon: Scissors, headerNav: true },
+    { href: "/tuckbox", label: "Tuckbox", icon: Scissors },
     { href: "/who-goes-first", label: "First Player", icon: Hand, touchOnly: true },
     { href: "/settings", label: "Settings", icon: Settings },
     ...(isAdmin

@@ -319,7 +319,7 @@ body::before {
   background: color-mix(in srgb, var(--accent) 60%, transparent);
 }
 
-/* --- Coming-soon splash --- */
+/* --- Landing hero --- */
 /* Gentle bob for the logo and floating game pieces. */
 @keyframes float {
   0%,
