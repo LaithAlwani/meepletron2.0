@@ -10,6 +10,11 @@ import { categoryLabel } from "@/convex/lib/topGamesCategories";
  * a large banner rather than a small square. Server-generated per list.
  */
 
+// Generate at request time, not during `next build`: the image reads list data
+// via fetchQuery, and the build's Convex deploy key can't view data. At runtime
+// it queries the public deployment (an unauthenticated read of a public list).
+export const dynamic = "force-dynamic";
+
 export const alt = "A Top Games list on Meepletron";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
