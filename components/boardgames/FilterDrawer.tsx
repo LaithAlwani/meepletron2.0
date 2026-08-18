@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { useQuery } from "convex/react";
 import { X, Bot, ChevronDown } from "lucide-react";
 import { api } from "@/convex/_generated/api";
@@ -147,7 +148,9 @@ export function FilterDrawer({
     });
   };
 
-  return (
+  // Portal to the body so the drawer escapes the page's `main` stacking context
+  // (z-10) and actually paints above the root-level bottom nav.
+  return createPortal(
     <>
       <div
         aria-hidden
@@ -257,7 +260,8 @@ export function FilterDrawer({
           </button>
         </div>
       </div>
-    </>
+    </>,
+    document.body,
   );
 }
 
