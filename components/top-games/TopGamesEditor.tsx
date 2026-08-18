@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/Field";
 import { useToast } from "@/components/ui/Toast";
 import { useConfirm } from "@/components/ui/Confirm";
 import { cn } from "@/lib/cn";
+import { topListTitle } from "@/lib/topGamesTitle";
 import { useReorder } from "./useReorder";
 
 type Row = {
@@ -72,7 +73,8 @@ export function TopGamesEditor({
   const [pitch, setPitch] = useState(0);
   const touched = useRef(false);
 
-  const defaultName = `Top ${size} · ${year}`;
+  // The full title as it will display — the name is slotted between size + year.
+  const previewTitle = topListTitle(size, year, name);
   const added = new Set(rows.map((r) => r.gameId));
   const mainCount = Math.min(rows.length, size);
   const hmCount = Math.max(0, rows.length - size);
@@ -166,7 +168,7 @@ export function TopGamesEditor({
         : "";
     const ok = await confirm({
       title: "Finalize this list?",
-      message: `This stamps your ${defaultName} for good.${hmNote} You can reopen it later to make changes.`,
+      message: `This stamps your ${previewTitle} for good.${hmNote} You can reopen it later to make changes.`,
       confirmText: "Finalize",
     });
     if (!ok) return;
@@ -189,7 +191,7 @@ export function TopGamesEditor({
             onChange={(e) => setName(e.target.value)}
             onBlur={saveName}
             onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
-            placeholder={defaultName}
+            placeholder="Name this list — e.g. 2-player games"
             className="h-10 w-full sm:w-auto sm:max-w-xs sm:flex-1"
             aria-label="List name"
           />
@@ -210,6 +212,13 @@ export function TopGamesEditor({
             Finalize
           </button>
         </div>
+
+        {name.trim() && (
+          <p className="mb-4 -mt-1 px-1 text-xs text-muted">
+            Shows as{" "}
+            <span className="font-semibold text-foreground">{previewTitle}</span>
+          </p>
+        )}
 
         {rows.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-border p-10 text-center text-muted">

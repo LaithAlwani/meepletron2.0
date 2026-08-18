@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { fetchQuery } from "convex/nextjs";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
+import { topListTitle } from "@/lib/topGamesTitle";
 
 /**
  * Per-list metadata so a shared Top Games link unfurls with the list's own title
@@ -19,7 +20,7 @@ export async function generateMetadata({
       id: listId as Id<"topGamesLists">,
     });
     if (!list) return {};
-    const displayTitle = list.title ?? `Top ${list.size} · ${list.year}`;
+    const displayTitle = topListTitle(list.size, list.year, list.title);
     const who =
       list.author?.name ??
       (list.author?.username ? `@${list.author.username}` : null);

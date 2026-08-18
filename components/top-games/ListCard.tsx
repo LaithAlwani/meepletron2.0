@@ -5,6 +5,7 @@ import { Globe } from "lucide-react";
 import type { Id } from "@/convex/_generated/dataModel";
 import { Chip } from "@/components/ui/Surface";
 import { cn } from "@/lib/cn";
+import { topListTitle } from "@/lib/topGamesTitle";
 
 export type TopListRow = {
   _id: Id<"topGamesLists">;
@@ -59,8 +60,7 @@ function OverlayChip({ list }: { list: TopListRow }) {
  * an empty list falls back to a plain surface card.
  */
 export function ListCard({ list }: { list: TopListRow }) {
-  const heading = list.title ?? `Top ${list.size} · ${list.year}`;
-  const meta = `Top ${list.size} · ${list.year}`;
+  const heading = topListTitle(list.size, list.year, list.title);
   const covers = list.covers;
   const hasCollage = covers.length > 0;
   const step = 84 / Math.max(covers.length, 1);
@@ -108,14 +108,6 @@ export function ListCard({ list }: { list: TopListRow }) {
         >
           {heading}
         </span>
-        <p
-          className={cn(
-            "mt-0.5 truncate text-xs",
-            hasCollage ? "text-white/85" : "text-muted",
-          )}
-        >
-          {meta}
-        </p>
       </div>
     </Link>
   );

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useMutation } from "convex/react";
 import {
@@ -27,6 +27,7 @@ import { useToast } from "@/components/ui/Toast";
 import { useConfirm } from "@/components/ui/Confirm";
 import { Chip } from "@/components/ui/Surface";
 import { cn } from "@/lib/cn";
+import { topListTitle } from "@/lib/topGamesTitle";
 
 type TopTag = "same" | "moved" | "new" | "back" | null;
 
@@ -253,17 +254,20 @@ function Reveal({
 
 function RevealRow({ item }: { item: Item }) {
   const inner = (
-    <div className="relative flex items-center gap-4 overflow-hidden rounded-2xl border border-border bg-surface p-3 pr-4 transition-colors hover:border-accent/40 sm:p-4">
-      <span className="font-display w-14 shrink-0 text-center text-4xl font-black tabular-nums text-subtle sm:text-5xl">
+    <div className="relative flex items-center gap-3.5 overflow-hidden rounded-2xl border border-border bg-surface p-3 shadow-sm transition-all hover:-translate-y-0.5 hover:border-accent/40 hover:shadow-md sm:gap-4 sm:p-4">
+      <span className="font-display w-9 shrink-0 text-center text-3xl font-extrabold tabular-nums text-subtle sm:w-11 sm:text-4xl">
         {item.rank}
       </span>
-      <Thumb url={item.game?.thumbUrl} className="h-16 w-16 sm:h-20 sm:w-20" />
+      <Thumb
+        url={item.game?.thumbUrl}
+        className="h-16 w-16 ring-1 ring-border sm:h-18 sm:w-18"
+      />
       <div className="min-w-0 flex-1">
-        <h3 className="font-display truncate text-lg font-bold">
+        <h3 className="font-display text-base font-bold leading-snug sm:text-lg">
           {item.game?.title ?? item.title}
         </h3>
         {item.history.length > 0 && (
-          <p className="mt-0.5 truncate text-xs text-subtle">{historyLine(item)}</p>
+          <p className="mt-1 truncate text-xs text-subtle">{historyLine(item)}</p>
         )}
       </div>
       <MovementBadge item={item} />
@@ -374,7 +378,10 @@ function PodiumCard({ item }: { item: Item }) {
  * Gentle auto-scroll for the countdown; any manual scroll pauses it. Stops once
  * `stopRef` (the #1 card) is centred in the viewport, or the page bottom.
  */
-function useAutoScroll(stopRef: React.RefObject<HTMLElement | null>): {
+function useAutoScroll(
+  stopRef: React.RefObject<HTMLElement | null>,
+  ready = true,
+): {
   playing: boolean;
   toggle: () => void;
 } {
@@ -383,9 +390,10 @@ function useAutoScroll(stopRef: React.RefObject<HTMLElement | null>): {
     return !window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
   });
 
-  // The animation loop.
+  // The animation loop — held until `ready` (e.g. the honorable-mentions
+  // intro has finished) so the page doesn't scroll away from it.
   useEffect(() => {
-    if (!playing) return;
+    if (!playing || !ready) return;
     let raf = 0;
     let last = 0;
     let target = window.scrollY;
@@ -417,7 +425,7 @@ function useAutoScroll(stopRef: React.RefObject<HTMLElement | null>): {
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [playing, stopRef]);
+  }, [playing, ready, stopRef]);
 
   // Any real user input hands control back.
   useEffect(() => {
@@ -437,14 +445,106 @@ function useAutoScroll(stopRef: React.RefObject<HTMLElement | null>): {
   return { playing, toggle: () => setPlaying((p) => !p) };
 }
 
-function RevealShow({ items }: { items: Item[] }) {
+/**
+ * The honorable-mentions intro: cards fly in one at a time, left to right, the
+ * strip scrolling to follow the newest. Calls `onDone` once the last has landed,
+ * which releases the vertical auto-scroll into the main countdown.
+ */
+function HonorableReveal({
+  items,
+  onDone,
+}: {
+  items: Item[];
+  onDone: () => void;
+}) {
+  const sectionRef = useRef<HTMLDivElement>(null);
+  const scrollerRef = useRef<HTMLDivElement>(null);
+  const [count, setCount] = useState(0);
+  const [started, setStarted] = useState(false);
+
+  // Center the honorable strip in the viewport as the reveal begins, then start
+  // dealing the cards once it's settled.
+  useEffect(() => {
+    sectionRef.current?.scrollIntoView({ block: "center", behavior: "smooth" });
+    const t = setTimeout(() => setStarted(true), 600);
+    return () => clearTimeout(t);
+  }, []);
+
+  // Reveal the next card on a slow beat; a longer pause after the last so it can
+  // be taken in, then onDone releases the scroll down into the countdown.
+  useEffect(() => {
+    if (!started) return;
+    if (count >= items.length) {
+      const t = setTimeout(onDone, 1200);
+      return () => clearTimeout(t);
+    }
+    const t = setTimeout(() => setCount((c) => c + 1), 850);
+    return () => clearTimeout(t);
+  }, [started, count, items.length, onDone]);
+
+  // Follow the newest card to the right edge.
+  useEffect(() => {
+    const el = scrollerRef.current;
+    if (el) el.scrollTo({ left: el.scrollWidth, behavior: "smooth" });
+  }, [count]);
+
+  return (
+    <div ref={sectionRef} className="mb-8">
+      <h2 className="mb-3 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.16em] text-accent-2">
+        <Star className="h-3.5 w-3.5" />
+        Honorable mentions
+      </h2>
+      <div
+        ref={scrollerRef}
+        style={{ scrollbarWidth: "none" }}
+        className="-mx-4 flex gap-3 overflow-x-auto px-4 pb-2 [&::-webkit-scrollbar]:hidden sm:mx-0 sm:px-0"
+      >
+        {items.slice(0, count).map((item) => {
+          const inner = (
+            <>
+              <Thumb url={item.game?.thumbUrl} className="aspect-square w-full" />
+              <p className="mt-1.5 line-clamp-2 text-xs font-medium leading-tight text-muted">
+                {item.game?.title ?? item.title}
+              </p>
+            </>
+          );
+          return (
+            <div key={item.gameId} className="msg-in w-28 shrink-0 sm:w-32">
+              {item.game?.slug ? (
+                <Link href={`/boardgames/${item.game.slug}`} className="block">
+                  {inner}
+                </Link>
+              ) : (
+                <div>{inner}</div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function RevealShow({
+  items,
+  honorable,
+}: {
+  items: Item[];
+  honorable: Item[];
+}) {
   // Reverse: highest rank first, counting down to #1 (the climax) at the bottom.
   const reversed = [...items].sort((a, b) => b.rank - a.rank);
   const firstRef = useRef<HTMLDivElement>(null);
-  const auto = useAutoScroll(firstRef);
+  // Hold the countdown auto-scroll until the honorable intro finishes.
+  const [honorableDone, setHonorableDone] = useState(honorable.length === 0);
+  const markDone = useCallback(() => setHonorableDone(true), []);
+  const auto = useAutoScroll(firstRef, honorableDone);
   return (
     // clip-x so the sideways slide-in never spawns a horizontal scrollbar.
     <div className="space-y-3 overflow-x-clip">
+      {honorable.length > 0 && (
+        <HonorableReveal items={honorable} onDone={markDone} />
+      )}
       <p className="text-center text-xs font-bold uppercase tracking-[0.25em] text-subtle">
         The countdown ↓
       </p>
@@ -462,7 +562,7 @@ function RevealShow({ items }: { items: Item[] }) {
       <button
         type="button"
         onClick={auto.toggle}
-        className="fixed bottom-5 right-4 z-30 inline-flex items-center gap-1.5 rounded-full border border-border bg-surface/90 px-3.5 py-2 text-sm font-semibold text-foreground shadow-lg backdrop-blur transition-colors hover:border-accent/50 sm:bottom-6 sm:right-6"
+        className="fixed bottom-[calc(3.75rem+env(safe-area-inset-bottom))] left-4 z-30 inline-flex items-center gap-1.5 rounded-full border border-border bg-surface/90 px-3.5 py-2 text-sm font-semibold text-foreground shadow-lg backdrop-blur transition-colors hover:border-accent/50 sm:bottom-6 sm:left-6"
       >
         {auto.playing ? (
           <>
@@ -502,7 +602,7 @@ export function TopGamesView({ data }: { data: TopListData }) {
     }
   }
 
-  const heading = data.title ?? `Top ${data.size} · ${data.year}`;
+  const heading = topListTitle(data.size, data.year, data.title);
   const isPublic = data.visibility === "public";
   const mainItems = data.items.filter((i) => i.rank <= data.size);
   const honorable = data.items.filter((i) => i.rank > data.size);
@@ -624,7 +724,7 @@ export function TopGamesView({ data }: { data: TopListData }) {
       </div>
 
       {mode === "reveal" ? (
-        <RevealShow items={mainItems} />
+        <RevealShow items={mainItems} honorable={honorable} />
       ) : (
         <>
           {/* Ranked list */}

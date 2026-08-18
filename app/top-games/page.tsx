@@ -1,73 +1,46 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import {
   useQuery,
-  useMutation,
   Authenticated,
   Unauthenticated,
   AuthLoading,
 } from "convex/react";
-import { Trophy, Plus, Minus } from "lucide-react";
+import { Plus, Minus } from "lucide-react";
 import { api } from "@/convex/_generated/api";
-import type { Id } from "@/convex/_generated/dataModel";
 import { buttonClasses } from "@/components/ui/Button";
 import { Skeleton } from "@/components/ui/Surface";
 import { Thumb } from "@/components/top-games/Thumb";
 import { ListCard } from "@/components/top-games/ListCard";
-import { useToast } from "@/components/ui/Toast";
 import { cn } from "@/lib/cn";
+import { PageTitle } from "@/components/ui/PageTitle";
 
 const PRESETS = [10, 25, 50, 100];
 const CURRENT_YEAR = new Date().getFullYear();
 
-// Shared field chrome: a small uppercase label, a segmented "track" the controls
-// sit in, and a spinner-stripping helper for the number inputs (we drive them
-// with our own presets/steppers, so the native arrows are just noise).
-const LABEL = "mb-1.5 block text-[11px] font-bold uppercase tracking-[0.12em] text-subtle";
+// The year stepper's chrome: a segmented "track" plus a spinner-stripping helper
+// for the number input (we drive it with steppers, so native arrows are noise).
 const TRACK = "inline-flex items-center rounded-xl border border-border bg-surface-2 p-1";
 const NO_SPIN =
   "[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:m-0 [&::-webkit-inner-spin-button]:appearance-none";
-
-type ListRow = {
-  _id: Id<"topGamesLists">;
-  size: number;
-  year: number;
-  title: string | null;
-  status: "draft" | "finalized";
-  visibility: "private" | "public";
-  count: number;
-  updatedAt: number;
-  covers: string[];
-};
 
 export default function TopGamesPage() {
   const [tab, setTab] = useState<"mine" | "community">("mine");
   return (
     <div className="mx-auto max-w-3xl px-4 py-8">
-      <div className="mb-1 flex items-center gap-2 text-accent">
-        <Trophy className="h-6 w-6" />
-        <h1 className="font-display text-3xl font-extrabold tracking-tight text-foreground">
-          Top Games
-        </h1>
-      </div>
-      <p className="mb-5 text-sm text-muted">
-        Rank your favourite games each year, then watch how they move over time.
-      </p>
+      <PageTitle className="mb-5">Top Games</PageTitle>
 
-      <div className="mb-6 flex gap-6 border-b border-border">
+      <div className="mb-6 flex gap-5">
         {(["mine", "community"] as const).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
             aria-current={tab === t ? "page" : undefined}
             className={cn(
-              "-mb-px border-b-2 px-0.5 pb-2.5 text-sm font-semibold transition-colors",
-              tab === t
-                ? "border-accent text-foreground"
-                : "border-transparent text-muted hover:text-foreground",
+              "px-0.5 text-sm font-semibold transition-colors",
+              tab === t ? "text-accent" : "text-muted hover:text-foreground",
             )}
           >
             {t === "mine" ? "My lists" : "Community"}
@@ -110,13 +83,16 @@ function MyLists() {
 
   return (
     <div className="space-y-6">
-      <CreateForm lists={lists ?? []} />
+      <Link href="/top-games/new" className={buttonClasses("primary", "md")}>
+        <Plus className="h-4 w-4" />
+        Create list
+      </Link>
 
       {lists === undefined ? (
         <Skeleton className="h-24 w-full" />
       ) : lists.length === 0 ? (
         <p className="text-center text-sm text-muted">
-          No lists yet — create one above.
+          No lists yet — tap “Create list” to start.
         </p>
       ) : (
         <ul className="grid gap-3 sm:grid-cols-2">
@@ -127,110 +103,6 @@ function MyLists() {
           ))}
         </ul>
       )}
-    </div>
-  );
-}
-
-function CreateForm({ lists }: { lists: ListRow[] }) {
-  const router = useRouter();
-  const toast = useToast();
-  const create = useMutation(api.topGames.create);
-
-  const [size, setSize] = useState(100);
-  const [year, setYear] = useState(CURRENT_YEAR);
-  const [seed, setSeed] = useState(true);
-  const [busy, setBusy] = useState(false);
-
-  // Most recent finalized list of this size from a prior year — offer to seed.
-  const seedCandidate = useMemo(
-    () =>
-      lists
-        .filter((l) => l.size === size && l.status === "finalized" && l.year < year)
-        .sort((a, b) => b.year - a.year)[0],
-    [lists, size, year],
-  );
-
-  async function onCreate() {
-    setBusy(true);
-    try {
-      const { listId, existed } = await create({
-        size,
-        year,
-        seedFromListId: seedCandidate && seed ? seedCandidate._id : undefined,
-      });
-      if (existed) toast("Opened your existing list for that year.", "info");
-      router.push(`/top-games/${listId}`);
-    } catch (e) {
-      toast(e instanceof Error ? e.message : "Couldn't create the list.", "error");
-      setBusy(false);
-    }
-  }
-
-  return (
-    <div className="rounded-2xl border border-border bg-surface p-4">
-      <h2 className="font-display mb-3 font-bold">Start a new list</h2>
-      <div className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-end">
-        <div className="min-w-0">
-          <label className={LABEL}>List size</label>
-          <SizeControl size={size} onChange={setSize} />
-        </div>
-        <div>
-          <label className={LABEL}>Year</label>
-          <YearStepper year={year} onChange={setYear} />
-        </div>
-        <button
-          onClick={onCreate}
-          disabled={busy}
-          className={buttonClasses("primary", "md", "w-full sm:w-auto")}
-        >
-          <Plus className="h-4 w-4" />
-          Create
-        </button>
-      </div>
-      {seedCandidate && (
-        <label className="mt-3 flex items-center gap-2 text-sm text-muted">
-          <input
-            type="checkbox"
-            checked={seed}
-            onChange={(e) => setSeed(e.target.checked)}
-            className="h-4 w-4 accent-accent"
-          />
-          Start from my {seedCandidate.title ?? `Top ${seedCandidate.size} · ${seedCandidate.year}`}
-        </label>
-      )}
-    </div>
-  );
-}
-
-/** Segmented preset picker (10 / 25 / 50 / 100). */
-function SizeControl({
-  size,
-  onChange,
-}: {
-  size: number;
-  onChange: (n: number) => void;
-}) {
-  return (
-    <div className="flex w-full items-center gap-0.5 rounded-xl border border-border bg-surface-2 p-1 sm:inline-flex sm:w-auto">
-      {PRESETS.map((p) => {
-        const active = size === p;
-        return (
-          <button
-            key={p}
-            type="button"
-            onClick={() => onChange(p)}
-            aria-pressed={active}
-            className={cn(
-              "h-9 flex-1 rounded-lg px-2.5 text-sm font-bold tabular-nums transition-all sm:min-w-11 sm:flex-none",
-              active
-                ? "bg-accent text-accent-foreground shadow-sm"
-                : "text-muted hover:bg-surface hover:text-foreground",
-            )}
-          >
-            {p}
-          </button>
-        );
-      })}
     </div>
   );
 }
@@ -290,15 +162,25 @@ function Community() {
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-col gap-4 rounded-2xl border border-border bg-surface p-4 sm:flex-row sm:flex-wrap sm:items-end">
-        <div className="min-w-0">
-          <label className={LABEL}>List size</label>
-          <SizeControl size={size} onChange={setSize} />
-        </div>
-        <div>
-          <label className={LABEL}>Year</label>
-          <YearStepper year={year} onChange={setYear} />
-        </div>
+      <div className="flex flex-wrap items-center gap-2">
+        {PRESETS.map((p) => (
+          <button
+            key={p}
+            type="button"
+            onClick={() => setSize(p)}
+            aria-pressed={size === p}
+            className={cn(
+              "rounded-full border px-3.5 py-2 text-xs font-bold tabular-nums transition-all",
+              size === p
+                ? "border-accent bg-accent text-accent-foreground shadow-sm"
+                : "border-border bg-surface text-muted hover:bg-surface-2 hover:text-foreground",
+            )}
+          >
+            Top {p}
+          </button>
+        ))}
+        <span className="mx-1 h-5 w-px shrink-0 bg-border" />
+        <YearStepper year={year} onChange={setYear} />
       </div>
 
       {data === undefined ? (
