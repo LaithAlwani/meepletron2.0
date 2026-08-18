@@ -61,14 +61,17 @@ export function GameCard({
         )}
       </Link>
 
-      {/* Read-only tags: which of your collection lists this game is in. */}
-      <div className="pointer-events-none absolute left-2 top-2 z-20">
+      {/* Read-only tags: which of your collection lists this game is in.
+          group-hover:translate-y-1 cancels the card's hover lift so the tags
+          stay put (they don't ride up or zoom with the cover). */}
+      <div className="pointer-events-none absolute left-2 top-2 z-20 transition-transform duration-200 group-hover:translate-y-1">
         <CollectionTags gameId={game._id} />
       </div>
 
       {/* Add-to-collection bookmark — flush in the top-right corner, hanging
-          from the top edge (no background, no top padding). */}
-      <div className="absolute right-0 top-0 z-20">
+          from the top edge (no background, no top padding). Cancels the card's
+          hover lift so it stays anchored. */}
+      <div className="absolute right-0 top-0 z-20 transition-transform duration-200 group-hover:translate-y-1">
         <CollectionButton
           gameId={game._id}
           size="lg"
