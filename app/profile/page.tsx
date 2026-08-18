@@ -18,6 +18,7 @@ import { useConfirm } from "@/components/ui/Confirm";
 import { friendlyError } from "@/lib/friendlyError";
 import { InstallPrompt } from "@/components/InstallPrompt";
 import { Die } from "@/components/ui/icons";
+import { AvatarImg } from "@/components/ui/Avatar";
 import { cn } from "@/lib/cn";
 
 const CameraIcon = (
@@ -329,14 +330,11 @@ function ProfileAvatar({
     <div className="mb-4 flex flex-col items-center">
       <div className="relative">
         <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-full bg-accent/15 text-3xl font-bold text-accent">
-          {avatarUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={avatarUrl} alt="" className="h-full w-full object-cover" />
-          ) : isGuest ? (
-            <Die className="h-8 w-8" />
-          ) : (
-            initial
-          )}
+          <AvatarImg
+            src={avatarUrl}
+            initial={initial}
+            icon={isGuest ? <Die className="h-8 w-8" /> : undefined}
+          />
         </div>
         {canEdit && (
           <>

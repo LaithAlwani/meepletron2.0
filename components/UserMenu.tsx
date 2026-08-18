@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { ThemeMenu } from "@/components/ThemeToggle";
+import { AvatarImg } from "@/components/ui/Avatar";
 
 export function UserMenu({
   initial,
@@ -69,12 +70,7 @@ export function UserMenu({
         aria-expanded={open}
         className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full bg-accent/12 text-sm font-bold text-accent transition-colors hover:bg-accent/20"
       >
-        {avatarUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={avatarUrl} alt="" className="h-full w-full object-cover" />
-        ) : (
-          initial
-        )}
+        <AvatarImg src={avatarUrl} initial={initial} />
       </button>
       {open && (
         <div className="animate-in absolute right-0 z-50 mt-2 w-48 rounded-2xl border border-border bg-surface p-1.5 shadow-xl">

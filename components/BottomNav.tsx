@@ -1,16 +1,11 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useQuery } from "convex/react";
-import {
-  LayoutGrid,
-  MessageCircle,
-  Trophy,
-  CircleUser,
-} from "lucide-react";
-import { api } from "@/convex/_generated/api";
+import { LayoutGrid, MessageCircle, Trophy, MoreHorizontal } from "lucide-react";
 import { cn } from "@/lib/cn";
+import { MoreSheet } from "@/components/MoreSheet";
 
 const TABS = [
   { href: "/boardgames", label: "Library", icon: LayoutGrid },
@@ -20,21 +15,18 @@ const TABS = [
 
 /**
  * Mobile-only bottom tab bar (the primary nav on small screens). Hidden on the
- * splash, chat (own shell), and auth routes. The collection now lives inside the
- * library, so its old slot became the profile avatar. Renders a matching in-flow
- * spacer so the fixed bar never covers page content.
+ * chat (own shell) and auth routes. The last tab is "More" (⋯), which opens the
+ * former header avatar menu as a bottom sheet. Renders a matching in-flow spacer
+ * so the fixed bar never covers page content.
  */
 export function BottomNav() {
   const pathname = usePathname() ?? "";
-  const me = useQuery(api.users.me);
+  const [moreOpen, setMoreOpen] = useState(false);
   const hidden =
     pathname === "/auth" ||
     pathname === "/who-goes-first" ||
     /^\/boardgames\/[^/]+\/chat/.test(pathname);
   if (hidden) return null;
-
-  const profileActive =
-    pathname === "/profile" || pathname.startsWith("/profile/");
 
   return (
     <>
@@ -65,35 +57,26 @@ export function BottomNav() {
             );
           })}
           <li className="flex-1">
-            <Link
-              href="/profile"
-              aria-current={profileActive ? "page" : undefined}
+            <button
+              onClick={() => setMoreOpen(true)}
+              aria-haspopup="menu"
+              aria-expanded={moreOpen}
               className={cn(
-                "flex h-13 flex-col items-center justify-center gap-0.5 text-[10px] font-semibold transition-colors",
-                profileActive ? "text-accent" : "text-subtle hover:text-muted",
+                "flex h-13 w-full flex-col items-center justify-center gap-0.5 text-[10px] font-semibold transition-colors",
+                moreOpen ? "text-accent" : "text-subtle hover:text-muted",
               )}
             >
-              {me?.avatarUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={me.avatarUrl}
-                  alt=""
-                  className={cn(
-                    "h-5 w-5 rounded-full object-cover",
-                    profileActive && "ring-2 ring-accent",
-                  )}
-                />
-              ) : (
-                <CircleUser
-                  className="h-4.5 w-4.5"
-                  strokeWidth={profileActive ? 2.4 : 2}
-                />
-              )}
-              Profile
-            </Link>
+              <MoreHorizontal
+                className="h-4.5 w-4.5"
+                strokeWidth={moreOpen ? 2.4 : 2}
+              />
+              More
+            </button>
           </li>
         </ul>
       </nav>
+
+      <MoreSheet open={moreOpen} onClose={() => setMoreOpen(false)} />
     </>
   );
 }

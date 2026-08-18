@@ -29,12 +29,13 @@ function Brand() {
       className="flex items-center gap-2"
     >
       <Image
-        src="/icons/icon-96x96.webp"
+        src="/logo.webp"
         alt=""
-        width={32}
-        height={32}
+        width={128}
+        height={160}
         priority
-        className="h-8 w-8"
+        quality={90}
+        className="h-9 w-auto"
       />
       <span className="font-display text-xl font-extrabold tracking-tight">
         meepletron
@@ -83,7 +84,8 @@ export function Header() {
             );
           })}
         </nav>
-        <div className="ml-auto flex items-center gap-1.5">
+        {/* Desktop only — on mobile these live in the bottom nav's "More" sheet. */}
+        <div className="ml-auto hidden items-center gap-1.5 sm:flex">
           <AuthLoading>
             <div className="h-9 w-9 animate-pulse rounded-full bg-surface-2" />
           </AuthLoading>

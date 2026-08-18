@@ -462,12 +462,12 @@ export function GlobalAssistant() {
           <div className="animate-in fixed bottom-0 left-0 z-50 flex h-[85dvh] w-full flex-col overflow-hidden rounded-t-2xl border border-border bg-background shadow-2xl sm:bottom-6 sm:left-auto sm:right-4 sm:h-128 sm:w-96 sm:rounded-2xl">
             {/* Header */}
             <div className="flex items-center gap-2.5 border-b border-border bg-surface px-3 py-2.5">
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-lg">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
-                  src="/icons/icon-96x96.webp"
+                  src="/logo.webp"
                   alt=""
-                  className="h-full w-full object-contain"
+                  className="h-full w-auto object-contain"
                 />
               </div>
               <div className="min-w-0 flex-1">

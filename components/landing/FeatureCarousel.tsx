@@ -209,7 +209,7 @@ export function FeatureCarousel() {
                   <Icon className="h-7 w-7 sm:h-8 sm:w-8" />
                 </div>
 
-                <div className="min-w-0 flex-1">
+                <div className="flex min-w-0 flex-1 flex-col">
                   <div className="flex flex-wrap items-center gap-2">
                     <h3 className="font-display text-2xl font-extrabold tracking-tight sm:text-3xl">
                       {f.title}
@@ -231,7 +231,7 @@ export function FeatureCarousel() {
                   </p>
 
                   {f.cta && (
-                    <div className="mt-5">
+                    <div className="mt-auto flex justify-end pt-5">
                       {"href" in f.cta ? (
                         <Link href={f.cta.href} className={buttonClasses("primary", "md")}>
                           {f.cta.label}

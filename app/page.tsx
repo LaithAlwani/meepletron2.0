@@ -127,9 +127,7 @@ export default function LandingPage() {
         >
           Ask a rules question the way you&apos;d say it at the table and get a
           straight answer, quoted from the actual rulebook with the page it came
-          from. Then stay for the rest of game night — a growing library, your
-          BoardGameGeek collection synced in, a tuckbox designer, a first-player
-          picker and your top games of the year.
+          from. 
         </p>
 
         <div
@@ -160,7 +158,7 @@ export default function LandingPage() {
             What Meepletron does
           </p>
           <h2 className="font-display mt-1 text-3xl font-extrabold tracking-tight sm:text-4xl">
-            Seven tools for game night — and one on the way
+            Seven tools to use on your game night
           </h2>
           <p className="mt-2 text-sm text-muted">
             Swipe through: each one comes with the short version of how to use
@@ -185,7 +183,7 @@ export default function LandingPage() {
               The beta proved people would rather ask than flip back through a
               rulebook. So we rebuilt the part that matters: a new way of
               parsing rulebook text that keeps a game&apos;s structure and
-              symbols intact, for noticeably more accurate answers — and a
+              symbols intact, for noticeably more accurate answers and a
               citation under every one of them.
             </p>
           </div>
