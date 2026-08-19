@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { DEFAULT_SORT, isGameSort, type GameSortKey } from "@/convex/lib/gameSort";
 
 export type TimeFilter = "quick" | "standard" | "epic";
 
@@ -59,6 +60,7 @@ export function useLibraryFilters() {
   const [term, setTerm] = useState("");
   const [debounced, setDebounced] = useState("");
   const [filters, setFilters] = useState<LibraryFilterState>(EMPTY_FILTERS);
+  const [sort, setSort] = useState<GameSortKey>(DEFAULT_SORT);
   const [hydrated, setHydrated] = useState(false);
 
   // Hydrate once from the persisted snapshot. Deferred a frame so we don't call
@@ -72,8 +74,10 @@ export function useLibraryFilters() {
           const s = JSON.parse(raw) as {
             term?: string;
             filters?: Partial<LibraryFilterState>;
+            sort?: string;
           };
           if (s.filters) setFilters({ ...EMPTY_FILTERS, ...s.filters });
+          if (s.sort && isGameSort(s.sort)) setSort(s.sort);
           if (typeof s.term === "string") {
             setTerm(s.term);
             setDebounced(s.term.trim());
@@ -93,15 +97,15 @@ export function useLibraryFilters() {
     return () => clearTimeout(t);
   }, [term]);
 
-  // Persist term + filters after hydration.
+  // Persist term + filters + sort after hydration.
   useEffect(() => {
     if (!hydrated) return;
     try {
-      sessionStorage.setItem(KEY, JSON.stringify({ term, filters }));
+      sessionStorage.setItem(KEY, JSON.stringify({ term, filters, sort }));
     } catch {
       /* storage unavailable */
     }
-  }, [term, filters, hydrated]);
+  }, [term, filters, sort, hydrated]);
 
   const args = useMemo(() => toLibraryArgs(debounced, filters), [debounced, filters]);
   const activeCount = countActiveFilters(filters);
@@ -114,6 +118,8 @@ export function useLibraryFilters() {
     searching,
     filters,
     setFilters,
+    sort,
+    setSort,
     clear: () => setFilters(EMPTY_FILTERS),
     args,
     activeCount,

@@ -7,6 +7,7 @@ import {
 } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { bggStatsValidator } from "./lib/bggStats";
+import { bggSortKeys } from "./lib/gameSort";
 import { parseItem, parseFullItem, decodeEntities } from "./lib/bggThing";
 
 const BGG_USER_AGENT = "Meepletron/1.0 (board game rules assistant)";
@@ -123,7 +124,13 @@ export const search = action({
 export const setBggStats = internalMutation({
   args: { gameId: v.id("games"), bgg: bggStatsValidator },
   handler: async (ctx, { gameId, bgg }) => {
-    await ctx.db.patch("games", gameId, { bgg, bggCheckedAt: Date.now() });
+    // Keep the denormalized sort keys in step with the refreshed stats (title /
+    // year are untouched by a stats refresh, so their keys stay valid).
+    await ctx.db.patch("games", gameId, {
+      bgg,
+      bggCheckedAt: Date.now(),
+      ...bggSortKeys(bgg),
+    });
   },
 });
 

@@ -133,6 +133,14 @@ export default defineSchema({
     // excluded from every catalogue surface (browse, search, sitemap). Cleared
     // when an admin edits the game, which promotes it to a real entry.
     isStub: v.optional(v.boolean()),
+    // Denormalized, indexable sort keys — kept in sync at every write so the
+    // library can paginate ordered by rating / title / year / complexity /
+    // popularity without scanning the catalogue. See sortKeys() in games.ts.
+    sortTitle: v.optional(v.string()), // lowercased title, for A–Z
+    yearNum: v.optional(v.number()), // release year as a number
+    bggRating: v.optional(v.number()), // = bgg.rating
+    bggRatingCount: v.optional(v.number()), // = bgg.ratingCount (popularity)
+    bggWeight: v.optional(v.number()), // = bgg.weight (complexity)
   })
     .index("by_slug", ["slug"])
     .index("by_isExpansion", ["isExpansion"])
@@ -142,6 +150,13 @@ export default defineSchema({
     .index("by_bgg_id", ["bggId"])
     // The catalogue's real read path: non-stub base games / expansions.
     .index("by_isStub_and_isExpansion", ["isStub", "isExpansion"])
+    // Sorted catalogue reads: same (isStub, isExpansion) prefix, then the sort
+    // key, so the library paginates ordered without a scan.
+    .index("by_lib_title", ["isStub", "isExpansion", "sortTitle"])
+    .index("by_lib_year", ["isStub", "isExpansion", "yearNum"])
+    .index("by_lib_rating", ["isStub", "isExpansion", "bggRating"])
+    .index("by_lib_weight", ["isStub", "isExpansion", "bggWeight"])
+    .index("by_lib_rated", ["isStub", "isExpansion", "bggRatingCount"])
     .searchIndex("search_text", {
       searchField: "searchText",
       filterFields: ["isExpansion", "isStub"],

@@ -17,12 +17,13 @@ import { PreviewCard, PreviewRow } from "@/components/boardgames/PreviewCard";
 import { useBggSearch } from "@/components/boardgames/useBggSearch";
 import { FilterDrawer } from "@/components/boardgames/FilterDrawer";
 import { useLibraryFilters } from "@/components/boardgames/useLibraryFilters";
+import { SortControl } from "@/components/boardgames/SortControl";
 
 type View = "grid" | "list";
 const gridClass = "grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4";
 
 export default function AllBoardgamesPage() {
-  const { term, setTerm, debounced, searching, filters, setFilters, clear, args, activeCount } =
+  const { term, setTerm, debounced, searching, filters, setFilters, sort, setSort, clear, args, activeCount } =
     useLibraryFilters();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [view, setView] = useState<View>("grid");
@@ -45,7 +46,7 @@ export default function AllBoardgamesPage() {
 
   const { results, status, loadMore } = usePaginatedQuery(
     api.games.libraryGames,
-    args,
+    { ...args, sort },
     { initialNumItems: 24 },
   );
   // Skip the exact count while searching — it's a full-catalogue scan; show the
@@ -110,8 +111,9 @@ export default function AllBoardgamesPage() {
           ) : null}
         </h1>
 
-        <div className="flex items-center gap-2">
-          <div className="relative flex-1 sm:w-64">
+        {/* Mobile: search on its own row, action buttons below. Desktop: inline. */}
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <div className="relative w-full sm:w-64">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-subtle" />
             <input
               type="search"
@@ -121,31 +123,40 @@ export default function AllBoardgamesPage() {
               className="w-full rounded-xl border border-border bg-surface py-2.5 pl-10 pr-3 text-sm outline-none transition-shadow focus:border-accent/50 focus:ring-2 focus:ring-ring/40"
             />
           </div>
-          <button
-            onClick={() => setDrawerOpen(true)}
-            aria-label="Filters"
-            title="Filters"
-            className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-border bg-surface text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
-          >
-            <SlidersHorizontal className="h-4.5 w-4.5" />
-            {activeCount > 0 && (
-              <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-accent px-1 text-[11px] font-bold text-accent-foreground">
-                {activeCount}
-              </span>
+          <div className="flex items-center justify-end gap-2">
+            {!searching && (
+              <SortControl
+                value={sort}
+                onChange={setSort}
+                className="flex-1 sm:w-40 sm:flex-none"
+              />
             )}
-          </button>
-          <button
-            onClick={toggleView}
-            aria-label={view === "grid" ? "Switch to list view" : "Switch to grid view"}
-            title={view === "grid" ? "List view" : "Grid view"}
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-border bg-surface text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
-          >
-            {view === "grid" ? (
-              <List className="h-4.5 w-4.5" />
-            ) : (
-              <LayoutGrid className="h-4.5 w-4.5" />
-            )}
-          </button>
+            <button
+              onClick={() => setDrawerOpen(true)}
+              aria-label="Filters"
+              title="Filters"
+              className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-border bg-surface text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
+            >
+              <SlidersHorizontal className="h-4.5 w-4.5" />
+              {activeCount > 0 && (
+                <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-accent px-1 text-[11px] font-bold text-accent-foreground">
+                  {activeCount}
+                </span>
+              )}
+            </button>
+            <button
+              onClick={toggleView}
+              aria-label={view === "grid" ? "Switch to list view" : "Switch to grid view"}
+              title={view === "grid" ? "List view" : "Grid view"}
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-border bg-surface text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
+            >
+              {view === "grid" ? (
+                <List className="h-4.5 w-4.5" />
+              ) : (
+                <LayoutGrid className="h-4.5 w-4.5" />
+              )}
+            </button>
+          </div>
         </div>
       </div>
 

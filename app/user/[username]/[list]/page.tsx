@@ -1,12 +1,14 @@
 "use client";
 
-import { use, useEffect, useRef } from "react";
+import { use, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useQuery, usePaginatedQuery } from "convex/react";
 import { ArrowLeft } from "lucide-react";
 import { api } from "@/convex/_generated/api";
 import { Skeleton } from "@/components/ui/Surface";
 import { Die } from "@/components/ui/icons";
+import { SortControl } from "@/components/boardgames/SortControl";
+import { DEFAULT_SORT, type GameSortKey } from "@/convex/lib/gameSort";
 
 const TITLES: Record<string, string> = {
   owned: "Owned games",
@@ -23,6 +25,7 @@ export default function CollectionListPage({
 }) {
   const { username, list } = use(params);
   const valid = list === "owned" || list === "for-trade" || list === "wishlist";
+  const [sort, setSort] = useState<GameSortKey>(DEFAULT_SORT);
   const args = valid
     ? { username, list: list as CollectionList }
     : ("skip" as const);
@@ -30,7 +33,7 @@ export default function CollectionListPage({
   const meta = useQuery(api.topGames.publicCollectionMeta, args);
   const { results, status, loadMore } = usePaginatedQuery(
     api.topGames.publicCollectionPage,
-    args,
+    args === "skip" ? "skip" : { ...args, sort },
     { initialNumItems: 48 },
   );
 
@@ -57,9 +60,18 @@ export default function CollectionListPage({
         {meta?.author?.name ?? (valid ? `@${username}` : "Back")}
       </Link>
 
-      <h1 className="font-display mb-5 text-2xl font-extrabold tracking-tight">
-        {title}
-      </h1>
+      <div className="mb-5 flex items-center justify-between gap-3">
+        <h1 className="font-display text-2xl font-extrabold tracking-tight">
+          {title}
+        </h1>
+        {valid && meta?.shared && (
+          <SortControl
+            value={sort}
+            onChange={setSort}
+            className="w-40 shrink-0"
+          />
+        )}
+      </div>
 
       {!valid || meta === null ? (
         <p className="rounded-2xl border border-dashed border-border p-10 text-center text-muted">

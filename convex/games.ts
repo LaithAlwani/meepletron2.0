@@ -12,6 +12,12 @@ import { internal } from "./_generated/api";
 import { requireAdmin, getCurrentUser } from "./lib/auth";
 import { slugify, slugifyUnique } from "./lib/slug";
 import { buildSearchText, gameNameMatchScore } from "./lib/gameSearch";
+import {
+  sortKeys,
+  isGameSort,
+  DEFAULT_SORT,
+  type GameSortKey,
+} from "./lib/gameSort";
 import { bggStatsValidator } from "./lib/bggStats";
 
 /** Resolve a game's storage ids into signed URLs for the client. */
@@ -335,6 +341,89 @@ async function filteredLibrary(
   });
 }
 
+/**
+ * The non-stub base-game query for the fast (paginated) library path, ordered by
+ * the chosen sort. Each branch uses a dedicated (isStub, isExpansion, <key>)
+ * index so pagination reads ~one page — no scan. `rating` is the default.
+ */
+function libraryBase(ctx: QueryCtx, sort: GameSortKey) {
+  const q = ctx.db.query("games");
+  switch (sort) {
+    case "title":
+      return q
+        .withIndex("by_lib_title", (i) =>
+          i.eq("isStub", false).eq("isExpansion", false),
+        )
+        .order("asc");
+    case "year":
+      return q
+        .withIndex("by_lib_year", (i) =>
+          i.eq("isStub", false).eq("isExpansion", false),
+        )
+        .order("desc");
+    case "weight":
+      return q
+        .withIndex("by_lib_weight", (i) =>
+          i.eq("isStub", false).eq("isExpansion", false),
+        )
+        .order("desc");
+    case "rated":
+      return q
+        .withIndex("by_lib_rated", (i) =>
+          i.eq("isStub", false).eq("isExpansion", false),
+        )
+        .order("desc");
+    case "newest":
+      return q
+        .withIndex("by_isStub_and_isExpansion", (i) =>
+          i.eq("isStub", false).eq("isExpansion", false),
+        )
+        .order("desc");
+    case "rating":
+    default:
+      return q
+        .withIndex("by_lib_rating", (i) =>
+          i.eq("isStub", false).eq("isExpansion", false),
+        )
+        .order("desc");
+  }
+}
+
+/** In-memory sort for the scan path (genre / mechanic / chat filters). */
+function sortLibrary(
+  games: Doc<"games">[],
+  sort: GameSortKey,
+): Doc<"games">[] {
+  const num = (v?: number) => v ?? -Infinity;
+  const arr = [...games];
+  switch (sort) {
+    case "title":
+      arr.sort((a, b) =>
+        (a.sortTitle ?? a.title.toLowerCase()).localeCompare(
+          b.sortTitle ?? b.title.toLowerCase(),
+        ),
+      );
+      break;
+    case "year":
+      arr.sort((a, b) => num(b.yearNum) - num(a.yearNum));
+      break;
+    case "weight":
+      arr.sort((a, b) => num(b.bggWeight) - num(a.bggWeight));
+      break;
+    case "rated":
+      arr.sort((a, b) => num(b.bggRatingCount) - num(a.bggRatingCount));
+      break;
+    case "newest":
+      arr.sort((a, b) => b._creationTime - a._creationTime);
+      break;
+    case "rating":
+    default:
+      arr.sort((a, b) => num(b.bggRating) - num(a.bggRating));
+      break;
+  }
+  return arr;
+}
+
 /** Does this filter set need the full-catalogue JS scan (array-contains / chat)? */
 function needsLibraryScan(f: LibraryFilters): boolean {
   return (
@@ -351,14 +440,23 @@ function needsLibraryScan(f: LibraryFilters): boolean {
  * index, so those fall back to the full-catalogue scan (offset cursor).
  */
 export const libraryGames = query({
-  args: { paginationOpts: paginationOptsValidator, ...libraryFilterArgs },
-  handler: async (ctx, { paginationOpts, ...f }) => {
+  args: {
+    paginationOpts: paginationOptsValidator,
+    sort: v.optional(v.string()),
+    ...libraryFilterArgs,
+  },
+  handler: async (ctx, { paginationOpts, sort: sortArg, ...f }) => {
+    const sort: GameSortKey = isGameSort(sortArg ?? "")
+      ? (sortArg as GameSortKey)
+      : DEFAULT_SORT;
+
     if (!needsLibraryScan(f)) {
       const trimmed = (f.term ?? "").trim();
       const searching = trimmed.length >= 2;
       const needsFilter =
         f.players != null || f.time != null || !!f.hasExpansions;
 
+      // While searching, order by text relevance; otherwise by the chosen sort.
       const base = searching
         ? ctx.db
             .query("games")
@@ -368,12 +466,7 @@ export const libraryGames = query({
                 .eq("isExpansion", false)
                 .eq("isStub", false),
             )
-        : ctx.db
-            .query("games")
-            .withIndex("by_isStub_and_isExpansion", (i) =>
-              i.eq("isStub", false).eq("isExpansion", false),
-            )
-            .order("desc");
+        : libraryBase(ctx, sort);
 
       // players / time / expansions apply during pagination, so we read only
       // enough rows to fill the page instead of the whole catalogue.
@@ -422,7 +515,7 @@ export const libraryGames = query({
     }
 
     // Scan path — genre / mechanic / chat-ready filters.
-    const filtered = await filteredLibrary(ctx, f);
+    const filtered = sortLibrary(await filteredLibrary(ctx, f), sort);
     const offset = Number(paginationOpts.cursor ?? "0") || 0;
     const end = offset + paginationOpts.numItems;
     const slice = filtered.slice(offset, end);
@@ -1004,6 +1097,7 @@ export const createGame = mutation({
         categories: args.categories,
         gameMechanics: args.gameMechanics,
       }),
+      ...sortKeys({ title, year: args.year, bgg: args.bgg }),
     });
     // Adopt any collection rows already pointing at this BGG id.
     if (args.bggId) {
@@ -1046,6 +1140,14 @@ export const updateGame = mutation({
       categories: rest.categories ?? game.categories,
       gameMechanics: rest.gameMechanics ?? game.gameMechanics,
     });
+    Object.assign(
+      patch,
+      sortKeys({
+        title: (patch.title as string | undefined) ?? game.title,
+        year: (rest.year as string | undefined) ?? game.year,
+        bgg: rest.bgg ?? game.bgg,
+      }),
+    );
     await ctx.db.patch("games", gameId, patch);
 
     // Newly-set BGG id: adopt the collection rows that were waiting for it.
@@ -1146,6 +1248,27 @@ const enrichMetaValidator = v.object({
  * already been curated — an automated import must never clobber an admin's work.
  * Always stamps `bggCheckedAt` so a failed family doesn't re-loop the sweep.
  */
+/**
+ * One-off backfill of the denormalized sort keys on games created before they
+ * existed. Batched + idempotent (only touches rows still missing sortTitle) —
+ * re-run until it reports done.
+ */
+export const backfillSortKeys = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const rows = await ctx.db
+      .query("games")
+      .filter((q) => q.eq(q.field("sortTitle"), undefined))
+      .take(400);
+    for (const g of rows) {
+      await ctx.db.patch("games", g._id, {
+        ...sortKeys({ title: g.title, year: g.year, bgg: g.bgg }),
+      });
+    }
+    return { patched: rows.length, done: rows.length < 400 };
+  },
+});
+
 export const applyStubEnrichment = internalMutation({
   args: {
     gameId: v.id("games"),
@@ -1196,6 +1319,7 @@ export const applyStubEnrichment = internalMutation({
         gameMechanics: meta.gameMechanics,
       }),
       bggCheckedAt: Date.now(),
+      ...sortKeys({ title, year: meta.year ?? game.year, bgg: bgg ?? game.bgg }),
     };
     if (bgg) patch.bgg = bgg;
     if (imageId) {
@@ -1246,6 +1370,7 @@ export const ensureStubForBgg = internalMutation({
       publishers: [],
       categories: [],
       gameMechanics: [],
+      ...sortKeys({ title }),
     });
     return { gameId, needsEnrich: true };
   },

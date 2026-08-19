@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useEffect, useRef } from "react";
+import { use, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import {
@@ -12,8 +12,10 @@ import {
 import { ChevronLeft } from "lucide-react";
 import { api } from "@/convex/_generated/api";
 import { GameCard } from "@/components/boardgames/GameCard";
+import { SortControl } from "@/components/boardgames/SortControl";
 import { buttonClasses } from "@/components/ui/Button";
 import { statusBySlug, type CollStatus } from "@/components/collection/status";
+import { DEFAULT_SORT, type GameSortKey } from "@/convex/lib/gameSort";
 
 const gridClass = "grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4";
 
@@ -69,9 +71,10 @@ function GridSkeleton() {
 }
 
 function ListBody({ status }: { status: CollStatus }) {
+  const [sort, setSort] = useState<GameSortKey>(DEFAULT_SORT);
   const { results, status: qStatus, loadMore } = usePaginatedQuery(
     api.bggSync.myCollection,
-    { filter: status.filter },
+    { filter: status.filter, sort },
     { initialNumItems: 24 },
   );
 
@@ -89,28 +92,34 @@ function ListBody({ status }: { status: CollStatus }) {
     return () => io.disconnect();
   }, [qStatus, loadMore]);
 
-  if (qStatus === "LoadingFirstPage") return <GridSkeleton />;
-
-  if (results.length === 0) {
-    return (
+  const content =
+    qStatus === "LoadingFirstPage" ? (
+      <GridSkeleton />
+    ) : results.length === 0 ? (
       <div className="rounded-2xl border border-dashed border-border p-10 text-center text-muted">
         <p className="font-medium">Nothing here yet.</p>
         <p className="mt-1 text-sm">{status.empty}</p>
       </div>
+    ) : (
+      <>
+        <div className={gridClass}>
+          {results.map((game, i) => (
+            <GameCard key={game._id} game={game} index={i} />
+          ))}
+        </div>
+        <div ref={sentinelRef} aria-hidden className="h-px" />
+        {qStatus === "LoadingMore" && (
+          <p className="mt-8 text-center text-sm text-muted">Loading…</p>
+        )}
+      </>
     );
-  }
 
   return (
     <>
-      <div className={gridClass}>
-        {results.map((game, i) => (
-          <GameCard key={game._id} game={game} index={i} />
-        ))}
+      <div className="mb-4 flex justify-end">
+        <SortControl value={sort} onChange={setSort} className="w-40" />
       </div>
-      <div ref={sentinelRef} aria-hidden className="h-px" />
-      {qStatus === "LoadingMore" && (
-        <p className="mt-8 text-center text-sm text-muted">Loading…</p>
-      )}
+      {content}
     </>
   );
 }

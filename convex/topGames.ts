@@ -9,6 +9,7 @@ import {
 import type { Doc, Id } from "./_generated/dataModel";
 import { getCurrentUser, requireUser } from "./lib/auth";
 import { DEFAULT_CATEGORY, isTopCategory } from "./lib/topGamesCategories";
+import { isGameSort } from "./lib/gameSort";
 
 /**
  * Top Games — a user's ranked "Top N" list for a given year, with year-over-year
@@ -643,13 +644,75 @@ export const publicCollectionPage = query({
     username: v.string(),
     list: collectionListValidator,
     paginationOpts: paginationOptsValidator,
+    sort: v.optional(v.string()),
   },
-  handler: async (ctx, { username, list, paginationOpts }) => {
+  handler: async (ctx, { username, list, paginationOpts, sort }) => {
     const empty = { page: [], isDone: true, continueCursor: "" };
     const user = await userByUsername(ctx, username);
     if (!user || !isShared(user.publicProfile ?? {}, list)) return empty;
 
     const field = collectionField(list);
+    const thumbItem = async (
+      r: Doc<"bggCollection">,
+      g: Doc<"games"> | null,
+    ) => {
+      const thumbUrl = g?.thumbnailId
+        ? await ctx.storage.getUrl(g.thumbnailId)
+        : g?.imageId
+          ? await ctx.storage.getUrl(g.imageId)
+          : (r.thumbnailUrl ?? null);
+      return {
+        _id: r._id,
+        gameId: r.gameId ?? null,
+        title: g?.title ?? r.title,
+        slug: g?.slug ?? null,
+        thumbUrl,
+      };
+    };
+
+    // Sorted path (game-field sorts): bounded load + join + sort + offset page.
+    const sortKey = sort && isGameSort(sort) && sort !== "title" ? sort : null;
+    if (sortKey) {
+      const rows = await ctx.db
+        .query("bggCollection")
+        .withIndex("by_user_and_sort_title", (q) => q.eq("userId", user._id))
+        .filter((q) => q.eq(q.field(field), true))
+        .take(2000); // the collection's practical cap
+      const paired = await Promise.all(
+        rows.map(async (r) => ({
+          r,
+          g: r.gameId ? await ctx.db.get("games", r.gameId) : null,
+        })),
+      );
+      const num = (v?: number) => v ?? -Infinity;
+      paired.sort((a, b) => {
+        switch (sortKey) {
+          case "year":
+            return num(b.g?.yearNum) - num(a.g?.yearNum);
+          case "weight":
+            return num(b.g?.bggWeight) - num(a.g?.bggWeight);
+          case "rated":
+            return num(b.g?.bggRatingCount) - num(a.g?.bggRatingCount);
+          case "newest":
+            return (
+              (b.g?._creationTime ?? b.r._creationTime) -
+              (a.g?._creationTime ?? a.r._creationTime)
+            );
+          case "rating":
+          default:
+            return num(b.g?.bggRating) - num(a.g?.bggRating);
+        }
+      });
+      const offset = Number(paginationOpts.cursor ?? "0") || 0;
+      const end = offset + paginationOpts.numItems;
+      const slice = paired.slice(offset, end);
+      return {
+        page: await Promise.all(slice.map(({ r, g }) => thumbItem(r, g))),
+        isDone: end >= paired.length,
+        continueCursor: String(end),
+      };
+    }
+
     const result = await ctx.db
       .query("bggCollection")
       .withIndex("by_user_and_sort_title", (q) => q.eq("userId", user._id))
@@ -661,18 +724,7 @@ export const publicCollectionPage = query({
       page: await Promise.all(
         result.page.map(async (r) => {
           const g = r.gameId ? await ctx.db.get("games", r.gameId) : null;
-          const thumbUrl = g?.thumbnailId
-            ? await ctx.storage.getUrl(g.thumbnailId)
-            : g?.imageId
-              ? await ctx.storage.getUrl(g.imageId)
-              : null;
-          return {
-            _id: r._id,
-            gameId: r.gameId ?? null,
-            title: g?.title ?? r.title,
-            slug: g?.slug ?? null,
-            thumbUrl,
-          };
+          return await thumbItem(r, g);
         }),
       ),
     };

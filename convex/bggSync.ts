@@ -9,8 +9,8 @@ import {
   mutation,
   query,
 } from "./_generated/server";
-import type { ActionCtx, MutationCtx } from "./_generated/server";
-import type { Id } from "./_generated/dataModel";
+import type { ActionCtx, MutationCtx, QueryCtx } from "./_generated/server";
+import type { Id, Doc } from "./_generated/dataModel";
 import { internal } from "./_generated/api";
 import { getCurrentUser, requireUser } from "./lib/auth";
 import {
@@ -24,6 +24,7 @@ import { seal } from "./lib/bggCrypto";
 import { parseCollectionXml, type BggCollectionItem } from "./lib/bggXml";
 import { bggCollectionItemValidator } from "./lib/bggSyncTypes";
 import { slugifyUnique } from "./lib/slug";
+import { sortKeys, isGameSort, type GameSortKey } from "./lib/gameSort";
 
 /**
  * BoardGameGeek account linking + collection sync.
@@ -298,6 +299,57 @@ export const myCollectionCounts = query({
   },
 });
 
+/** How many collection rows the sorted path considers (bounded, surfaced). */
+const COLLECTION_SORT_CAP = 1500;
+
+/** A library-style card for a collection row + its linked game. */
+async function collectionCard(
+  ctx: QueryCtx,
+  row: Doc<"bggCollection">,
+  game: Doc<"games">,
+) {
+  const [imageUrl, storedThumb] = await Promise.all([
+    game.imageId ? ctx.storage.getUrl(game.imageId) : Promise.resolve(null),
+    game.thumbnailId
+      ? ctx.storage.getUrl(game.thumbnailId)
+      : Promise.resolve(null),
+  ]);
+  // Fall back to the BGG thumbnail on the row when there's no stored cover.
+  return {
+    ...game,
+    imageUrl,
+    thumbnailUrl: storedThumb ?? row.thumbnailUrl ?? null,
+  };
+}
+
+/** Sort (row, game) pairs by a chosen game-field sort. */
+function sortCollection<T extends { game: Doc<"games"> }>(
+  pairs: T[],
+  sort: GameSortKey,
+): T[] {
+  const num = (v?: number) => v ?? -Infinity;
+  const arr = [...pairs];
+  switch (sort) {
+    case "year":
+      arr.sort((a, b) => num(b.game.yearNum) - num(a.game.yearNum));
+      break;
+    case "weight":
+      arr.sort((a, b) => num(b.game.bggWeight) - num(a.game.bggWeight));
+      break;
+    case "rated":
+      arr.sort((a, b) => num(b.game.bggRatingCount) - num(a.game.bggRatingCount));
+      break;
+    case "newest":
+      arr.sort((a, b) => b.game._creationTime - a.game._creationTime);
+      break;
+    case "rating":
+    default:
+      arr.sort((a, b) => num(b.game.bggRating) - num(a.game.bggRating));
+      break;
+  }
+  return arr;
+}
+
 export const myCollection = query({
   args: {
     paginationOpts: paginationOptsValidator,
@@ -311,8 +363,9 @@ export const myCollection = query({
         v.literal("prevOwned"),
       ),
     ),
+    sort: v.optional(v.string()),
   },
-  handler: async (ctx, { paginationOpts, filter }) => {
+  handler: async (ctx, { paginationOpts, filter, sort }) => {
     const user = await getCurrentUser(ctx);
     if (!user) {
       return { page: [], isDone: true, continueCursor: "" };
@@ -325,27 +378,69 @@ export const myCollection = query({
       prevOwned: "prevOwned",
     } as const;
 
-    let q = ctx.db
-      .query("bggCollection")
-      .withIndex("by_user_and_sort_title", (qq) => qq.eq("userId", user._id));
-    // `.filter` doesn't reduce rows read, but a single user's collection is
-    // bounded at a couple of thousand rows, so the scan stays cheap.
-    if (filter && filter !== "all") {
-      const field = FIELD[filter];
-      q = q.filter((qq) => qq.eq(qq.field(field), true));
-    } else {
-      // `all` = in at least one of the four lists.
-      q = q.filter((qq) =>
-        qq.or(
-          qq.eq(qq.field("own"), true),
-          qq.eq(qq.field("wishlist"), true),
-          qq.eq(qq.field("forTrade"), true),
-          qq.eq(qq.field("prevOwned"), true),
-        ),
+    // `all` = in at least one of the four lists; otherwise the one chosen list.
+    // Inlined at each call site so Convex infers the filter-builder type.
+    // Sorted path: any game-field sort. `title` stays on the cheap cursor path
+    // below (the index is already alphabetical). Load a bounded window of rows,
+    // join their games (which carry the denormalized sort keys), sort, and
+    // offset-paginate — the collection is bounded at a couple of thousand rows.
+    const sortKey =
+      sort && isGameSort(sort) && sort !== "title" ? sort : null;
+    if (sortKey) {
+      const rows = await ctx.db
+        .query("bggCollection")
+        .withIndex("by_user_and_sort_title", (qq) => qq.eq("userId", user._id))
+        .filter((qq) =>
+          filter && filter !== "all"
+            ? qq.eq(qq.field(FIELD[filter]), true)
+            : qq.or(
+                qq.eq(qq.field("own"), true),
+                qq.eq(qq.field("wishlist"), true),
+                qq.eq(qq.field("forTrade"), true),
+                qq.eq(qq.field("prevOwned"), true),
+              ),
+        )
+        .take(COLLECTION_SORT_CAP);
+      const paired = (
+        await Promise.all(
+          rows.map(async (row) => {
+            const game = row.gameId
+              ? await ctx.db.get("games", row.gameId)
+              : null;
+            return game ? { row, game } : null;
+          }),
+        )
+      ).flatMap((p) => (p ? [p] : []));
+      const sorted = sortCollection(paired, sortKey);
+      const offset = Number(paginationOpts.cursor ?? "0") || 0;
+      const end = offset + paginationOpts.numItems;
+      const slice = sorted.slice(offset, end);
+      const page = await Promise.all(
+        slice.map(({ row, game }) => collectionCard(ctx, row, game)),
       );
+      return {
+        page,
+        isDone: end >= sorted.length,
+        continueCursor: String(end),
+      };
     }
 
-    const result = await q.paginate(paginationOpts);
+    // `.filter` doesn't reduce rows read, but a single user's collection is
+    // bounded at a couple of thousand rows, so the scan stays cheap.
+    const result = await ctx.db
+      .query("bggCollection")
+      .withIndex("by_user_and_sort_title", (qq) => qq.eq("userId", user._id))
+      .filter((qq) =>
+        filter && filter !== "all"
+          ? qq.eq(qq.field(FIELD[filter]), true)
+          : qq.or(
+              qq.eq(qq.field("own"), true),
+              qq.eq(qq.field("wishlist"), true),
+              qq.eq(qq.field("forTrade"), true),
+              qq.eq(qq.field("prevOwned"), true),
+            ),
+      )
+      .paginate(paginationOpts);
     // The collection renders library-style GameCards, so return the linked game
     // + media. Rows whose game was deleted are dropped (nothing to card).
     const page = (
@@ -354,20 +449,7 @@ export const myCollection = query({
           if (!row.gameId) return null;
           const game = await ctx.db.get("games", row.gameId);
           if (!game) return null;
-          const [imageUrl, storedThumb] = await Promise.all([
-            game.imageId
-              ? ctx.storage.getUrl(game.imageId)
-              : Promise.resolve(null),
-            game.thumbnailId
-              ? ctx.storage.getUrl(game.thumbnailId)
-              : Promise.resolve(null),
-          ]);
-          // Fall back to the BGG thumbnail on the row when there's no stored cover.
-          return {
-            ...game,
-            imageUrl,
-            thumbnailUrl: storedThumb ?? row.thumbnailUrl ?? null,
-          };
+          return await collectionCard(ctx, row, game);
         }),
       )
     ).flatMap((g) => (g ? [g] : []));
@@ -608,6 +690,7 @@ async function linkOrCreateGame(
     publishers: [],
     categories: [],
     gameMechanics: [],
+    ...sortKeys({ title: item.title, year: item.year }),
     // searchText deliberately left unset: a stub has nothing worth matching,
     // and this keeps it out of full-text search even before the isStub filter.
   });

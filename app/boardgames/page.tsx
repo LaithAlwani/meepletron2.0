@@ -11,18 +11,21 @@ import { CardRail } from "@/components/boardgames/CardRail";
 import { useBggSearch } from "@/components/boardgames/useBggSearch";
 import { FilterDrawer } from "@/components/boardgames/FilterDrawer";
 import { useLibraryFilters } from "@/components/boardgames/useLibraryFilters";
+import { SortControl } from "@/components/boardgames/SortControl";
 import { CollectionSection } from "@/components/collection/CollectionSection";
 
 const cellClass = "w-40 shrink-0 snap-start sm:w-44";
 
 export default function BoardgamesPage() {
-  const { term, setTerm, debounced, searching, filters, setFilters, clear, args, activeCount } =
+  const { term, setTerm, debounced, searching, filters, setFilters, sort, setSort, clear, args, activeCount } =
     useLibraryFilters();
   const [drawerOpen, setDrawerOpen] = useState(false);
 
-  const { results, status } = usePaginatedQuery(api.games.libraryGames, args, {
-    initialNumItems: 20,
-  });
+  const { results, status } = usePaginatedQuery(
+    api.games.libraryGames,
+    { ...args, sort },
+    { initialNumItems: 20 },
+  );
   // Skip the exact count while searching — it's a full-catalogue scan, and the
   // search path already shows a live result count.
   const total = useQuery(api.games.libraryCount, searching ? "skip" : args);
@@ -59,8 +62,9 @@ export default function BoardgamesPage() {
           </h1>
         </div>
 
-        <div className="mt-4 flex items-center gap-2 sm:mt-0 sm:shrink-0">
-          <div className="relative flex-1 sm:w-64">
+        {/* Mobile: search on its own row, sort + filter below. Desktop: inline. */}
+        <div className="mt-4 flex flex-col gap-2 sm:mt-0 sm:flex-row sm:items-center sm:shrink-0">
+          <div className="relative w-full sm:w-64">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-subtle" />
             <input
               type="search"
@@ -70,19 +74,28 @@ export default function BoardgamesPage() {
               className="w-full rounded-xl border border-border bg-surface py-2.5 pl-10 pr-3 text-sm outline-none transition-shadow focus:border-accent/50 focus:ring-2 focus:ring-ring/40"
             />
           </div>
-          <button
-            onClick={() => setDrawerOpen(true)}
-            aria-label="Filters"
-            title="Filters"
-            className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-border bg-surface text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
-          >
-            <SlidersHorizontal className="h-4.5 w-4.5" />
-            {activeCount > 0 && (
-              <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-accent px-1 text-[11px] font-bold text-accent-foreground">
-                {activeCount}
-              </span>
+          <div className="flex items-center justify-end gap-2">
+            {!searching && (
+              <SortControl
+                value={sort}
+                onChange={setSort}
+                className="flex-1 sm:w-40 sm:flex-none"
+              />
             )}
-          </button>
+            <button
+              onClick={() => setDrawerOpen(true)}
+              aria-label="Filters"
+              title="Filters"
+              className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-border bg-surface text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
+            >
+              <SlidersHorizontal className="h-4.5 w-4.5" />
+              {activeCount > 0 && (
+                <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-accent px-1 text-[11px] font-bold text-accent-foreground">
+                  {activeCount}
+                </span>
+              )}
+            </button>
+          </div>
         </div>
       </div>
 

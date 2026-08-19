@@ -41,6 +41,7 @@ export const TOP_CATEGORIES: readonly TopCategory[] = [
   { key: "dexterity", label: "Dexterity", hint: "Flick, stack, balance" },
   { key: "roll-and-write", label: "Roll & write", hint: "Roll dice, fill your sheet" },
   { key: "horror", label: "Horror", hint: "Spooky & tense" },
+  { key: "expansions", label: "Best expansions", hint: "Add-ons & expansions" },
   // Opinion cuts
   { key: "underrated", label: "Underrated gems", hint: "Deserve more love" },
   { key: "worst", label: "Worst games", hint: "Your hall of shame" },
