@@ -3,7 +3,7 @@
 import { use, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useQuery, useMutation } from "convex/react";
+import { useQuery, useMutation, useConvexAuth } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import {
   ArrowLeft,
@@ -16,6 +16,8 @@ import {
   Clock,
   MapPin,
   Users,
+  Heart,
+  MessageCircle,
 } from "lucide-react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
@@ -29,6 +31,7 @@ import {
   LogPlayWizard,
   type WizardInitialPlay,
 } from "@/components/plays/LogPlayWizard";
+import { CommentsDrawer } from "@/components/plays/CommentsDrawer";
 import { FORMAT_LABEL, playDate } from "@/components/plays/PlayCard";
 import { formatPlayTime } from "@/lib/format";
 import { cn } from "@/lib/cn";
@@ -45,8 +48,11 @@ export default function PlayPage({
   const confirm = useConfirm();
   const setVisibility = useMutation(api.plays.setPlayVisibility);
   const remove = useMutation(api.plays.deletePlay);
+  const toggleReaction = useMutation(api.plays.toggleReaction);
+  const { isAuthenticated } = useConvexAuth();
   const [rematch, setRematch] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [commentsOpen, setCommentsOpen] = useState(false);
 
   if (play === undefined) {
     return (
@@ -123,6 +129,11 @@ export default function PlayPage({
             <span className="rounded-full bg-surface-2 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-muted">
               {FORMAT_LABEL[play.format] ?? play.format}
             </span>
+            {play.source === "bgg" && (
+              <span className="rounded-full bg-accent-2/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-accent-2">
+                BGG
+              </span>
+            )}
             {!isPublic && (
               <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-subtle">
                 <Lock className="h-3 w-3" />
@@ -222,6 +233,57 @@ export default function PlayPage({
         )}
       </div>
 
+      {/* Likes + comments (public plays only) */}
+      {isPublic && (
+        <div className="mt-4 flex items-center gap-1 border-y border-border-muted py-1">
+          <button
+            onClick={() => {
+              if (!isAuthenticated) {
+                toast("Sign in to like plays.", "info", {
+                  label: "Sign in",
+                  href: "/auth",
+                });
+                return;
+              }
+              void toggleReaction({ playId: play._id });
+            }}
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-semibold transition-colors",
+              play.myReaction
+                ? "text-red-500"
+                : "text-muted hover:bg-surface-2 hover:text-foreground",
+            )}
+          >
+            <Heart className={cn("h-4 w-4", play.myReaction && "fill-current")} />
+            {play.reactionCount ? play.reactionCount : "Like"}
+          </button>
+          <button
+            onClick={() => setCommentsOpen(true)}
+            className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-semibold text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
+          >
+            <MessageCircle className="h-4 w-4" />
+            {play.commentCount ? play.commentCount : "Comment"}
+          </button>
+        </div>
+      )}
+
+      {/* Imported-from-BGG review nudge (format was inferred). */}
+      {play.isOwner && play.source === "bgg" && play.needsReview && (
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-accent-2/30 bg-accent-2/10 px-4 py-3">
+          <p className="text-sm text-foreground">
+            Imported from BoardGameGeek — we guessed the scoring. Check the format
+            and winner.
+          </p>
+          <button
+            onClick={() => setEditing(true)}
+            className={buttonClasses("secondary", "sm")}
+          >
+            <Pencil className="h-4 w-4" />
+            Review
+          </button>
+        </div>
+      )}
+
       {/* Coop outcome */}
       {play.format === "cooperative" && play.coopOutcome && (
         <div
@@ -233,6 +295,9 @@ export default function PlayPage({
           )}
         >
           {play.coopOutcome === "win" ? "🏆 The table won" : "The table lost"}
+          {play.coopScore != null && (
+            <span className="ml-2 tabular-nums">· {play.coopScore} pts</span>
+          )}
         </div>
       )}
 
@@ -325,6 +390,14 @@ export default function PlayPage({
         </p>
       )}
 
+      {isPublic && (
+        <CommentsDrawer
+          open={commentsOpen}
+          onClose={() => setCommentsOpen(false)}
+          playId={play._id}
+        />
+      )}
+
       {play.isOwner && (editing || rematch) && (
         <LogPlayWizard
           open
@@ -374,6 +447,7 @@ function buildInitialPlay(play: PlayDetail, edit: boolean): WizardInitialPlay {
     ...base,
     playId: play._id,
     coopOutcome: play.coopOutcome as WizardInitialPlay["coopOutcome"],
+    coopScore: play.coopScore ?? null,
     teamWinner,
     date: play.date,
     lengthMinutes: play.lengthMinutes ?? null,

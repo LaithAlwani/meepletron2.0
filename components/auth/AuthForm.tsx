@@ -56,9 +56,12 @@ export function AuthForm() {
     setError(null);
     try {
       if (provider === "google") await stashGuestUpgrade();
-      await signIn(provider);
+      // Google redirects away and back — tell it to land on the library, not "/".
+      await signIn(
+        provider,
+        provider === "google" ? { redirectTo: "/boardgames" } : undefined,
+      );
       if (provider === "anonymous") router.push("/boardgames");
-      // Google redirects away and back; no local push needed.
     } catch {
       setError("Sign-in failed. Please try again.");
       setSubmitting(false);

@@ -52,6 +52,7 @@ export type WizardInitialPlay = {
   format: PlayFormat;
   scoreMode?: ScoreMode;
   coopOutcome?: "win" | "loss";
+  coopScore?: number | null;
   teamNames?: string[];
   teamWinner?: number;
   date?: string;
@@ -180,6 +181,9 @@ export function LogPlayWizard({
   const [coopOutcome, setCoopOutcome] = useState<"win" | "loss">(
     ip?.coopOutcome ?? "win",
   );
+  const [coopScore, setCoopScore] = useState<string>(
+    isEdit && ip?.coopScore != null ? String(ip.coopScore) : "",
+  );
   const [teamCount, setTeamCount] = useState(
     Math.min(4, Math.max(2, initTeamNames.length)),
   );
@@ -239,6 +243,7 @@ export function LogPlayWizard({
     setFormat(ip?.format ?? "competitive");
     setScoreMode(ip?.scoreMode ?? "highest");
     setCoopOutcome(ip?.coopOutcome ?? "win");
+    setCoopScore(isEdit && ip?.coopScore != null ? String(ip.coopScore) : "");
     setTeamCount(Math.min(4, Math.max(2, initTeamNames.length)));
     setTeamNames(initTeamNames);
     setTeamWinner(ip?.teamWinner ?? 0);
@@ -306,6 +311,8 @@ export function LogPlayWizard({
         format,
         scoreMode: format === "competitive" ? scoreMode : undefined,
         coopOutcome: format === "cooperative" ? coopOutcome : undefined,
+        coopScore:
+          format === "cooperative" && coopScore ? Number(coopScore) : undefined,
         teams,
         players: players.map((p) => ({
           name: p.name.trim() || "Player",
@@ -435,6 +442,8 @@ export function LogPlayWizard({
               scoreMode={scoreMode}
               coopOutcome={coopOutcome}
               setCoopOutcome={setCoopOutcome}
+              coopScore={coopScore}
+              setCoopScore={setCoopScore}
               players={players}
               setPlayers={setPlayers}
               isTeams={isTeams}
@@ -940,6 +949,8 @@ function ScoresStep(props: {
   scoreMode: ScoreMode;
   coopOutcome: "win" | "loss";
   setCoopOutcome: (v: "win" | "loss") => void;
+  coopScore: string;
+  setCoopScore: (v: string) => void;
   players: PlayerForm[];
   setPlayers: React.Dispatch<React.SetStateAction<PlayerForm[]>>;
   isTeams: boolean;
@@ -955,25 +966,37 @@ function ScoresStep(props: {
 
   if (props.format === "cooperative") {
     return (
-      <div className="space-y-3">
-        <label className={LABEL}>Did the table win?</label>
-        <div className="flex gap-2">
-          {(["win", "loss"] as const).map((o) => (
-            <button
-              key={o}
-              onClick={() => props.setCoopOutcome(o)}
-              className={cn(
-                "flex-1 rounded-xl border px-3 py-3 text-sm font-bold transition-all",
-                props.coopOutcome === o
-                  ? o === "win"
-                    ? "border-accent bg-accent/10 text-accent"
-                    : "border-red-300 bg-red-50 text-red-600 dark:border-red-500/40 dark:bg-red-500/10 dark:text-red-400"
-                  : "border-border bg-surface text-muted hover:bg-surface-2",
-              )}
-            >
-              {o === "win" ? "🏆 We won" : "We lost"}
-            </button>
-          ))}
+      <div className="space-y-4">
+        <div>
+          <label className={LABEL}>Did the table win?</label>
+          <div className="flex gap-2">
+            {(["win", "loss"] as const).map((o) => (
+              <button
+                key={o}
+                onClick={() => props.setCoopOutcome(o)}
+                className={cn(
+                  "flex-1 rounded-xl border px-3 py-3 text-sm font-bold transition-all",
+                  props.coopOutcome === o
+                    ? o === "win"
+                      ? "border-accent bg-accent/10 text-accent"
+                      : "border-red-300 bg-red-50 text-red-600 dark:border-red-500/40 dark:bg-red-500/10 dark:text-red-400"
+                    : "border-border bg-surface text-muted hover:bg-surface-2",
+                )}
+              >
+                {o === "win" ? "🏆 We won" : "We lost"}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div>
+          <label className={LABEL}>Score (optional)</label>
+          <input
+            type="number"
+            value={props.coopScore}
+            onChange={(e) => props.setCoopScore(e.target.value)}
+            placeholder="e.g. 87 — beat your best"
+            className={fieldCls}
+          />
         </div>
       </div>
     );

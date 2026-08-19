@@ -59,19 +59,26 @@ async function gameCover(ctx: QueryCtx, gameId?: Id<"games">) {
 }
 
 /**
- * Swap a player's stored name for their current `@username` when they're a linked
- * member (falls back to the stored name for people/guests). So a play always
- * shows the member's handle, not a stale display name.
+ * Resolve each player for display: swap a linked member's stored name for their
+ * current `@username`, and attach their avatar URL (null for people/guests). So a
+ * play always shows the member's up-to-date handle + avatar, never a stale one.
  */
 async function withHandles<T extends { name: string; userId?: Id<"users"> }>(
   ctx: QueryCtx,
   players: T[],
-): Promise<T[]> {
+): Promise<(T & { avatarUrl: string | null })[]> {
   return await Promise.all(
     players.map(async (p) => {
-      if (!p.userId) return p;
+      if (!p.userId) return { ...p, avatarUrl: null };
       const u = await ctx.db.get("users", p.userId);
-      return u?.username ? { ...p, name: `@${u.username}` } : p;
+      const avatarUrl = u?.avatarStorageId
+        ? await ctx.storage.getUrl(u.avatarStorageId)
+        : (u?.image ?? null);
+      return {
+        ...p,
+        name: u?.username ? `@${u.username}` : p.name,
+        avatarUrl,
+      };
     }),
   );
 }
@@ -107,6 +114,7 @@ async function playCard(ctx: QueryCtx, play: PlayDoc) {
     playerCount: play.players.length,
     players: resolved.map((p) => ({
       name: p.name,
+      avatarUrl: p.avatarUrl,
       isWinner: !!p.isWinner,
       score: p.score ?? null,
       placement: p.placement ?? null,
@@ -201,6 +209,7 @@ const playBodyValidator = {
   format: playFormatValidator,
   scoreMode: v.optional(playScoreModeValidator),
   coopOutcome: v.optional(coopOutcomeValidator),
+  coopScore: v.optional(v.number()),
   teams: v.optional(v.array(playTeamValidator)),
   players: v.array(playerInputValidator),
   photoIds: v.optional(v.array(v.id("_storage"))),
@@ -372,6 +381,7 @@ export const logPlay = mutation({
       format: args.format,
       scoreMode: args.scoreMode,
       coopOutcome: args.coopOutcome,
+      coopScore: args.format === "cooperative" ? args.coopScore : undefined,
       teams: derived.teams,
       players: derived.players,
       photoIds,
@@ -428,10 +438,13 @@ export const updatePlay = mutation({
       format: args.format,
       scoreMode: args.scoreMode,
       coopOutcome: args.coopOutcome,
+      coopScore: args.format === "cooperative" ? args.coopScore : undefined,
       teams: derived.teams,
       players: derived.players,
       photoIds,
       visibility: args.visibility,
+      // Editing confirms an imported play's guessed format.
+      needsReview: false,
       updatedAt: Date.now(),
     });
 
@@ -452,6 +465,7 @@ export const deletePlay = mutation({
     if (!play || play.userId !== user._id) return;
     for (const id of play.photoIds ?? []) await ctx.storage.delete(id);
     await clearParticipants(ctx, playId);
+    await clearPlaySocial(ctx, playId);
     await ctx.db.delete("plays", playId);
   },
 });
@@ -611,6 +625,14 @@ export const getPlay = query({
     );
     const owner = await ctx.db.get("users", play.userId);
     const players = await withHandles(ctx, play.players);
+    const myReaction =
+      viewer != null &&
+      (await ctx.db
+        .query("playReactions")
+        .withIndex("by_user_and_play", (q) =>
+          q.eq("userId", viewer._id).eq("playId", playId),
+        )
+        .unique()) != null;
     return {
       ...play,
       players,
@@ -621,6 +643,7 @@ export const getPlay = query({
       winners: winnerNamesOf(players),
       ownerName: owner?.name ?? owner?.username ?? null,
       ownerUsername: owner?.username ?? null,
+      myReaction,
     };
   },
 });
@@ -779,6 +802,286 @@ export const myPlayStats = query({
 });
 
 /* -------------------------------------------------------------------------- */
+/* Community feed + reactions + comments                                      */
+/* -------------------------------------------------------------------------- */
+
+/** Public author info for a feed item / comment. */
+async function playOwner(ctx: QueryCtx, userId: Id<"users">) {
+  const u = await ctx.db.get("users", userId);
+  const avatarUrl = u?.avatarStorageId
+    ? await ctx.storage.getUrl(u.avatarStorageId)
+    : (u?.image ?? null);
+  return {
+    name: u?.name ?? u?.username ?? "Player",
+    username: u?.username ?? null,
+    avatarUrl,
+  };
+}
+
+/** Delete a play's likes + comments (on play delete / user purge). */
+async function clearPlaySocial(ctx: MutationCtx, playId: Id<"plays">) {
+  const reactions = await ctx.db
+    .query("playReactions")
+    .withIndex("by_play", (q) => q.eq("playId", playId))
+    .collect();
+  for (const r of reactions) await ctx.db.delete("playReactions", r._id);
+  const comments = await ctx.db
+    .query("playComments")
+    .withIndex("by_play_and_created", (q) => q.eq("playId", playId))
+    .collect();
+  for (const c of comments) {
+    const likes = await ctx.db
+      .query("commentReactions")
+      .withIndex("by_comment", (q) => q.eq("commentId", c._id))
+      .collect();
+    for (const l of likes) await ctx.db.delete("commentReactions", l._id);
+    await ctx.db.delete("playComments", c._id);
+  }
+}
+
+/** The public plays feed — everyone's public plays, newest first. */
+export const communityPlays = query({
+  args: { paginationOpts: paginationOptsValidator },
+  handler: async (ctx, { paginationOpts }) => {
+    const viewer = await getCurrentUser(ctx);
+    const result = await ctx.db
+      .query("plays")
+      .withIndex("by_visibility_and_date", (q) => q.eq("visibility", "public"))
+      .order("desc")
+      .paginate(paginationOpts);
+    const page = await Promise.all(
+      result.page.map(async (p) => {
+        const card = await playCard(ctx, p);
+        const owner = await playOwner(ctx, p.userId);
+        const photoUrls = (
+          await Promise.all(
+            (p.photoIds ?? []).map((id) => ctx.storage.getUrl(id)),
+          )
+        ).filter((u): u is string => !!u);
+        const myReaction =
+          viewer != null &&
+          (await ctx.db
+            .query("playReactions")
+            .withIndex("by_user_and_play", (q) =>
+              q.eq("userId", viewer._id).eq("playId", p._id),
+            )
+            .unique()) != null;
+        return { ...card, owner, photoUrls, myReaction };
+      }),
+    );
+    return { ...result, page };
+  },
+});
+
+/** Toggle the caller's like on a play. Returns the new state. */
+export const toggleReaction = mutation({
+  args: { playId: v.id("plays") },
+  handler: async (ctx, { playId }) => {
+    const user = await requireUser(ctx);
+    const play = await ctx.db.get("plays", playId);
+    if (!play) throw new Error("Play not found");
+    const existing = await ctx.db
+      .query("playReactions")
+      .withIndex("by_user_and_play", (q) =>
+        q.eq("userId", user._id).eq("playId", playId),
+      )
+      .unique();
+    if (existing) {
+      await ctx.db.delete("playReactions", existing._id);
+      await ctx.db.patch("plays", playId, {
+        reactionCount: Math.max(0, (play.reactionCount ?? 0) - 1),
+      });
+      return { reacted: false };
+    }
+    await ctx.db.insert("playReactions", {
+      playId,
+      userId: user._id,
+      createdAt: Date.now(),
+    });
+    await ctx.db.patch("plays", playId, {
+      reactionCount: (play.reactionCount ?? 0) + 1,
+    });
+    return { reacted: true };
+  },
+});
+
+export const addComment = mutation({
+  args: { playId: v.id("plays"), text: v.string() },
+  handler: async (ctx, { playId, text }) => {
+    const user = await requireUser(ctx);
+    const body = text.trim().slice(0, 2000);
+    if (!body) return;
+    const play = await ctx.db.get("plays", playId);
+    if (!play) throw new Error("Play not found");
+    if (play.visibility !== "public" && play.userId !== user._id) {
+      throw new Error("You can't comment on a private play.");
+    }
+    await ctx.db.insert("playComments", {
+      playId,
+      userId: user._id,
+      text: body,
+      createdAt: Date.now(),
+    });
+    await ctx.db.patch("plays", playId, {
+      commentCount: (play.commentCount ?? 0) + 1,
+    });
+  },
+});
+
+export const editComment = mutation({
+  args: { commentId: v.id("playComments"), text: v.string() },
+  handler: async (ctx, { commentId, text }) => {
+    const user = await requireUser(ctx);
+    const c = await ctx.db.get("playComments", commentId);
+    if (!c || c.userId !== user._id) throw new Error("Comment not found");
+    const body = text.trim().slice(0, 2000);
+    if (!body) return;
+    await ctx.db.patch("playComments", commentId, {
+      text: body,
+      editedAt: Date.now(),
+    });
+  },
+});
+
+export const deleteComment = mutation({
+  args: { commentId: v.id("playComments") },
+  handler: async (ctx, { commentId }) => {
+    const user = await requireUser(ctx);
+    const c = await ctx.db.get("playComments", commentId);
+    if (!c) return;
+    const play = await ctx.db.get("plays", c.playId);
+    // The comment's author, or the play's owner, may delete it.
+    if (c.userId !== user._id && play?.userId !== user._id) return;
+    const likes = await ctx.db
+      .query("commentReactions")
+      .withIndex("by_comment", (q) => q.eq("commentId", commentId))
+      .collect();
+    for (const l of likes) await ctx.db.delete("commentReactions", l._id);
+    await ctx.db.delete("playComments", commentId);
+    if (play) {
+      await ctx.db.patch("plays", c.playId, {
+        commentCount: Math.max(0, (play.commentCount ?? 0) - 1),
+      });
+    }
+  },
+});
+
+export const listComments = query({
+  args: { playId: v.id("plays"), paginationOpts: paginationOptsValidator },
+  handler: async (ctx, { playId, paginationOpts }) => {
+    const viewer = await getCurrentUser(ctx);
+    const play = await ctx.db.get("plays", playId);
+    const empty = { page: [], isDone: true, continueCursor: "" };
+    if (!play) return empty;
+    const isOwner = viewer != null && viewer._id === play.userId;
+    if (play.visibility !== "public" && !isOwner) return empty;
+
+    const result = await ctx.db
+      .query("playComments")
+      .withIndex("by_play_and_created", (q) => q.eq("playId", playId))
+      .order("desc")
+      .paginate(paginationOpts);
+    return {
+      ...result,
+      page: await Promise.all(
+        result.page.map(async (c) => ({
+          _id: c._id,
+          text: c.text,
+          createdAt: c.createdAt,
+          editedAt: c.editedAt ?? null,
+          author: await playOwner(ctx, c.userId),
+          canEdit: viewer != null && viewer._id === c.userId,
+          likeCount: c.likeCount ?? 0,
+          myLike:
+            viewer != null &&
+            (await ctx.db
+              .query("commentReactions")
+              .withIndex("by_user_and_comment", (q) =>
+                q.eq("userId", viewer._id).eq("commentId", c._id),
+              )
+              .unique()) != null,
+          canDelete:
+            viewer != null &&
+            (viewer._id === c.userId || viewer._id === play.userId),
+        })),
+      ),
+    };
+  },
+});
+
+/** Toggle the caller's like on a comment. */
+export const toggleCommentReaction = mutation({
+  args: { commentId: v.id("playComments") },
+  handler: async (ctx, { commentId }) => {
+    const user = await requireUser(ctx);
+    const c = await ctx.db.get("playComments", commentId);
+    if (!c) throw new Error("Comment not found");
+    const existing = await ctx.db
+      .query("commentReactions")
+      .withIndex("by_user_and_comment", (q) =>
+        q.eq("userId", user._id).eq("commentId", commentId),
+      )
+      .unique();
+    if (existing) {
+      await ctx.db.delete("commentReactions", existing._id);
+      await ctx.db.patch("playComments", commentId, {
+        likeCount: Math.max(0, (c.likeCount ?? 0) - 1),
+      });
+      return { liked: false };
+    }
+    await ctx.db.insert("commentReactions", {
+      commentId,
+      userId: user._id,
+      createdAt: Date.now(),
+    });
+    await ctx.db.patch("playComments", commentId, {
+      likeCount: (c.likeCount ?? 0) + 1,
+    });
+    return { liked: true };
+  },
+});
+
+/**
+ * Engagement a player has received: total likes on their plays + on their
+ * comments, and total comments on their plays. `username` targets a public
+ * profile; omitted = the caller. Bounded scan of their own rows.
+ */
+export const playEngagement = query({
+  args: { username: v.optional(v.string()) },
+  handler: async (ctx, { username }) => {
+    const viewer = await getCurrentUser(ctx);
+    let targetId = viewer?._id;
+    if (username) {
+      const lower = username.trim().toLowerCase();
+      const u = await ctx.db
+        .query("users")
+        .withIndex("by_username_lower", (q) => q.eq("usernameLower", lower))
+        .unique();
+      targetId = u?._id;
+    }
+    if (!targetId) return { likesReceived: 0, commentsReceived: 0 };
+
+    const plays = await ctx.db
+      .query("plays")
+      .withIndex("by_user_and_date", (q) => q.eq("userId", targetId))
+      .take(3000);
+    let likesReceived = 0;
+    let commentsReceived = 0;
+    for (const p of plays) {
+      likesReceived += p.reactionCount ?? 0;
+      commentsReceived += p.commentCount ?? 0;
+    }
+    const comments = await ctx.db
+      .query("playComments")
+      .withIndex("by_user", (q) => q.eq("userId", targetId))
+      .take(3000);
+    for (const c of comments) likesReceived += c.likeCount ?? 0;
+
+    return { likesReceived, commentsReceived };
+  },
+});
+
+/* -------------------------------------------------------------------------- */
 /* Internal: purge + claim-on-signup                                          */
 /* -------------------------------------------------------------------------- */
 
@@ -797,6 +1100,7 @@ export const purgeUserPlays = internalMutation({
         .collect();
       for (const pt of parts) await ctx.db.delete("playParticipants", pt._id);
       for (const id of p.photoIds ?? []) await ctx.storage.delete(id);
+      await clearPlaySocial(ctx, p._id);
       await ctx.db.delete("plays", p._id);
     }
     if (plays.length > 0) {

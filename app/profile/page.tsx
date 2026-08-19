@@ -126,6 +126,7 @@ function ProfileBody() {
   const playStats = useQuery(api.plays.myPlayStats, {
     monthStartDate: monthStart,
   });
+  const engagement = useQuery(api.plays.playEngagement, {});
   const { signOut } = useAuthActions();
   const router = useRouter();
 
@@ -216,7 +217,7 @@ function ProfileBody() {
         </Link>
       </div>
       <div className="mb-6">
-        <PlayerStatsCard stats={playStats} />
+        <PlayerStatsCard stats={playStats} engagement={engagement} />
       </div>
 
       {/* Activity */}

@@ -72,6 +72,9 @@ export const playRowValidator = v.object({
   format: playFormatValidator,
   scoreMode: v.optional(playScoreModeValidator),
   coopOutcome: v.optional(coopOutcomeValidator),
+  // Optional shared score for a cooperative/solo play (many solos are score
+  // chases). Distinct from per-player competitive scores.
+  coopScore: v.optional(v.number()),
   teams: v.optional(v.array(playTeamValidator)),
   players: v.array(playPlayerValidator),
   photoIds: v.optional(v.array(v.id("_storage"))),
@@ -107,4 +110,28 @@ export const playParticipantValidator = v.object({
   visibility: playVisibilityValidator,
   userId: v.optional(v.id("users")),
   emailLower: v.optional(v.string()),
+});
+
+/** A "like" on a play — one per user (toggled). Count is denormalized on plays. */
+export const playReactionValidator = v.object({
+  playId: v.id("plays"),
+  userId: v.id("users"),
+  createdAt: v.number(),
+});
+
+/** A comment on a public play. Count is denormalized on plays. */
+export const playCommentValidator = v.object({
+  playId: v.id("plays"),
+  userId: v.id("users"),
+  text: v.string(),
+  createdAt: v.number(),
+  editedAt: v.optional(v.number()),
+  likeCount: v.optional(v.number()), // denormalized
+});
+
+/** A "like" on a comment — one per user (toggled). */
+export const commentReactionValidator = v.object({
+  commentId: v.id("playComments"),
+  userId: v.id("users"),
+  createdAt: v.number(),
 });

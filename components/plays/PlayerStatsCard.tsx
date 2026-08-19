@@ -35,8 +35,10 @@ function monthLabel(key: string): string {
  */
 export function PlayerStatsCard({
   stats,
+  engagement,
 }: {
   stats: Stats | null | undefined;
+  engagement?: { likesReceived: number; commentsReceived: number } | null;
 }) {
   if (stats === undefined) {
     return <Skeleton className="h-64 w-full rounded-2xl" />;
@@ -96,12 +98,17 @@ export function PlayerStatsCard({
           <Stat label="Games" value={stats.uniqueGames} />
           <Stat
             label="Record"
-            value={
-              stats.decided > 0 ? `${stats.wins}–${losses}` : "—"
-            }
+            value={stats.decided > 0 ? `${stats.wins}–${losses}` : "—"}
           />
         </div>
       </div>
+
+      {engagement && (
+        <div className="mt-3 grid grid-cols-2 gap-3">
+          <Stat label="Likes received" value={engagement.likesReceived} />
+          <Stat label="Comments received" value={engagement.commentsReceived} />
+        </div>
+      )}
 
       {/* Monthly bar chart */}
       <div className="mt-5">

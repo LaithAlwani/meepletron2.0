@@ -36,6 +36,7 @@ export default function ProfilePage({
 }) {
   const { username } = use(params);
   const data = useQuery(api.topGames.publicProfile, { username });
+  const engagement = useQuery(api.plays.playEngagement, { username });
 
   if (data === undefined) {
     return (
@@ -95,6 +96,21 @@ export default function ProfilePage({
           {author?.username && (
             <p className="text-sm text-muted">@{author.username}</p>
           )}
+          {engagement &&
+            (engagement.likesReceived > 0 || engagement.commentsReceived > 0) && (
+              <div className="mt-1 flex gap-3 text-xs text-subtle">
+                <span>
+                  <b className="text-foreground">{engagement.likesReceived}</b>{" "}
+                  likes
+                </span>
+                <span>
+                  <b className="text-foreground">
+                    {engagement.commentsReceived}
+                  </b>{" "}
+                  comments
+                </span>
+              </div>
+            )}
         </div>
       </div>
 

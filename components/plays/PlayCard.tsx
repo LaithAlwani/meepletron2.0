@@ -1,10 +1,63 @@
 "use client";
 
 import Link from "next/link";
-import { Trophy, Lock, Users, Clock, Dices } from "lucide-react";
+import { Trophy, Lock, Clock, Dices } from "lucide-react";
 import { Thumb } from "@/components/top-games/Thumb";
 import { formatPlayTime } from "@/lib/format";
 import { cn } from "@/lib/cn";
+
+type PlayerBadge = { name: string; avatarUrl: string | null };
+
+/** Overlapping player avatars (member photo, else the first letter of the name). */
+export function AvatarStack({
+  players,
+  ringClass = "ring-background",
+  max = 5,
+}: {
+  players: PlayerBadge[];
+  ringClass?: string;
+  max?: number;
+}) {
+  const shown = players.slice(0, max);
+  const extra = players.length - shown.length;
+  return (
+    <div className="flex -space-x-1.5">
+      {shown.map((p, i) =>
+        p.avatarUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            key={i}
+            src={p.avatarUrl}
+            alt=""
+            title={p.name}
+            className={cn("h-5 w-5 rounded-full object-cover ring-2", ringClass)}
+          />
+        ) : (
+          <span
+            key={i}
+            title={p.name}
+            className={cn(
+              "flex h-5 w-5 items-center justify-center rounded-full bg-surface-2 text-[9px] font-bold text-muted ring-2",
+              ringClass,
+            )}
+          >
+            {p.name.replace(/^@/, "").charAt(0).toUpperCase()}
+          </span>
+        ),
+      )}
+      {extra > 0 && (
+        <span
+          className={cn(
+            "flex h-5 w-5 items-center justify-center rounded-full bg-surface-2 text-[9px] font-bold text-muted ring-2",
+            ringClass,
+          )}
+        >
+          +{extra}
+        </span>
+      )}
+    </div>
+  );
+}
 
 export const FORMAT_LABEL: Record<string, string> = {
   competitive: "Competitive",
@@ -37,6 +90,7 @@ export type PlayCardData = {
   format: string;
   visibility: "private" | "public";
   playerCount: number;
+  players: { name: string; avatarUrl: string | null }[];
   winners: string[];
 };
 
@@ -65,11 +119,8 @@ export function PlayCard({ play }: { play: PlayCardData }) {
           )}
         </div>
         <div className="mt-0.5 flex flex-wrap items-center gap-x-2.5 gap-y-0.5 text-xs text-subtle">
+          {play.players.length > 0 && <AvatarStack players={play.players} />}
           <span>{playDate(play.date)}</span>
-          <span className="inline-flex items-center gap-1">
-            <Users className="h-3 w-3" />
-            {play.playerCount}
-          </span>
           {time && (
             <span className="inline-flex items-center gap-1">
               <Clock className="h-3 w-3" />

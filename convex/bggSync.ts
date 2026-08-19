@@ -477,6 +477,7 @@ async function resetJob(
     username: string;
     kind: "collection" | "plays";
     mode: "incremental" | "full";
+    minDate?: string;
   },
 ): Promise<Id<"bggSyncJobs">> {
   const now = Date.now();
@@ -495,7 +496,7 @@ async function resetJob(
     enrichProcessed: undefined,
     currentTitle: undefined,
     attempts: 0,
-    minDate: undefined,
+    minDate: args.minDate,
     updatedAt: now,
     finishedAt: undefined,
     error: undefined,
@@ -624,12 +625,15 @@ async function startPlaysSync(
     .withIndex("by_user", (q) => q.eq("userId", userId))
     .unique();
   if (!account) return null;
+  // After the first full import, only fetch plays on/after the high-water mark.
+  const minDate = account.playsSyncedThrough;
   const jobId = await resetJob(ctx, {
     userId,
     accountId: account._id,
     username: account.username,
     kind: "plays",
-    mode: "full",
+    mode: minDate ? "incremental" : "full",
+    minDate: minDate ?? undefined,
   });
   await ctx.scheduler.runAfter(0, internal.bggSync.runPlays, { jobId });
   return jobId;
@@ -1389,9 +1393,16 @@ export const finishPlays = internalMutation({
     const now = Date.now();
     const account = await ctx.db.get("bggAccounts", job.accountId);
     if (account) {
+      // The true total (not just this run's page count — incremental syncs only
+      // process the newest plays).
+      const owned = await ctx.db
+        .query("plays")
+        .withIndex("by_user_and_date", (q) => q.eq("userId", job.userId))
+        .take(5000);
+      const playsCount = owned.filter((p) => p.source === "bgg").length;
       await ctx.db.patch("bggAccounts", job.accountId, {
         playsSyncedAt: now,
-        playsCount: job.processed,
+        playsCount,
       });
     }
     await ctx.db.patch("bggSyncJobs", jobId, {
@@ -1442,7 +1453,7 @@ export const runPlays = internalAction({
     try {
       res = await bggGet(
         "/xmlapi2/plays",
-        { username: job.username, page: job.page },
+        { username: job.username, page: job.page, mindate: job.minDate },
         { token },
       );
     } catch {

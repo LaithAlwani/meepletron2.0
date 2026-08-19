@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import {
   createContext,
   useCallback,
@@ -9,10 +10,16 @@ import {
 } from "react";
 
 type ToastKind = "success" | "error" | "info";
-type Toast = { id: number; message: string; kind: ToastKind };
+type ToastAction = { label: string; href: string };
+type Toast = {
+  id: number;
+  message: string;
+  kind: ToastKind;
+  action?: ToastAction;
+};
 
 const ToastContext = createContext<{
-  toast: (message: string, kind?: ToastKind) => void;
+  toast: (message: string, kind?: ToastKind, action?: ToastAction) => void;
 } | null>(null);
 
 const kindStyles: Record<ToastKind, string> = {
@@ -26,14 +33,17 @@ let counter = 0;
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
 
-  const toast = useCallback((message: string, kind: ToastKind = "info") => {
-    const id = ++counter;
-    setToasts((prev) => [...prev, { id, message, kind }]);
-    setTimeout(
-      () => setToasts((prev) => prev.filter((t) => t.id !== id)),
-      4000,
-    );
-  }, []);
+  const toast = useCallback(
+    (message: string, kind: ToastKind = "info", action?: ToastAction) => {
+      const id = ++counter;
+      setToasts((prev) => [...prev, { id, message, kind, action }]);
+      setTimeout(
+        () => setToasts((prev) => prev.filter((t) => t.id !== id)),
+        action ? 6000 : 4000,
+      );
+    },
+    [],
+  );
 
   return (
     <ToastContext.Provider value={{ toast }}>
@@ -43,9 +53,20 @@ export function ToastProvider({ children }: { children: ReactNode }) {
           <div
             key={t.id}
             role="status"
-            className={`animate-in pointer-events-auto w-fit max-w-[calc(100vw-1.5rem)] wrap-break-word rounded-lg border px-3.5 py-2 text-[13px] font-medium shadow-xl sm:max-w-sm sm:text-sm ${kindStyles[t.kind]}`}
+            className={`animate-in pointer-events-auto flex w-fit max-w-[calc(100vw-1.5rem)] items-center gap-2 wrap-break-word rounded-lg border px-3.5 py-2 text-[13px] font-medium shadow-xl sm:max-w-sm sm:text-sm ${kindStyles[t.kind]}`}
           >
-            {t.message}
+            <span>{t.message}</span>
+            {t.action && (
+              <Link
+                href={t.action.href}
+                onClick={() =>
+                  setToasts((prev) => prev.filter((x) => x.id !== t.id))
+                }
+                className="shrink-0 font-bold underline underline-offset-2"
+              >
+                {t.action.label}
+              </Link>
+            )}
           </div>
         ))}
       </div>

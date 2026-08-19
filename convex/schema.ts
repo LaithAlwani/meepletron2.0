@@ -13,6 +13,9 @@ import {
   playRowValidator,
   playPersonValidator,
   playParticipantValidator,
+  playReactionValidator,
+  playCommentValidator,
+  commentReactionValidator,
 } from "./lib/playTypes";
 
 /**
@@ -542,6 +545,21 @@ export default defineSchema({
     .index("by_user_and_date", ["userId", "date"])
     .index("by_email", ["emailLower"])
     .index("by_play", ["playId"]),
+
+  // Likes on plays — one per user, toggled (count denormalized on plays).
+  playReactions: defineTable(playReactionValidator)
+    .index("by_user_and_play", ["userId", "playId"])
+    .index("by_play", ["playId"]),
+
+  // Comments on public plays (count denormalized on plays).
+  playComments: defineTable(playCommentValidator)
+    .index("by_play_and_created", ["playId", "createdAt"])
+    .index("by_user", ["userId"]), // aggregate a user's received comment likes
+
+  // Likes on comments — one per user, toggled (count denormalized on comment).
+  commentReactions: defineTable(commentReactionValidator)
+    .index("by_user_and_comment", ["userId", "commentId"])
+    .index("by_comment", ["commentId"]),
 
   // A user's ranked "Top N games" list for a given year. Entries are a bounded
   // (≤ ~250) inline array — array index = rank − 1 — so a drag-reorder is one
