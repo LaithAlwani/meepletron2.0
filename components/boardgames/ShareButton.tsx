@@ -15,12 +15,14 @@ export function ShareButton({
   url,
   text,
   label,
+  labelClassName,
   className,
 }: {
   title: string;
   url?: string;
   text?: string;
   label?: string;
+  labelClassName?: string;
   className?: string;
 }) {
   const toast = useToast();
@@ -69,7 +71,7 @@ export function ShareButton({
       ) : (
         <Share2 className="h-4.5 w-4.5" />
       )}
-      {label}
+      {label && <span className={labelClassName}>{label}</span>}
     </button>
   );
 }

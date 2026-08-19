@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { PlayerStatsCard } from "@/components/plays/PlayerStatsCard";
 import {
   useQuery,
   useMutation,
@@ -118,6 +119,13 @@ function ProfileBody() {
   const stats = useQuery(api.users.myStats);
   // null when no BGG account is linked — the card is simply omitted then.
   const bgg = useQuery(api.bggSync.myAccount);
+  const monthStart = useMemo(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
+  }, []);
+  const playStats = useQuery(api.plays.myPlayStats, {
+    monthStartDate: monthStart,
+  });
   const { signOut } = useAuthActions();
   const router = useRouter();
 
@@ -194,6 +202,22 @@ function ProfileBody() {
 
       {/* Public profile sharing */}
       {!isGuest && <PublicProfileCard me={me} />}
+
+      {/* Plays */}
+      <div className="mb-2 flex items-center justify-between px-1">
+        <p className="text-xs font-semibold uppercase tracking-widest text-subtle">
+          Plays
+        </p>
+        <Link
+          href="/plays"
+          className="text-xs font-semibold text-accent hover:underline"
+        >
+          View all
+        </Link>
+      </div>
+      <div className="mb-6">
+        <PlayerStatsCard stats={playStats} />
+      </div>
 
       {/* Activity */}
       <p className="mb-2 px-1 text-xs font-semibold uppercase tracking-widest text-subtle">
@@ -499,12 +523,14 @@ type PrefKey =
   | "showTopLists"
   | "showOwned"
   | "showForTrade"
-  | "showWishlist";
+  | "showWishlist"
+  | "showPlays";
 
 const SHARE_TOGGLES: { key: PrefKey; label: string; def: boolean }[] = [
   { key: "showName", label: "Name", def: true },
   { key: "showAvatar", label: "Profile photo", def: true },
   { key: "showTopLists", label: "Top Games lists", def: true },
+  { key: "showPlays", label: "Plays", def: false },
   { key: "showOwned", label: "Owned games", def: false },
   { key: "showForTrade", label: "Games for trade", def: false },
   { key: "showWishlist", label: "Wishlist", def: false },

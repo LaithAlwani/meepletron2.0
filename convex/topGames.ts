@@ -569,6 +569,9 @@ export const publicProfile = query({
     return {
       author: await authorInfo(ctx, user._id),
       lists,
+      // Whether to show a plays section — the plays themselves are fetched by the
+      // page via api.plays.userPublicPlays (keeps the play projection in one place).
+      showPlays: p.showPlays ?? false,
       owned:
         (p.showOwned ?? false)
           ? await collectionSection(ctx, user._id, (r) => r.own === true, 30)

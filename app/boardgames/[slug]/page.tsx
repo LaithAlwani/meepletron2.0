@@ -32,8 +32,9 @@ import {
 } from "@/components/boardgames/GameReference";
 import { ExpandableText } from "@/components/ui/ExpandableText";
 import { buttonClasses } from "@/components/ui/Button";
-import { useToast } from "@/components/ui/Toast";
 import { Die } from "@/components/ui/icons";
+import { LogPlayWizard } from "@/components/plays/LogPlayWizard";
+import { GamePlaysSection } from "@/components/plays/GamePlaysSection";
 
 function InfoSection({
   title,
@@ -195,7 +196,6 @@ export default function GameDetailPage({
   const game = useQuery(api.games.getByHandle, { handle });
   const me = useQuery(api.users.me);
   const isAdmin = me?.role === "admin";
-  const toast = useToast();
 
   useEffect(() => {
     window.scrollTo(0, 0);
@@ -208,6 +208,7 @@ export default function GameDetailPage({
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, [zoomed]);
+  const [logOpen, setLogOpen] = useState(false);
 
   if (game === undefined) {
     return (
@@ -360,9 +361,9 @@ export default function GameDetailPage({
                 />
                 <button
                   type="button"
-                  onClick={() => toast("Play logging is coming soon", "info")}
-                  aria-label="Record a play"
-                  title="Record a play (coming soon)"
+                  onClick={() => setLogOpen(true)}
+                  aria-label="Log a play"
+                  title="Log a play"
                   className={actionCls}
                 >
                   <Dices className="h-4.5 w-4.5" />
@@ -428,6 +429,8 @@ export default function GameDetailPage({
         <FaqAccordion gameId={gameId} />
 
         <RemindersList gameId={gameId} />
+
+        <GamePlaysSection gameId={gameId} onLog={() => setLogOpen(true)} />
 
         {(game.designers.length > 0 ||
           game.artists.length > 0 ||
@@ -526,6 +529,17 @@ export default function GameDetailPage({
           </button>
         </div>
       )}
+
+      <LogPlayWizard
+        open={logOpen}
+        onClose={() => setLogOpen(false)}
+        initialGame={{
+          gameId,
+          bggId: game.bggId ?? undefined,
+          title: game.title,
+          coverUrl: cover,
+        }}
+      />
     </>
   );
 }

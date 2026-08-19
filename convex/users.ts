@@ -99,6 +99,42 @@ export const updateProfile = mutation({
 });
 
 /**
+ * Find members by name or @username, for tagging players in a play log. Only
+ * users with a public username are discoverable; guests are excluded. Bounded
+ * scan (the caller must be signed in). Returns minimal public fields.
+ */
+export const searchUsers = query({
+  args: { term: v.string() },
+  handler: async (ctx, { term }) => {
+    const me = await getCurrentUser(ctx);
+    if (!me) return [];
+    const t = term.trim().toLowerCase();
+    if (t.length < 2) return [];
+    const rows = await ctx.db.query("users").take(1000);
+    const matched = rows
+      .filter(
+        (u) =>
+          u._id !== me._id &&
+          u.isAnonymous !== true &&
+          !!u.username &&
+          ((u.name?.toLowerCase().includes(t) ?? false) ||
+            (u.usernameLower?.includes(t) ?? false)),
+      )
+      .slice(0, 8);
+    return await Promise.all(
+      matched.map(async (u) => ({
+        _id: u._id,
+        name: u.name ?? u.username ?? "Player",
+        username: u.username ?? null,
+        avatarUrl: u.avatarStorageId
+          ? await ctx.storage.getUrl(u.avatarStorageId)
+          : (u.image ?? null),
+      })),
+    );
+  },
+});
+
+/**
  * Update which parts of the profile are exposed on the public /user/<username>
  * page. Merges the given toggles into the existing set (all optional).
  */
@@ -110,6 +146,7 @@ export const setPublicProfile = mutation({
     showOwned: v.optional(v.boolean()),
     showForTrade: v.optional(v.boolean()),
     showWishlist: v.optional(v.boolean()),
+    showPlays: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     const user = await requireUser(ctx);

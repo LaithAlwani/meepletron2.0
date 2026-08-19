@@ -24,6 +24,7 @@ export function BggAccountCard() {
   const jobs = useQuery(api.bggSync.myJobs);
   const linkAccount = useAction(api.bggSync.linkAccount);
   const syncNow = useMutation(api.bggSync.syncNow);
+  const syncPlays = useMutation(api.bggSync.syncPlaysNow);
   const unlink = useMutation(api.bggSync.unlinkAccount);
   const toast = useToast();
   const confirm = useConfirm();
@@ -37,6 +38,11 @@ export function BggAccountCard() {
     job && ["queued", "waiting", "running", "sweeping"].includes(job.status);
   const enriching = job?.status === "enriching";
   const running = importing || enriching;
+
+  const playsJob = jobs?.find((j) => j.kind === "plays");
+  const playsRunning =
+    playsJob &&
+    ["queued", "waiting", "running", "sweeping"].includes(playsJob.status);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -60,6 +66,15 @@ export function BggAccountCard() {
       toast("Syncing your collection…", "success");
     } catch (err) {
       toast(friendlyError(err, "Couldn't start the sync"), "error");
+    }
+  }
+
+  async function doSyncPlays() {
+    try {
+      await syncPlays({});
+      toast("Importing your plays…", "success");
+    } catch (err) {
+      toast(friendlyError(err, "Couldn't start the plays import"), "error");
     }
   }
 
@@ -237,13 +252,61 @@ export function BggAccountCard() {
         <p className="text-xs text-red-500">{job.error}</p>
       )}
 
-      <div className="flex gap-2">
+      {/* Plays import — paged, so it shows page progress. */}
+      <div className="border-t border-border-muted pt-3">
+        <p className="text-xs text-muted">
+          {account.playsSyncedAt
+            ? `${account.playsCount ?? 0} plays · imported ${relativeTime(
+                account.playsSyncedAt,
+              )}`
+            : "Plays not imported yet"}
+        </p>
+        {playsRunning && (
+          <div className="mt-1.5 space-y-1.5">
+            <div className="flex items-center justify-between gap-2 text-xs text-muted">
+              <span className="flex min-w-0 items-center gap-1.5">
+                <RefreshCw className="h-3.5 w-3.5 shrink-0 animate-spin" />
+                {playsJob.status === "waiting"
+                  ? "Preparing your plays…"
+                  : "Importing your plays…"}
+              </span>
+              <span className="shrink-0 tabular-nums">
+                {playsJob.totalPages
+                  ? `page ${playsJob.page} / ${playsJob.totalPages}`
+                  : `${playsJob.processed}`}
+              </span>
+            </div>
+            {playsJob.totalPages ? (
+              <div className="h-1.5 overflow-hidden rounded-full bg-surface-2">
+                <div
+                  className="h-full rounded-full bg-accent transition-all"
+                  style={{
+                    width: `${Math.min(100, Math.round((playsJob.page / playsJob.totalPages) * 100))}%`,
+                  }}
+                />
+              </div>
+            ) : null}
+          </div>
+        )}
+        {playsJob?.status === "error" && playsJob.error && (
+          <p className="mt-1 text-xs text-red-500">{playsJob.error}</p>
+        )}
+      </div>
+
+      <div className="flex flex-wrap gap-2">
         <button
           onClick={doSync}
           disabled={running}
           className={buttonClasses("ghost", "sm")}
         >
-          Sync now
+          Sync collection
+        </button>
+        <button
+          onClick={doSyncPlays}
+          disabled={playsRunning}
+          className={buttonClasses("ghost", "sm")}
+        >
+          Import plays
         </button>
         <button onClick={doUnlink} className={buttonClasses("ghost", "sm")}>
           Unlink

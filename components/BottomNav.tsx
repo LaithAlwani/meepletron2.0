@@ -3,14 +3,21 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutGrid, MessageCircle, Trophy, MoreHorizontal } from "lucide-react";
+import {
+  LayoutGrid,
+  Dices,
+  Trophy,
+  MessageCircle,
+  MoreHorizontal,
+} from "lucide-react";
 import { cn } from "@/lib/cn";
 import { MoreSheet } from "@/components/MoreSheet";
 
 const TABS = [
   { href: "/boardgames", label: "Library", icon: LayoutGrid },
-  { href: "/chats", label: "Chats", icon: MessageCircle },
+  { href: "/plays", label: "Plays", icon: Dices },
   { href: "/top-games", label: "Top Games", icon: Trophy },
+  { href: "/chats", label: "Chats", icon: MessageCircle },
 ];
 
 /**

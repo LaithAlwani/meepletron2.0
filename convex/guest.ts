@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { mutation } from "./_generated/server";
 import { getAuthUserId } from "@convex-dev/auth/server";
+import { internal } from "./_generated/api";
 import { deleteUserAndAuth } from "./lib/purge";
 
 const UPGRADE_TTL_MS = 15 * 60 * 1000;
@@ -103,13 +104,51 @@ export const completeUpgrade = mutation({
       }
     }
 
+    // Plays: re-own the guest's logged plays, their participant links, and saved
+    // people. Done before the guest is deleted (its cascade would purge them).
+    let playsMoved = 0;
+    const guestPlays = await ctx.db
+      .query("plays")
+      .withIndex("by_user_and_date", (q) => q.eq("userId", guest._id))
+      .take(1000);
+    for (const play of guestPlays) {
+      await ctx.db.patch("plays", play._id, { userId: currentUserId });
+      const parts = await ctx.db
+        .query("playParticipants")
+        .withIndex("by_play", (q) => q.eq("playId", play._id))
+        .collect();
+      for (const pt of parts) {
+        await ctx.db.patch("playParticipants", pt._id, {
+          ownerId: currentUserId,
+          ...(pt.userId === guest._id ? { userId: currentUserId } : {}),
+        });
+      }
+      playsMoved++;
+    }
+    const guestPeople = await ctx.db
+      .query("playPeople")
+      .withIndex("by_owner", (q) => q.eq("ownerId", guest._id))
+      .take(1000);
+    for (const person of guestPeople) {
+      await ctx.db.patch("playPeople", person._id, { ownerId: currentUserId });
+    }
+
     // Guest row has no data left — delete it and its auth rows.
     await deleteUserAndAuth(ctx, guest._id);
+
+    // Inherit any plays a friend logged them in by this account's email.
+    if (current.email) {
+      await ctx.scheduler.runAfter(0, internal.plays.claimPlaysByEmail, {
+        userId: currentUserId,
+        email: current.email,
+      });
+    }
 
     return {
       migrated: true as const,
       chats: chatsMoved,
       favorites: favoritesMoved,
+      plays: playsMoved,
     };
   },
 });

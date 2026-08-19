@@ -4,12 +4,20 @@ import { use } from "react";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { useQuery } from "convex/react";
-import { Trophy, Package, Repeat2, Heart, type LucideIcon } from "lucide-react";
+import {
+  Trophy,
+  Package,
+  Repeat2,
+  Heart,
+  Dices,
+  type LucideIcon,
+} from "lucide-react";
 import { api } from "@/convex/_generated/api";
 import { Skeleton } from "@/components/ui/Surface";
 import { buttonClasses } from "@/components/ui/Button";
 import { ListCard } from "@/components/top-games/ListCard";
 import { CoverScroller } from "@/components/top-games/CoverScroller";
+import { PlayCard } from "@/components/plays/PlayCard";
 
 type Section = {
   total: number;
@@ -53,11 +61,12 @@ export default function ProfilePage({
     );
   }
 
-  const { author, lists, owned, forTrade, wishlist } = data;
+  const { author, lists, owned, forTrade, wishlist, showPlays } = data;
   const initial = (author?.name ?? author?.username ?? "?")
     .charAt(0)
     .toUpperCase();
   const hasAnything =
+    showPlays ||
     lists.length > 0 ||
     (owned?.total ?? 0) > 0 ||
     (forTrade?.total ?? 0) > 0 ||
@@ -95,6 +104,8 @@ export default function ProfilePage({
         </p>
       ) : (
         <div className="space-y-8">
+          {showPlays && <PublicPlaysBlock username={username} />}
+
           {lists.length > 0 && (
             <SectionBlock icon={Trophy} title="Top Games">
               <ul className="grid gap-3 sm:grid-cols-2">
@@ -128,6 +139,22 @@ export default function ProfilePage({
         </div>
       )}
     </div>
+  );
+}
+
+function PublicPlaysBlock({ username }: { username: string }) {
+  const plays = useQuery(api.plays.userPublicPlays, { username });
+  if (!plays || plays.length === 0) return null;
+  return (
+    <SectionBlock icon={Dices} title="Recent plays" count={plays.length}>
+      <ul className="space-y-2.5">
+        {plays.map((p) => (
+          <li key={p._id}>
+            <PlayCard play={p} />
+          </li>
+        ))}
+      </ul>
+    </SectionBlock>
   );
 }
 

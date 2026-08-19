@@ -6,10 +6,14 @@ import { bggStatsValidator } from "./lib/bggStats";
 import {
   bggAccountStatusValidator,
   bggCollectionRowValidator,
-  bggPlayRowValidator,
   bggSyncKindValidator,
   bggSyncStatusValidator,
 } from "./lib/bggSyncTypes";
+import {
+  playRowValidator,
+  playPersonValidator,
+  playParticipantValidator,
+} from "./lib/playTypes";
 
 /**
  * Meepletron 2.0 data model — everything lives in Convex.
@@ -52,6 +56,7 @@ export default defineSchema({
         showOwned: v.optional(v.boolean()),
         showForTrade: v.optional(v.boolean()),
         showWishlist: v.optional(v.boolean()),
+        showPlays: v.optional(v.boolean()),
       }),
     ),
     tokensUsedToday: v.optional(v.number()),
@@ -517,12 +522,26 @@ export default defineSchema({
     // Cross-user: adopt every user's rows when an admin gives a game its BGG id.
     .index("by_bgg_id", ["bggId"]),
 
-  // One row per logged play. Phase two — defined now so phase one's schema
-  // doesn't have to reshape later.
-  bggPlays: defineTable(bggPlayRowValidator)
-    .index("by_user_and_play_id", ["userId", "playId"]) // idempotent upsert key
+  // One row per recorded play session (hand-logged or imported from BGG).
+  plays: defineTable(playRowValidator)
     .index("by_user_and_date", ["userId", "date"])
-    .index("by_user_and_bgg_id", ["userId", "bggId"]),
+    .index("by_game_and_date", ["gameId", "date"])
+    .index("by_visibility_and_date", ["visibility", "date"]) // public feed (later)
+    .index("by_bgg_play_id", ["bggPlayId"]), // idempotent BGG import dedupe
+
+  // An owner's saved non-system players, reused across their plays.
+  playPeople: defineTable(playPersonValidator)
+    .index("by_owner", ["ownerId"])
+    .index("by_owner_and_name", ["ownerId", "name"])
+    .index("by_owner_and_email", ["ownerId", "emailLower"])
+    .index("by_email", ["emailLower"]), // claim-on-signup
+
+  // Indexed play↔participant links: "plays I was in" + email-claim are index
+  // scans (the embedded players[] array isn't queryable).
+  playParticipants: defineTable(playParticipantValidator)
+    .index("by_user_and_date", ["userId", "date"])
+    .index("by_email", ["emailLower"])
+    .index("by_play", ["playId"]),
 
   // A user's ranked "Top N games" list for a given year. Entries are a bounded
   // (≤ ~250) inline array — array index = rank − 1 — so a drag-reorder is one
