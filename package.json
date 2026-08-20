@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "concurrently -n convex,next -c blue,green \"convex dev\" \"next dev\"",
+    "dev:lan": "concurrently -n convex,next -c blue,green \"convex dev\" \"next dev -H 0.0.0.0\"",
     "dev:next": "next dev",
     "dev:convex": "convex dev",
     "build": "next build",

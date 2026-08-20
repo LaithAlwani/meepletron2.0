@@ -25,15 +25,19 @@ const COLORS = [
 ];
 
 // Countdown ring geometry, derived from the dot so the gap stays explicit.
-// The ring still clears the dot's glow (which reaches ~48px) — it just hugs it
-// closely now instead of floating well outside it.
-const DOT = 70; // dot diameter in px, mirrors the h/w-[4.375rem] below
-const RING_W = 9; // ring stroke width
-const GAP = 13.25; // dot edge -> ring inner edge (half the original 26.5)
-const R = DOT / 2 + GAP + RING_W / 2; // 52.75 (ring centerline)
-const SVG = 2 * R + RING_W + 7; // 121.5 — ring box + stroke + padding
+// The ring still clears the dot's glow — it just hugs it closely.
+const DOT = 105; // dot diameter in px (1.5× the original 70)
+const RING_W = 10; // ring stroke width
+const GAP = 14; // dot edge -> ring inner edge
+const R = DOT / 2 + GAP + RING_W / 2; // ring centerline
+const SVG = 2 * R + RING_W + 8; // ring box + stroke + padding
 const MID = SVG / 2;
 const CIRC = 2 * Math.PI * R;
+
+// A second contact within a fingertip's width of an existing one is the same
+// finger (people press with the pad, not the tip) — ignore it so one finger
+// isn't counted as two players.
+const MIN_SEPARATION = 56; // px
 
 type Touch = { id: number; x: number; y: number; color: string };
 type Phase = "idle" | "counting" | "winner";
@@ -125,6 +129,11 @@ export function WhoGoesFirst() {
       const y = e.clientY;
       setTouches((prev) => {
         if (prev.some((t) => t.id === id)) return prev;
+        // A second contact landing on top of an existing one is the same finger
+        // (its pad, not the tip) — don't add it as a separate player.
+        if (prev.some((t) => Math.hypot(t.x - x, t.y - y) < MIN_SEPARATION)) {
+          return prev;
+        }
         const used = new Set(prev.map((t) => t.color));
         const color =
           COLORS.find((c) => !used.has(c)) ?? COLORS[prev.length % COLORS.length];
@@ -267,12 +276,14 @@ export function WhoGoesFirst() {
                 />
               )}
             </svg>
-            {/* solid center dot (1.25×) with a tighter colored glow */}
+            {/* solid center dot with a tight colored glow */}
             <span
-              className="absolute left-1/2 top-1/2 h-[4.375rem] w-[4.375rem] -translate-x-1/2 -translate-y-1/2 rounded-full"
+              className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full"
               style={{
+                width: DOT,
+                height: DOT,
                 backgroundColor: t.color,
-                boxShadow: `0 0 18px 4px ${t.color}`,
+                boxShadow: `0 0 24px 6px ${t.color}`,
               }}
             />
           </div>
@@ -290,6 +301,38 @@ export function WhoGoesFirst() {
             animation: `wgf-flood ${FLOOD_MS}ms ease-out forwards`,
           }}
         />
+      )}
+
+      {/* The winner's touch stays exactly as it looked in play — their dot with
+          a transparent gap around it (mirroring the countdown ring's gap), and
+          the flooded color fills in around that. */}
+      {flooded && (
+        <div
+          className="pointer-events-none absolute z-20"
+          style={{
+            left: winner!.x,
+            top: winner!.y,
+            transform: "translate(-50%, -50%)",
+            animation: "wgf-fade 500ms ease-out 1000ms both",
+          }}
+        >
+          {/* transparent gap: reveals the page background, separating the dot
+              from the flooded color the way the gap separates dot from ring */}
+          <span
+            className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-background"
+            style={{ width: DOT + 2 * GAP, height: DOT + 2 * GAP }}
+          />
+          {/* the winner's dot, identical to the in-play marker */}
+          <span
+            className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full"
+            style={{
+              width: DOT,
+              height: DOT,
+              backgroundColor: winner!.color,
+              boxShadow: `0 0 24px 6px ${winner!.color}`,
+            }}
+          />
+        </div>
       )}
 
       {/* Winner overlay — the flooded color IS the result, so all this adds is
@@ -340,7 +383,7 @@ function CountPill({ n, onFlood }: { n: number; onFlood: boolean }) {
           : "flex items-center gap-1.5 rounded-xl bg-surface/80 px-3 py-2 text-sm font-semibold text-muted backdrop-blur"
       }
     >
-      <Users className="h-[18px] w-[18px]" />
+      <Users className="h-4.5 w-4.5" />
       <span className="tabular-nums">{n}</span>
     </div>
   );
