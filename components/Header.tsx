@@ -12,6 +12,7 @@ import {
 import { Home, LayoutGrid, MessageCircle, Trophy, LogIn } from "lucide-react";
 import { api } from "@/convex/_generated/api";
 import { UserMenu } from "@/components/UserMenu";
+import { NotificationsBell } from "@/components/notifications/NotificationsBell";
 import { buttonClasses } from "@/components/ui/Button";
 import { cn } from "@/lib/cn";
 
@@ -97,13 +98,16 @@ export function Header() {
             {isGuest ? (
               signIn
             ) : (
-              <UserMenu
-                initial={(me?.name || me?.email || "?").charAt(0).toUpperCase()}
-                avatarUrl={me?.avatarUrl}
-                name={me?.name || me?.email || "Account"}
-                username={me?.username}
-                isAdmin={isAdmin}
-              />
+              <>
+                <NotificationsBell variant="header" />
+                <UserMenu
+                  initial={(me?.name || me?.email || "?").charAt(0).toUpperCase()}
+                  avatarUrl={me?.avatarUrl}
+                  name={me?.name || me?.email || "Account"}
+                  username={me?.username}
+                  isAdmin={isAdmin}
+                />
+              </>
             )}
           </Authenticated>
         </div>

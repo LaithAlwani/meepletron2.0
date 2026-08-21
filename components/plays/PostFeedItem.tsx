@@ -11,6 +11,7 @@ import { Thumb } from "@/components/top-games/Thumb";
 import { FORMAT_LABEL, playDate, AvatarStack } from "@/components/plays/PlayCard";
 import { CommentsDrawer } from "@/components/plays/CommentsDrawer";
 import { PhotoCarousel } from "@/components/plays/PhotoCarousel";
+import { ShareButton } from "@/components/boardgames/ShareButton";
 import { useToast } from "@/components/ui/Toast";
 import { useConfirm } from "@/components/ui/Confirm";
 import { relativeTime } from "@/lib/format";
@@ -41,6 +42,11 @@ export function PostFeedItem({ item }: { item: FeedItem }) {
     void toggle({ postId: item._id as Id<"posts"> });
   }
 
+  const postUrl =
+    typeof window !== "undefined"
+      ? `${window.location.origin}/posts/${item._id}`
+      : `/posts/${item._id}`;
+
   return (
     <article className="overflow-hidden rounded-2xl border border-border-muted bg-surface">
       {/* Owner header */}
@@ -68,7 +74,12 @@ export function PostFeedItem({ item }: { item: FeedItem }) {
           ) : (
             <span className="truncate text-sm font-semibold">{item.owner.name}</span>
           )}
-          <p className="text-xs text-subtle">{relativeTime(item.createdAt)}</p>
+          <Link
+            href={`/posts/${item._id}`}
+            className="text-xs text-subtle hover:text-muted"
+          >
+            {relativeTime(item.createdAt)}
+          </Link>
         </div>
         {item.isMine && <OwnerMenu item={item} />}
       </div>
@@ -99,6 +110,12 @@ export function PostFeedItem({ item }: { item: FeedItem }) {
           <MessageCircle className="h-4 w-4" />
           {item.commentCount > 0 && item.commentCount}
         </button>
+        <ShareButton
+          title="Meepletron"
+          text="Check out this post on Meepletron"
+          url={postUrl}
+          className="ml-auto inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-semibold text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
+        />
       </div>
 
       <CommentsDrawer

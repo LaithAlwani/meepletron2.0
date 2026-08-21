@@ -243,14 +243,19 @@ async function resolvePlayers(
 ): Promise<{
   players: PlayDoc["players"];
   participants: { userId?: Id<"users">; emailLower?: string }[];
+  // Emailed people who aren't linked to an account — candidates for a "you were
+  // added to a play" email. `personId` lets callers email only newly-added ones.
+  notify: { email: string; name: string; personId: Id<"playPeople"> }[];
 }> {
   const players: PlayDoc["players"] = [];
   const participants: { userId?: Id<"users">; emailLower?: string }[] = [];
+  const notify: { email: string; name: string; personId: Id<"playPeople"> }[] = [];
 
   for (const p of input.slice(0, PLAYERS_MAX)) {
     const name = p.name.trim() || "Player";
     let personId = p.personId;
     let emailLower: string | undefined;
+    let linked = false; // person already maps to a user account
 
     if (p.userId) {
       participants.push({ userId: p.userId });
@@ -258,6 +263,7 @@ async function resolvePlayers(
       const person = await ctx.db.get("playPeople", personId);
       if (person && person.ownerId === ownerId) {
         emailLower = person.emailLower;
+        linked = !!person.linkedUserId;
         await ctx.db.patch("playPeople", personId, {
           playCount: (person.playCount ?? 0) + 1,
         });
@@ -283,6 +289,7 @@ async function resolvePlayers(
       if (existing) {
         personId = existing._id;
         emailLower = existing.emailLower ?? emailLower;
+        linked = !!existing.linkedUserId;
         await ctx.db.patch("playPeople", existing._id, {
           playCount: (existing.playCount ?? 0) + 1,
           ...(emailLower && !existing.emailLower ? { emailLower } : {}),
@@ -299,6 +306,11 @@ async function resolvePlayers(
     }
 
     if (emailLower) participants.push({ emailLower });
+    // Notify emailed people who aren't already a Meepletron account (accounts get
+    // in-app notifications instead).
+    if (emailLower && !linked && !p.userId && personId) {
+      notify.push({ email: emailLower, name, personId });
+    }
     players.push({
       name,
       userId: p.userId,
@@ -311,7 +323,30 @@ async function resolvePlayers(
       isNew: p.isNew,
     });
   }
-  return { players, participants };
+  return { players, participants, notify };
+}
+
+/** Schedule "you were added to a play" emails for a set of tagged people. */
+async function scheduleTagEmails(
+  ctx: MutationCtx,
+  opts: {
+    ownerName: string;
+    playId: Id<"plays">;
+    playTitle: string;
+    notify: { email: string; name: string; personId: Id<"playPeople"> }[];
+  },
+) {
+  const siteUrl = process.env.SITE_URL || "https://www.meepletron.com";
+  const playUrl = `${siteUrl}/plays/${opts.playId}`;
+  for (const person of opts.notify) {
+    await ctx.scheduler.runAfter(0, internal.email.sendPlayTagEmail, {
+      to: person.email,
+      recipientName: person.name,
+      ownerName: opts.ownerName,
+      playTitle: opts.playTitle,
+      playUrl,
+    });
+  }
 }
 
 /** Write the indexed participant links for a play. */
@@ -355,7 +390,7 @@ export const logPlay = mutation({
   args: playBodyValidator,
   handler: async (ctx, args): Promise<Id<"plays">> => {
     const user = await requireUser(ctx);
-    const { players, participants } = await resolvePlayers(
+    const { players, participants, notify } = await resolvePlayers(
       ctx,
       user._id,
       args.players,
@@ -404,6 +439,13 @@ export const logPlay = mutation({
       userId: user._id,
       visibility: args.visibility,
     });
+    // Email every tagged non-account player so they can come see the play.
+    await scheduleTagEmails(ctx, {
+      ownerName: user.name ?? user.username ?? "Someone",
+      playId,
+      playTitle: args.title.trim() || "a game",
+      notify,
+    });
     return playId;
   },
 });
@@ -415,7 +457,7 @@ export const updatePlay = mutation({
     const play = await ctx.db.get("plays", playId);
     if (!play || play.userId !== user._id) throw new Error("Play not found");
 
-    const { players, participants } = await resolvePlayers(
+    const { players, participants, notify } = await resolvePlayers(
       ctx,
       user._id,
       args.players,
@@ -466,6 +508,13 @@ export const updatePlay = mutation({
       _id: playId,
       userId: user._id,
       visibility: args.visibility,
+    });
+    // Email tagged non-account players (anyone still without an account).
+    await scheduleTagEmails(ctx, {
+      ownerName: user.name ?? user.username ?? "Someone",
+      playId,
+      playTitle: args.title.trim() || play.title,
+      notify,
     });
   },
 });

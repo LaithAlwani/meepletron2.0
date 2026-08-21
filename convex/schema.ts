@@ -19,6 +19,7 @@ import {
   postReactionValidator,
   postCommentValidator,
   postCommentReactionValidator,
+  notificationValidator,
 } from "./lib/postTypes";
 
 /**
@@ -570,6 +571,12 @@ export default defineSchema({
   postCommentReactions: defineTable(postCommentReactionValidator)
     .index("by_user_and_comment", ["userId", "commentId"])
     .index("by_comment", ["commentId"]),
+
+  // In-app notifications (likes / comments / mentions on your posts).
+  notifications: defineTable(notificationValidator)
+    .index("by_user_and_created", ["userId", "createdAt"]) // the list
+    .index("by_user_and_read", ["userId", "read"]) // unread badge count
+    .index("by_post", ["postId"]), // cleanup on post delete
 
   // A user's ranked "Top N games" list for a given year. Entries are a bounded
   // (≤ ~250) inline array — array index = rank − 1 — so a drag-reorder is one

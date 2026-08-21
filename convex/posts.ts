@@ -1,6 +1,11 @@
 import { v } from "convex/values";
 import { paginationOptsValidator } from "convex/server";
-import { query, mutation, type QueryCtx } from "./_generated/server";
+import {
+  query,
+  mutation,
+  type QueryCtx,
+  type MutationCtx,
+} from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
 import { getCurrentUser, requireUser } from "./lib/auth";
 import { clearPostSocial } from "./lib/feed";
@@ -38,6 +43,44 @@ async function postOwner(ctx: QueryCtx, userId: Id<"users">) {
 async function urlsOf(ctx: QueryCtx, ids?: Id<"_storage">[]) {
   const urls = await Promise.all((ids ?? []).map((id) => ctx.storage.getUrl(id)));
   return urls.filter((u): u is string => !!u);
+}
+
+/** Create a notification for a recipient. No-op when you'd notify yourself; a
+ *  repeated like from the same actor on the same post doesn't stack. */
+async function notify(
+  ctx: MutationCtx,
+  n: {
+    userId: Id<"users">;
+    type: "post_like" | "post_comment" | "comment_mention";
+    actorId: Id<"users">;
+    postId?: Id<"posts">;
+    commentId?: Id<"postComments">;
+  },
+) {
+  if (n.userId === n.actorId) return;
+  if (n.type === "post_like" && n.postId) {
+    const recent = await ctx.db
+      .query("notifications")
+      .withIndex("by_user_and_created", (q) => q.eq("userId", n.userId))
+      .order("desc")
+      .take(50);
+    if (
+      recent.some(
+        (d) =>
+          d.type === "post_like" &&
+          d.postId === n.postId &&
+          d.actorId === n.actorId &&
+          !d.read,
+      )
+    ) {
+      return;
+    }
+  }
+  await ctx.db.insert("notifications", {
+    ...n,
+    read: false,
+    createdAt: Date.now(),
+  });
 }
 
 /** Build one feed item from a post, resolving its referenced play/list/photos.
@@ -242,6 +285,12 @@ export const toggleReaction = mutation({
     await ctx.db.patch("posts", postId, {
       reactionCount: (post.reactionCount ?? 0) + 1,
     });
+    await notify(ctx, {
+      userId: post.userId,
+      type: "post_like",
+      actorId: user._id,
+      postId,
+    });
     return { reacted: true };
   },
 });
@@ -257,7 +306,7 @@ export const addComment = mutation({
     if (post.visibility !== "public" && post.userId !== user._id) {
       throw new Error("You can't comment on this post.");
     }
-    await ctx.db.insert("postComments", {
+    const commentId = await ctx.db.insert("postComments", {
       postId,
       userId: user._id,
       text: body,
@@ -266,6 +315,33 @@ export const addComment = mutation({
     await ctx.db.patch("posts", postId, {
       commentCount: (post.commentCount ?? 0) + 1,
     });
+    // Notify the post owner, plus anyone @mentioned in the comment.
+    await notify(ctx, {
+      userId: post.userId,
+      type: "post_comment",
+      actorId: user._id,
+      postId,
+      commentId,
+    });
+    const mentioned = new Set<string>();
+    for (const m of body.matchAll(/@(\w{2,30})/g)) {
+      mentioned.add(m[1].toLowerCase());
+    }
+    for (const uname of mentioned) {
+      const u = await ctx.db
+        .query("users")
+        .withIndex("by_username_lower", (q) => q.eq("usernameLower", uname))
+        .unique();
+      if (u && u._id !== post.userId) {
+        await notify(ctx, {
+          userId: u._id,
+          type: "comment_mention",
+          actorId: user._id,
+          postId,
+          commentId,
+        });
+      }
+    }
   },
 });
 
@@ -303,6 +379,14 @@ export const deleteComment = mutation({
       await ctx.db.patch("posts", c.postId, {
         commentCount: Math.max(0, (post.commentCount ?? 0) - 1),
       });
+    }
+    // Drop notifications that pointed at this comment.
+    const notes = await ctx.db
+      .query("notifications")
+      .withIndex("by_post", (q) => q.eq("postId", c.postId))
+      .collect();
+    for (const nt of notes) {
+      if (nt.commentId === commentId) await ctx.db.delete("notifications", nt._id);
     }
   },
 });
@@ -379,5 +463,152 @@ export const toggleCommentReaction = mutation({
       likeCount: (c.likeCount ?? 0) + 1,
     });
     return { liked: true };
+  },
+});
+
+/* -------------------------------------------------------------------------- */
+/* Permalink + profile                                                        */
+/* -------------------------------------------------------------------------- */
+
+/** A single post for its permalink page (/posts/[id]). Public, or the owner's. */
+export const getPost = query({
+  args: { postId: v.id("posts") },
+  handler: async (ctx, { postId }) => {
+    const viewer = await getCurrentUser(ctx);
+    const post = await ctx.db.get("posts", postId);
+    if (!post) return null;
+    if (post.visibility !== "public" && (!viewer || viewer._id !== post.userId)) {
+      return null;
+    }
+    return await buildFeedItem(ctx, viewer, post);
+  },
+});
+
+/** A user's public image posts — the photo grid on their profile. */
+export const userImagePosts = query({
+  args: { username: v.string() },
+  handler: async (ctx, { username }) => {
+    const lower = username.trim().toLowerCase();
+    if (!lower) return [];
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_username_lower", (q) => q.eq("usernameLower", lower))
+      .unique();
+    if (!user) return [];
+    const rows = await ctx.db
+      .query("posts")
+      .withIndex("by_user_and_created", (q) => q.eq("userId", user._id))
+      .order("desc")
+      .take(60);
+    const images = rows
+      .filter((p) => p.kind === "image" && p.visibility === "public")
+      .slice(0, 18);
+    return await Promise.all(
+      images.map(async (p) => ({
+        _id: p._id,
+        caption: p.caption ?? null,
+        photoUrl:
+          p.photoIds && p.photoIds[0]
+            ? await ctx.storage.getUrl(p.photoIds[0])
+            : null,
+        photoCount: p.photoIds?.length ?? 0,
+      })),
+    );
+  },
+});
+
+/* -------------------------------------------------------------------------- */
+/* Notifications                                                              */
+/* -------------------------------------------------------------------------- */
+
+/** Enrich a notification with its actor + a small preview for the UI. */
+async function notificationView(ctx: QueryCtx, nt: Doc<"notifications">) {
+  const actor = await postOwner(ctx, nt.actorId);
+  let postKind: "play" | "image" | "toplist" | null = null;
+  let title: string | null = null;
+  let thumbUrl: string | null = null;
+  let snippet: string | null = null;
+  if (nt.postId) {
+    const post = await ctx.db.get("posts", nt.postId);
+    if (post) {
+      postKind = post.kind;
+      if (post.kind === "play" && post.playId) {
+        title = (await ctx.db.get("plays", post.playId))?.title ?? null;
+      } else if (post.kind === "toplist" && post.topListId) {
+        title =
+          (await ctx.db.get("topGamesLists", post.topListId))?.title ??
+          "Top Games list";
+      } else if (post.kind === "image") {
+        const first = post.photoIds?.[0];
+        thumbUrl = first ? await ctx.storage.getUrl(first) : null;
+      }
+    }
+  }
+  if (nt.commentId) {
+    snippet = (await ctx.db.get("postComments", nt.commentId))?.text.slice(0, 120) ?? null;
+  }
+  return {
+    _id: nt._id,
+    type: nt.type,
+    read: nt.read,
+    createdAt: nt.createdAt,
+    actor,
+    postId: nt.postId ?? null,
+    postKind,
+    title,
+    thumbUrl,
+    snippet,
+  };
+}
+
+/** The caller's notifications, newest first. */
+export const myNotifications = query({
+  args: { paginationOpts: paginationOptsValidator },
+  handler: async (ctx, { paginationOpts }) => {
+    const user = await getCurrentUser(ctx);
+    if (!user) return { page: [], isDone: true, continueCursor: "" };
+    const result = await ctx.db
+      .query("notifications")
+      .withIndex("by_user_and_created", (q) => q.eq("userId", user._id))
+      .order("desc")
+      .paginate(paginationOpts);
+    return {
+      ...result,
+      page: await Promise.all(result.page.map((n) => notificationView(ctx, n))),
+    };
+  },
+});
+
+/** Unread count for the bell badge (capped at 99 for display). */
+export const unreadNotificationCount = query({
+  args: {},
+  handler: async (ctx) => {
+    const user = await getCurrentUser(ctx);
+    if (!user) return 0;
+    const unread = await ctx.db
+      .query("notifications")
+      .withIndex("by_user_and_read", (q) =>
+        q.eq("userId", user._id).eq("read", false),
+      )
+      .take(100);
+    return unread.length;
+  },
+});
+
+/** Mark all of the caller's notifications read (batched). */
+export const markNotificationsRead = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const user = await requireUser(ctx);
+    const unread = await ctx.db
+      .query("notifications")
+      .withIndex("by_user_and_read", (q) =>
+        q.eq("userId", user._id).eq("read", false),
+      )
+      .take(200);
+    for (const n of unread) {
+      await ctx.db.patch("notifications", n._id, { read: true });
+    }
+    return unread.length;
   },
 });

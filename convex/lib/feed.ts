@@ -64,4 +64,9 @@ export async function clearPostSocial(ctx: MutationCtx, postId: Id<"posts">) {
     for (const l of likes) await ctx.db.delete("postCommentReactions", l._id);
     await ctx.db.delete("postComments", c._id);
   }
+  const notes = await ctx.db
+    .query("notifications")
+    .withIndex("by_post", (q) => q.eq("postId", postId))
+    .collect();
+  for (const nt of notes) await ctx.db.delete("notifications", nt._id);
 }

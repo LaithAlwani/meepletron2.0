@@ -7,14 +7,15 @@ import nodemailer from "nodemailer";
 const SUPPORT_EMAIL = "support@meepletron.com";
 const SITE_URL = process.env.SITE_URL || "https://www.meepletron.com";
 
-// Brand tokens (inline styles for email-client compatibility).
-const BRAND_PRIMARY = "#2563eb";
-const TEXT_HEADING = "#0f172a";
-const TEXT_BODY = "#334155";
-const TEXT_MUTED = "#64748b";
+// Brand tokens — Meepletron's light theme (warm tangerine on cream). Inline
+// styles for email-client compatibility.
+const BRAND_PRIMARY = "#dc4e26"; // tangerine accent
+const TEXT_HEADING = "#221d18"; // warm ink
+const TEXT_BODY = "#463c33";
+const TEXT_MUTED = "#8a7c6d";
 const SURFACE = "#ffffff";
-const BG = "#f8fafc";
-const BORDER = "#e2e8f0";
+const BG = "#faf6ee"; // warm cream
+const BORDER = "#ece3d5"; // warm sand
 
 function transporter() {
   return nodemailer.createTransport({
@@ -38,9 +39,11 @@ function escapeHtml(str: string): string {
 function emailLayout({
   previewText = "",
   bodyHtml,
+  footerNote = "You're receiving this because you contacted us. If this wasn't you, you can safely ignore it.",
 }: {
   previewText?: string;
   bodyHtml: string;
+  footerNote?: string;
 }): string {
   return `<!DOCTYPE html>
 <html lang="en">
@@ -70,7 +73,7 @@ function emailLayout({
               <p style="margin:0 0 6px 0;">
                 <a href="${SITE_URL}" style="color:${BRAND_PRIMARY};text-decoration:none;font-weight:600;">Meepletron</a> · Your board game rules assistant.
               </p>
-              <p style="margin:0;">You're receiving this because you contacted us. If this wasn't you, you can safely ignore it.</p>
+              <p style="margin:0;">${escapeHtml(footerNote)}</p>
             </td>
           </tr>
         </table>
@@ -144,6 +147,58 @@ export const sendContactEmails = internalAction({
       });
     } catch (err) {
       console.error("Failed to send contact auto-reply:", err);
+    }
+  },
+});
+
+/**
+ * Tell someone they were added to a logged play by email, with a CTA to view it.
+ * Best-effort; a send failure is logged, never thrown (mustn't block logging).
+ */
+export const sendPlayTagEmail = internalAction({
+  args: {
+    to: v.string(),
+    recipientName: v.optional(v.string()),
+    ownerName: v.string(),
+    playTitle: v.string(),
+    playUrl: v.string(),
+  },
+  handler: async (_ctx, { to, recipientName, ownerName, playTitle, playUrl }) => {
+    const t = transporter();
+    const from = process.env.MAIL_FROM || `Meepletron <${SUPPORT_EMAIL}>`;
+    const who = escapeHtml(ownerName);
+    const game = escapeHtml(playTitle);
+    const hello = recipientName?.trim()
+      ? `Hi ${escapeHtml(recipientName.trim())},`
+      : "Hi there,";
+    const url = encodeURI(playUrl);
+
+    const body = `
+      <h2 style="margin:0 0 12px 0;font-size:20px;color:${TEXT_HEADING};font-weight:700;">${who} added you to a game night 🎲</h2>
+      <p style="margin:0 0 12px 0;">${hello}</p>
+      <p style="margin:0 0 12px 0;"><strong style="color:${TEXT_HEADING};">${who}</strong> logged a play of <strong style="color:${TEXT_HEADING};">${game}</strong> on Meepletron and added you as one of the players.</p>
+      <p style="margin:0 0 22px 0;">Head over to see the scores, who won, and the photos from the table.</p>
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 24px 0;">
+        <tr><td style="border-radius:12px;background-color:${BRAND_PRIMARY};">
+          <a href="${url}" style="display:inline-block;padding:12px 26px;font-size:15px;font-weight:700;color:#ffffff;text-decoration:none;border-radius:12px;">See the play</a>
+        </td></tr>
+      </table>
+      <p style="margin:0;color:${TEXT_MUTED};font-size:13px;">Sign in with this email address to keep every game you're tagged in — and log your own.</p>`;
+
+    try {
+      await t.sendMail({
+        from,
+        to,
+        subject: `${ownerName} added you to a play of ${playTitle}`,
+        text: `${ownerName} logged a play of ${playTitle} on Meepletron and added you as a player.\n\nSee the play: ${playUrl}\n\nSign in with this email to keep every game you're tagged in.\n\n— Meepletron`,
+        html: emailLayout({
+          previewText: `${ownerName} added you to a play of ${playTitle}`,
+          bodyHtml: body,
+          footerNote: `You're receiving this because ${ownerName} logged a game with your email on Meepletron.`,
+        }),
+      });
+    } catch (err) {
+      console.error("Failed to send play-tag email:", err);
     }
   },
 });

@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { useQuery } from "convex/react";
 import {
   User,
+  Bell,
   Dices,
   Settings,
   Scissors,
@@ -57,6 +58,7 @@ export function MoreSheet({
 
   const items: { href: string; label: string; icon: LucideIcon }[] = [
     { href: "/profile", label: "Profile", icon: User },
+    { href: "/notifications", label: "Notifications", icon: Bell },
     { href: "/plays", label: "My plays", icon: Dices },
     { href: "/settings", label: "Settings", icon: Settings },
     { href: "/tuckbox", label: "Tuckbox", icon: Scissors },

@@ -62,3 +62,18 @@ export const postCommentReactionValidator = v.object({
   userId: v.id("users"),
   createdAt: v.number(),
 });
+
+/** An in-app notification for the recipient (`userId`) about someone's action. */
+export const notificationValidator = v.object({
+  userId: v.id("users"), // recipient
+  type: v.union(
+    v.literal("post_like"),
+    v.literal("post_comment"),
+    v.literal("comment_mention"),
+  ),
+  actorId: v.id("users"), // who triggered it
+  postId: v.optional(v.id("posts")),
+  commentId: v.optional(v.id("postComments")),
+  read: v.boolean(),
+  createdAt: v.number(),
+});

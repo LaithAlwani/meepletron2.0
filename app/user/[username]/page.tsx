@@ -10,6 +10,7 @@ import {
   Repeat2,
   Heart,
   Dices,
+  Image as ImageIcon,
   type LucideIcon,
 } from "lucide-react";
 import { api } from "@/convex/_generated/api";
@@ -37,6 +38,7 @@ export default function ProfilePage({
   const { username } = use(params);
   const data = useQuery(api.topGames.publicProfile, { username });
   const engagement = useQuery(api.plays.playEngagement, { username });
+  const photos = useQuery(api.posts.userImagePosts, { username });
 
   if (data === undefined) {
     return (
@@ -68,6 +70,7 @@ export default function ProfilePage({
     .toUpperCase();
   const hasAnything =
     showPlays ||
+    (photos?.length ?? 0) > 0 ||
     lists.length > 0 ||
     (owned?.total ?? 0) > 0 ||
     (forTrade?.total ?? 0) > 0 ||
@@ -121,6 +124,36 @@ export default function ProfilePage({
       ) : (
         <div className="space-y-8">
           {showPlays && <PublicPlaysBlock username={username} />}
+
+          {photos && photos.length > 0 && (
+            <SectionBlock icon={ImageIcon} title="Photos" count={photos.length}>
+              <ul className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+                {photos.map((p) => (
+                  <li key={p._id}>
+                    <Link
+                      href={`/posts/${p._id}`}
+                      className="group relative block aspect-square overflow-hidden rounded-xl bg-surface-2 ring-1 ring-border"
+                    >
+                      {p.photoUrl && (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={p.photoUrl}
+                          alt={p.caption ?? ""}
+                          loading="lazy"
+                          className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                        />
+                      )}
+                      {p.photoCount > 1 && (
+                        <span className="absolute right-1.5 top-1.5 rounded-md bg-black/55 px-1.5 py-0.5 text-[10px] font-bold text-white">
+                          {p.photoCount}
+                        </span>
+                      )}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </SectionBlock>
+          )}
 
           {lists.length > 0 && (
             <SectionBlock icon={Trophy} title="Top Games">
