@@ -8,12 +8,14 @@ import { buttonClasses } from "@/components/ui/Button";
 import { Skeleton } from "@/components/ui/Surface";
 import { PostFeedItem } from "@/components/plays/PostFeedItem";
 import { PostComposer } from "@/components/plays/PostComposer";
+import { UsernamePrompt } from "@/components/feed/UsernamePrompt";
 
 /** The home feed: a composer (signed-in) over everyone's shared posts. */
 export function HomeFeed() {
   return (
     <div className="mx-auto max-w-xl px-4 py-6 sm:py-8">
       <Authenticated>
+        <UsernamePrompt />
         <PostComposer />
       </Authenticated>
       <Unauthenticated>

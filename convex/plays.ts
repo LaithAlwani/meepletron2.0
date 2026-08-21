@@ -76,9 +76,10 @@ async function withHandles<T extends { name: string; userId?: Id<"users"> }>(
       const avatarUrl = u?.avatarStorageId
         ? await ctx.storage.getUrl(u.avatarStorageId)
         : (u?.image ?? null);
+      // A linked member is shown by their username, never their real name.
       return {
         ...p,
-        name: u?.username ? `@${u.username}` : p.name,
+        name: u?.username ?? p.name,
         avatarUrl,
       };
     }),
@@ -715,7 +716,7 @@ export const getPlay = query({
       coverUrl: cover?.coverUrl ?? null,
       photoUrls: photoUrls.filter((u): u is string => !!u),
       winners: winnerNamesOf(players),
-      ownerName: owner?.name ?? owner?.username ?? null,
+      ownerName: owner?.username ?? null,
       ownerUsername: owner?.username ?? null,
       postId: post?._id ?? null,
       reactionCount: post?.reactionCount ?? 0,

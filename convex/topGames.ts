@@ -72,16 +72,16 @@ async function authorInfo(ctx: QueryCtx, userId: Id<"users">) {
   const u = await ctx.db.get("users", userId);
   if (!u) return null;
   const p = u.publicProfile ?? {};
-  const showName = p.showName ?? true;
   const showAvatar = p.showAvatar ?? true;
   const avatarUrl = showAvatar
     ? u.avatarStorageId
       ? await ctx.storage.getUrl(u.avatarStorageId)
       : (u.image ?? null)
     : null;
+  // Public identity is the username, never the real name.
   return {
     username: u.username ?? null,
-    name: showName ? (u.name ?? null) : null,
+    name: u.username ?? null,
     avatarUrl,
   };
 }

@@ -27,14 +27,14 @@ import { topListPreview } from "./topGames";
 /* Helpers                                                                    */
 /* -------------------------------------------------------------------------- */
 
-/** Public author info for a post / comment. */
+/** Public author info for a post / comment — the username, never the real name. */
 async function postOwner(ctx: QueryCtx, userId: Id<"users">) {
   const u = await ctx.db.get("users", userId);
   const avatarUrl = u?.avatarStorageId
     ? await ctx.storage.getUrl(u.avatarStorageId)
     : (u?.image ?? null);
   return {
-    name: u?.name ?? u?.username ?? "Player",
+    name: u?.username ?? "Player",
     username: u?.username ?? null,
     avatarUrl,
   };

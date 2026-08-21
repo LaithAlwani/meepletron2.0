@@ -94,11 +94,8 @@ export default function ProfilePage({
         )}
         <div>
           <h1 className="font-display text-2xl font-extrabold tracking-tight">
-            {author?.name ?? author?.username ?? "Player"}
+            {author?.username ?? "Player"}
           </h1>
-          {author?.username && (
-            <p className="text-sm text-muted">@{author.username}</p>
-          )}
           {engagement &&
             (engagement.likesReceived > 0 || engagement.commentsReceived > 0) && (
               <div className="mt-1 flex gap-3 text-xs text-subtle">
