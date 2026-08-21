@@ -10,6 +10,7 @@ import { compressImage } from "@/lib/imageCompress";
 import { buttonClasses } from "@/components/ui/Button";
 import { useToast } from "@/components/ui/Toast";
 import { LogPlayWizard } from "@/components/plays/LogPlayWizard";
+import { useUsernameGate } from "@/components/feed/UsernameGate";
 import { topListTitle } from "@/lib/topGamesTitle";
 import { categoryLabel, DEFAULT_CATEGORY } from "@/convex/lib/topGamesCategories";
 import { cn } from "@/lib/cn";
@@ -19,10 +20,16 @@ type Mode = null | "photo" | "list" | "play";
 /** The top-of-feed composer: a bar with three ways to post (photo / list / play). */
 export function PostComposer() {
   const me = useQuery(api.users.me);
+  const ensureUsername = useUsernameGate();
   const [mode, setMode] = useState<Mode>(null);
 
   const avatar = me?.avatarUrl ?? null;
   const initial = (me?.name ?? me?.username ?? "?").charAt(0).toUpperCase();
+
+  // Photo + Top-list posts are public — require a username first.
+  async function openGated(next: "photo" | "list") {
+    if (await ensureUsername()) setMode(next);
+  }
 
   return (
     <div className="mb-5 rounded-2xl border border-border-muted bg-surface p-3">
@@ -36,15 +43,15 @@ export function PostComposer() {
           </span>
         )}
         <button
-          onClick={() => setMode("photo")}
+          onClick={() => openGated("photo")}
           className="flex-1 rounded-full border border-border bg-surface-2 px-4 py-2 text-left text-sm text-subtle transition-colors hover:border-accent/40"
         >
           Share something…
         </button>
       </div>
       <div className="mt-2.5 flex items-center gap-1 border-t border-border-muted pt-2.5">
-        <ComposerTab icon={<ImagePlus className="h-4 w-4" />} label="Photo" onClick={() => setMode("photo")} />
-        <ComposerTab icon={<Trophy className="h-4 w-4" />} label="Top list" onClick={() => setMode("list")} />
+        <ComposerTab icon={<ImagePlus className="h-4 w-4" />} label="Photo" onClick={() => openGated("photo")} />
+        <ComposerTab icon={<Trophy className="h-4 w-4" />} label="Top list" onClick={() => openGated("list")} />
         <ComposerTab icon={<Dices className="h-4 w-4" />} label="Log a play" onClick={() => setMode("play")} />
       </div>
 

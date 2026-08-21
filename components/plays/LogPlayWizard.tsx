@@ -23,6 +23,7 @@ import { Switch } from "@/components/ui/Switch";
 import { buttonClasses } from "@/components/ui/Button";
 import { useToast } from "@/components/ui/Toast";
 import { useGameSearch } from "@/components/boardgames/useGameSearch";
+import { useUsernameGate } from "@/components/feed/UsernameGate";
 import { compressImage } from "@/lib/imageCompress";
 import { cn } from "@/lib/cn";
 
@@ -131,6 +132,7 @@ export function LogPlayWizard({
 }) {
   const router = useRouter();
   const toast = useToast();
+  const ensureUsername = useUsernameGate();
   const me = useQuery(api.users.me, open ? {} : "skip");
   const logPlay = useMutation(api.plays.logPlay);
   const updatePlay = useMutation(api.plays.updatePlay);
@@ -292,6 +294,8 @@ export function LogPlayWizard({
 
   async function onSave() {
     if (!game) return;
+    // A public play appears in the feed — require a username before saving it.
+    if (visibility === "public" && !(await ensureUsername())) return;
     setBusy(true);
     try {
       const teams = isTeams

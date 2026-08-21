@@ -25,6 +25,7 @@ import type { Id } from "@/convex/_generated/dataModel";
 import { Thumb } from "./Thumb";
 import { CoverScroller } from "./CoverScroller";
 import { ShareButton } from "@/components/boardgames/ShareButton";
+import { useUsernameGate } from "@/components/feed/UsernameGate";
 import { useToast } from "@/components/ui/Toast";
 import { useConfirm } from "@/components/ui/Confirm";
 import { Chip } from "@/components/ui/Surface";
@@ -617,6 +618,7 @@ export function TopGamesView({ data }: { data: TopListData }) {
   const setVisibility = useMutation(api.topGames.setVisibility);
   const remove = useMutation(api.topGames.remove);
   const shareToFeed = useMutation(api.posts.createTopListPost);
+  const ensureUsername = useUsernameGate();
   const [sharing, setSharing] = useState(false);
   const [mode, setMode] = useState<"list" | "reveal">(() =>
     typeof window === "undefined"
@@ -657,6 +659,7 @@ export function TopGamesView({ data }: { data: TopListData }) {
   }
 
   async function onShareToFeed() {
+    if (!(await ensureUsername())) return;
     setSharing(true);
     try {
       await shareToFeed({ topListId: data._id });

@@ -5,6 +5,7 @@ import { ConvexReactClient } from "convex/react";
 import { ConvexAuthProvider } from "@convex-dev/auth/react";
 import { ToastProvider } from "@/components/ui/Toast";
 import { ConfirmProvider } from "@/components/ui/Confirm";
+import { UsernameGateProvider } from "@/components/feed/UsernameGate";
 import { GuestUpgradeClaimer } from "@/components/auth/GuestUpgradeClaimer";
 
 const convex = new ConvexReactClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
@@ -14,8 +15,10 @@ export function Providers({ children }: { children: ReactNode }) {
     <ConvexAuthProvider client={convex}>
       <ToastProvider>
         <ConfirmProvider>
-          <GuestUpgradeClaimer />
-          {children}
+          <UsernameGateProvider>
+            <GuestUpgradeClaimer />
+            {children}
+          </UsernameGateProvider>
         </ConfirmProvider>
       </ToastProvider>
     </ConvexAuthProvider>

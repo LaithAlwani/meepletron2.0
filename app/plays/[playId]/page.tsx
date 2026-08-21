@@ -32,6 +32,7 @@ import {
   type WizardInitialPlay,
 } from "@/components/plays/LogPlayWizard";
 import { CommentsDrawer } from "@/components/plays/CommentsDrawer";
+import { useUsernameGate } from "@/components/feed/UsernameGate";
 import { FORMAT_LABEL, playDate } from "@/components/plays/PlayCard";
 import { formatPlayTime } from "@/lib/format";
 import { cn } from "@/lib/cn";
@@ -49,6 +50,7 @@ export default function PlayPage({
   const setVisibility = useMutation(api.plays.setPlayVisibility);
   const remove = useMutation(api.plays.deletePlay);
   const toggleReaction = useMutation(api.posts.toggleReaction);
+  const ensureUsername = useUsernameGate();
   const { isAuthenticated } = useConvexAuth();
   const [rematch, setRematch] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -81,6 +83,8 @@ export default function PlayPage({
   const cover = play.photoUrls[0] ?? play.coverUrl;
 
   const toggleVisibility = async () => {
+    // Making a play public puts it in the feed — require a username first.
+    if (!isPublic && !(await ensureUsername())) return;
     try {
       await setVisibility({
         playId: play._id,
