@@ -18,10 +18,12 @@ const ROUTES: {
   changeFrequency: MetadataRoute.Sitemap[number]["changeFrequency"];
   priority: number;
 }[] = [
-  { path: "/", changeFrequency: "weekly", priority: 1 },
+  { path: "/", changeFrequency: "daily", priority: 1 },
   { path: "/boardgames", changeFrequency: "daily", priority: 0.9 },
+  { path: "/top-games", changeFrequency: "weekly", priority: 0.8 },
   { path: "/who-goes-first", changeFrequency: "monthly", priority: 0.7 },
   { path: "/tuckbox", changeFrequency: "monthly", priority: 0.6 },
+  { path: "/about", changeFrequency: "monthly", priority: 0.5 },
   { path: "/privacy-policy", changeFrequency: "yearly", priority: 0.2 },
   { path: "/terms-of-service", changeFrequency: "yearly", priority: 0.2 },
 ];
