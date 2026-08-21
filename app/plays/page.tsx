@@ -9,7 +9,7 @@ import {
   Unauthenticated,
   AuthLoading,
 } from "convex/react";
-import { Plus } from "lucide-react";
+import { Plus, Users } from "lucide-react";
 import { api } from "@/convex/_generated/api";
 import { PageTitle } from "@/components/ui/PageTitle";
 import { buttonClasses } from "@/components/ui/Button";
@@ -24,14 +24,24 @@ export default function PlaysPage() {
     <div className="mx-auto max-w-xl px-4 py-8">
       <div className="mb-6 flex items-center justify-between gap-4">
         <PageTitle>My plays</PageTitle>
-        <button
-          onClick={() => setWizardOpen(true)}
-          aria-label="Log a play"
-          className={buttonClasses("primary", "md")}
-        >
-          <Plus className="h-4 w-4" />
-          <span className="hidden sm:inline">Log a play</span>
-        </button>
+        <div className="flex items-center gap-2">
+          <Link
+            href="/plays/people"
+            className={buttonClasses("ghost", "md")}
+            title="Manage people"
+          >
+            <Users className="h-4 w-4" />
+            <span className="hidden sm:inline">People</span>
+          </Link>
+          <button
+            onClick={() => setWizardOpen(true)}
+            aria-label="Log a play"
+            className={buttonClasses("primary", "md")}
+          >
+            <Plus className="h-4 w-4" />
+            <span className="hidden sm:inline">Log a play</span>
+          </button>
+        </div>
       </div>
 
       <AuthLoading>

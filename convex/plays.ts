@@ -1,4 +1,4 @@
-import { v, type Infer } from "convex/values";
+import { v, ConvexError, type Infer } from "convex/values";
 import { paginationOptsValidator } from "convex/server";
 import {
   query,
@@ -34,6 +34,7 @@ import { syncPlayPost, deletePlayPost } from "./lib/feed";
 const PLAYERS_MAX = 30;
 const STATS_SCAN = 1000; // bounded rows a stats query reads
 const SWEEP_BATCH = 200; // rows a purge pass deletes before rescheduling
+const PEOPLE_SCAN = 1000; // bounded plays scanned when editing a saved person
 
 type PlayDoc = Doc<"plays">;
 
@@ -919,6 +920,185 @@ export const playEngagement = query({
     for (const c of comments) likesReceived += c.likeCount ?? 0;
 
     return { likesReceived, commentsReceived };
+  },
+});
+
+/* -------------------------------------------------------------------------- */
+/* Saved people — manage the non-account players you've added                 */
+/* -------------------------------------------------------------------------- */
+
+/** The caller's saved people, for the manage-people page. Linked people show
+ *  their account's current @username (they manage their own identity). */
+export const myPeople = query({
+  args: {},
+  handler: async (ctx) => {
+    const user = await getCurrentUser(ctx);
+    if (!user) return [];
+    const rows = await ctx.db
+      .query("playPeople")
+      .withIndex("by_owner", (q) => q.eq("ownerId", user._id))
+      .take(500);
+    const people = await Promise.all(
+      rows.map(async (r) => {
+        let displayName = r.name;
+        let username: string | null = null;
+        let avatarUrl: string | null = null;
+        if (r.linkedUserId) {
+          const u = await ctx.db.get("users", r.linkedUserId);
+          username = u?.username ?? null;
+          // A joined person is shown by their username, not the name you typed.
+          displayName = u?.username ? `@${u.username}` : r.name;
+          avatarUrl = u?.avatarStorageId
+            ? await ctx.storage.getUrl(u.avatarStorageId)
+            : (u?.image ?? null);
+        }
+        return {
+          _id: r._id,
+          name: displayName,
+          rawName: r.name,
+          email: r.emailLower ?? null,
+          playCount: r.playCount ?? 0,
+          linked: !!r.linkedUserId,
+          username,
+          avatarUrl,
+        };
+      }),
+    );
+    return people.sort((a, b) => b.playCount - a.playCount);
+  },
+});
+
+/**
+ * Edit a saved (non-account) person's name and/or email. Fixes the name across
+ * all of the owner's past plays, and moves the email-claim links to the new
+ * email. Rejects a duplicate email; joined people are read-only.
+ */
+export const updatePlayPerson = mutation({
+  args: {
+    personId: v.id("playPeople"),
+    name: v.string(),
+    email: v.optional(v.string()),
+  },
+  handler: async (ctx, { personId, name, email }) => {
+    const user = await requireUser(ctx);
+    const person = await ctx.db.get("playPeople", personId);
+    if (!person || person.ownerId !== user._id) {
+      throw new ConvexError("Person not found.");
+    }
+    if (person.linkedUserId) {
+      throw new ConvexError(
+        "This person has a Meepletron account — they manage their own name and email.",
+      );
+    }
+    const newName = name.trim();
+    if (!newName) throw new ConvexError("Name can't be empty.");
+
+    // Empty string clears the email; a non-empty invalid one is an error.
+    const raw = email?.trim() ?? "";
+    let newEmail: string | undefined;
+    if (raw) {
+      newEmail = normEmail(raw);
+      if (!newEmail) throw new ConvexError("Enter a valid email address.");
+    }
+
+    const oldEmail = person.emailLower;
+    if (newEmail && newEmail !== oldEmail) {
+      const clash = await ctx.db
+        .query("playPeople")
+        .withIndex("by_owner_and_email", (q) =>
+          q.eq("ownerId", user._id).eq("emailLower", newEmail),
+        )
+        .first();
+      if (clash && clash._id !== personId) {
+        throw new ConvexError("Another person already uses that email.");
+      }
+    }
+
+    await ctx.db.patch("playPeople", personId, {
+      name: newName,
+      emailLower: newEmail,
+    });
+
+    // Propagate the name to this person's embedded rows in past plays.
+    const plays = await ctx.db
+      .query("plays")
+      .withIndex("by_user_and_date", (q) => q.eq("userId", user._id))
+      .take(PEOPLE_SCAN);
+    const touched: {
+      playId: Id<"plays">;
+      gameId?: Id<"games">;
+      date: string;
+      visibility: PlayDoc["visibility"];
+    }[] = [];
+    for (const play of plays) {
+      let changed = false;
+      const players = play.players.map((p) => {
+        if (p.personId === personId) {
+          changed = true;
+          return { ...p, name: newName };
+        }
+        return p;
+      });
+      if (changed) {
+        await ctx.db.patch("plays", play._id, { players });
+        touched.push({
+          playId: play._id,
+          gameId: play.gameId,
+          date: play.date,
+          visibility: play.visibility,
+        });
+      }
+    }
+
+    // Keep the email-claim links in step with the new email.
+    if (oldEmail !== newEmail) {
+      if (oldEmail) {
+        const rows = await ctx.db
+          .query("playParticipants")
+          .withIndex("by_email", (q) => q.eq("emailLower", oldEmail))
+          .collect();
+        for (const r of rows) {
+          if (r.ownerId !== user._id) continue;
+          if (newEmail) await ctx.db.patch("playParticipants", r._id, { emailLower: newEmail });
+          else await ctx.db.delete("playParticipants", r._id);
+        }
+      } else if (newEmail) {
+        // No prior email: add a link for each play this person is in.
+        for (const tp of touched) {
+          const existing = await ctx.db
+            .query("playParticipants")
+            .withIndex("by_play", (q) => q.eq("playId", tp.playId))
+            .collect();
+          if (!existing.some((e) => e.emailLower === newEmail)) {
+            await ctx.db.insert("playParticipants", {
+              playId: tp.playId,
+              ownerId: user._id,
+              gameId: tp.gameId,
+              date: tp.date,
+              visibility: tp.visibility,
+              emailLower: newEmail,
+            });
+          }
+        }
+      }
+    }
+  },
+});
+
+/** Remove a saved person from the owner's list. Past plays keep their name
+ *  (history isn't rewritten). Joined people can't be removed here. */
+export const deletePlayPerson = mutation({
+  args: { personId: v.id("playPeople") },
+  handler: async (ctx, { personId }) => {
+    const user = await requireUser(ctx);
+    const person = await ctx.db.get("playPeople", personId);
+    if (!person || person.ownerId !== user._id) return;
+    if (person.linkedUserId) {
+      throw new ConvexError(
+        "This person has a Meepletron account and can't be removed from your list.",
+      );
+    }
+    await ctx.db.delete("playPeople", personId);
   },
 });
 
