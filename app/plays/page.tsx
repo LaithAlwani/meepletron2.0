@@ -15,18 +15,15 @@ import { PageTitle } from "@/components/ui/PageTitle";
 import { buttonClasses } from "@/components/ui/Button";
 import { Skeleton } from "@/components/ui/Surface";
 import { PlayCard } from "@/components/plays/PlayCard";
-import { PlayFeedItem } from "@/components/plays/PlayFeedItem";
 import { LogPlayWizard } from "@/components/plays/LogPlayWizard";
-import { cn } from "@/lib/cn";
 
 export default function PlaysPage() {
   const [wizardOpen, setWizardOpen] = useState(false);
-  const [tab, setTab] = useState<"feed" | "mine">("feed");
 
   return (
     <div className="mx-auto max-w-xl px-4 py-8">
-      <div className="mb-5 flex items-center justify-between gap-4">
-        <PageTitle>Plays</PageTitle>
+      <div className="mb-6 flex items-center justify-between gap-4">
+        <PageTitle>My plays</PageTitle>
         <button
           onClick={() => setWizardOpen(true)}
           aria-label="Log a play"
@@ -37,97 +34,23 @@ export default function PlaysPage() {
         </button>
       </div>
 
-      <div className="mb-6 flex gap-5">
-        {(["feed", "mine"] as const).map((t) => (
-          <button
-            key={t}
-            onClick={() => setTab(t)}
-            aria-current={tab === t ? "page" : undefined}
-            className={cn(
-              "px-0.5 text-sm font-semibold transition-colors",
-              tab === t ? "text-accent" : "text-muted hover:text-foreground",
-            )}
-          >
-            {t === "feed" ? "Community" : "My plays"}
-          </button>
-        ))}
-      </div>
-
-      {tab === "feed" ? (
-        <CommunityFeed />
-      ) : (
-        <>
-          <AuthLoading>
-            <PlaysSkeleton />
-          </AuthLoading>
-          <Unauthenticated>
-            <div className="rounded-2xl border border-border bg-surface p-6 text-center">
-              <p className="text-sm text-muted">Sign in to record your plays.</p>
-              <Link href="/auth" className={`mt-4 ${buttonClasses("primary", "sm")}`}>
-                Sign in
-              </Link>
-            </div>
-          </Unauthenticated>
-          <Authenticated>
-            <MyPlays onLog={() => setWizardOpen(true)} />
-          </Authenticated>
-        </>
-      )}
+      <AuthLoading>
+        <PlaysSkeleton />
+      </AuthLoading>
+      <Unauthenticated>
+        <div className="rounded-2xl border border-border bg-surface p-6 text-center">
+          <p className="text-sm text-muted">Sign in to record your plays.</p>
+          <Link href="/auth" className={`mt-4 ${buttonClasses("primary", "sm")}`}>
+            Sign in
+          </Link>
+        </div>
+      </Unauthenticated>
+      <Authenticated>
+        <MyPlays onLog={() => setWizardOpen(true)} />
+      </Authenticated>
 
       <LogPlayWizard open={wizardOpen} onClose={() => setWizardOpen(false)} />
     </div>
-  );
-}
-
-function CommunityFeed() {
-  const { results, status, loadMore } = usePaginatedQuery(
-    api.plays.communityPlays,
-    {},
-    { initialNumItems: 10 },
-  );
-  const sentinel = useRef<HTMLDivElement | null>(null);
-  useEffect(() => {
-    const el = sentinel.current;
-    if (!el || status !== "CanLoadMore") return;
-    const io = new IntersectionObserver(
-      (entries) => entries[0]?.isIntersecting && loadMore(10),
-      { rootMargin: "800px" },
-    );
-    io.observe(el);
-    return () => io.disconnect();
-  }, [status, loadMore]);
-
-  if (status === "LoadingFirstPage") {
-    return (
-      <div className="space-y-4">
-        {Array.from({ length: 3 }).map((_, i) => (
-          <Skeleton key={i} className="h-56 w-full rounded-2xl" />
-        ))}
-      </div>
-    );
-  }
-  if (results.length === 0) {
-    return (
-      <div className="rounded-2xl border border-dashed border-border p-10 text-center text-muted">
-        <p className="font-medium">No public plays yet.</p>
-        <p className="mt-1 text-sm">
-          Log a play and make it public to share it here.
-        </p>
-      </div>
-    );
-  }
-  return (
-    <>
-      <div className="space-y-4">
-        {results.map((item) => (
-          <PlayFeedItem key={item._id} item={item} />
-        ))}
-      </div>
-      <div ref={sentinel} aria-hidden className="h-px" />
-      {status === "LoadingMore" && (
-        <p className="mt-6 text-center text-sm text-muted">Loading…</p>
-      )}
-    </>
   );
 }
 

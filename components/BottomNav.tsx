@@ -4,8 +4,8 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  Home,
   LayoutGrid,
-  Dices,
   Trophy,
   MessageCircle,
   MoreHorizontal,
@@ -14,8 +14,8 @@ import { cn } from "@/lib/cn";
 import { MoreSheet } from "@/components/MoreSheet";
 
 const TABS = [
+  { href: "/", label: "Home", icon: Home },
   { href: "/boardgames", label: "Library", icon: LayoutGrid },
-  { href: "/plays", label: "Plays", icon: Dices },
   { href: "/top-games", label: "Top Games", icon: Trophy },
   { href: "/chats", label: "Chats", icon: MessageCircle },
 ];

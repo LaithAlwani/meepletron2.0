@@ -301,6 +301,24 @@ async function listCard(ctx: QueryCtx, list: ListDoc) {
   return { ...listMeta(list), covers: await coverSample(ctx, list, 5) };
 }
 
+/**
+ * A preview of a list for a "toplist" feed post — meta + a cover collage.
+ * Returns null if the list no longer exists. Reused by convex/posts.ts.
+ */
+export async function topListPreview(ctx: QueryCtx, listId: Id<"topGamesLists">) {
+  const list = await ctx.db.get("topGamesLists", listId);
+  if (!list) return null;
+  return {
+    listId: list._id,
+    category: list.category ?? DEFAULT_CATEGORY,
+    size: list.size,
+    year: list.year,
+    title: list.title ?? null,
+    count: list.entries.length,
+    covers: await coverSample(ctx, list, 5),
+  };
+}
+
 /** Load an owned list for a write, or throw. */
 async function ownedList(
   ctx: QueryCtx,

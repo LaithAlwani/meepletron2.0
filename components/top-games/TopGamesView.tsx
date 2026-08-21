@@ -18,6 +18,7 @@ import {
   Sparkles,
   Play,
   Pause,
+  Rss,
 } from "lucide-react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
@@ -615,6 +616,8 @@ export function TopGamesView({ data }: { data: TopListData }) {
   const reopen = useMutation(api.topGames.reopen);
   const setVisibility = useMutation(api.topGames.setVisibility);
   const remove = useMutation(api.topGames.remove);
+  const shareToFeed = useMutation(api.posts.createTopListPost);
+  const [sharing, setSharing] = useState(false);
   const [mode, setMode] = useState<"list" | "reveal">(() =>
     typeof window === "undefined"
       ? "reveal"
@@ -650,6 +653,18 @@ export function TopGamesView({ data }: { data: TopListData }) {
       toast(isPublic ? "List is now private." : "List is public — share the link!", "success");
     } catch (e) {
       toast(e instanceof Error ? e.message : "Couldn't update.", "error");
+    }
+  }
+
+  async function onShareToFeed() {
+    setSharing(true);
+    try {
+      await shareToFeed({ topListId: data._id });
+      toast("Shared to the feed!", "success", { label: "View feed", href: "/" });
+    } catch (e) {
+      toast(e instanceof Error ? e.message : "Couldn't share.", "error");
+    } finally {
+      setSharing(false);
     }
   }
 
@@ -742,6 +757,17 @@ export function TopGamesView({ data }: { data: TopListData }) {
                 text={`${heading} — my Top Games list on Meepletron`}
                 className={ICON_BTN}
               />
+            )}
+            {data.status === "finalized" && (
+              <button
+                onClick={onShareToFeed}
+                disabled={sharing}
+                title="Share to feed"
+                aria-label="Share to feed"
+                className={ICON_BTN}
+              >
+                <Rss className="h-4.5 w-4.5" />
+              </button>
             )}
             <button
               onClick={onDelete}

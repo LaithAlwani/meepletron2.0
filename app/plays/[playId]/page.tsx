@@ -48,7 +48,7 @@ export default function PlayPage({
   const confirm = useConfirm();
   const setVisibility = useMutation(api.plays.setPlayVisibility);
   const remove = useMutation(api.plays.deletePlay);
-  const toggleReaction = useMutation(api.plays.toggleReaction);
+  const toggleReaction = useMutation(api.posts.toggleReaction);
   const { isAuthenticated } = useConvexAuth();
   const [rematch, setRematch] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -234,7 +234,7 @@ export default function PlayPage({
       </div>
 
       {/* Likes + comments (public plays only) */}
-      {isPublic && (
+      {isPublic && play.postId && (
         <div className="mt-4 flex items-center gap-1 border-y border-border-muted py-1">
           <button
             onClick={() => {
@@ -245,7 +245,7 @@ export default function PlayPage({
                 });
                 return;
               }
-              void toggleReaction({ playId: play._id });
+              if (play.postId) void toggleReaction({ postId: play.postId });
             }}
             className={cn(
               "inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-semibold transition-colors",
@@ -390,11 +390,11 @@ export default function PlayPage({
         </p>
       )}
 
-      {isPublic && (
+      {isPublic && play.postId && (
         <CommentsDrawer
           open={commentsOpen}
           onClose={() => setCommentsOpen(false)}
-          playId={play._id}
+          postId={play.postId}
         />
       )}
 

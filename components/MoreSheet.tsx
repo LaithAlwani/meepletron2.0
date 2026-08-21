@@ -6,10 +6,12 @@ import { usePathname } from "next/navigation";
 import { useQuery } from "convex/react";
 import {
   User,
+  Dices,
   Settings,
   Scissors,
   Hand,
   Shield,
+  Info,
   X,
   LogIn,
   type LucideIcon,
@@ -55,9 +57,11 @@ export function MoreSheet({
 
   const items: { href: string; label: string; icon: LucideIcon }[] = [
     { href: "/profile", label: "Profile", icon: User },
+    { href: "/plays", label: "My plays", icon: Dices },
     { href: "/settings", label: "Settings", icon: Settings },
     { href: "/tuckbox", label: "Tuckbox", icon: Scissors },
     { href: "/who-goes-first", label: "Who goes first", icon: Hand },
+    { href: "/about", label: "About", icon: Info },
     ...(me?.role === "admin"
       ? [{ href: "/admin", label: "Admin", icon: Shield as LucideIcon }]
       : []),
@@ -146,6 +150,14 @@ export function MoreSheet({
               >
                 <Scissors className="h-4.5 w-4.5 shrink-0 text-muted" />
                 Tuckbox
+              </Link>
+              <Link
+                href="/about"
+                onClick={onClose}
+                className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-surface-2"
+              >
+                <Info className="h-4.5 w-4.5 shrink-0 text-muted" />
+                About
               </Link>
             </div>
           )}

@@ -17,6 +17,12 @@ import {
   playCommentValidator,
   commentReactionValidator,
 } from "./lib/playTypes";
+import {
+  postRowValidator,
+  postReactionValidator,
+  postCommentValidator,
+  postCommentReactionValidator,
+} from "./lib/postTypes";
 
 /**
  * Meepletron 2.0 data model — everything lives in Convex.
@@ -546,18 +552,38 @@ export default defineSchema({
     .index("by_email", ["emailLower"])
     .index("by_play", ["playId"]),
 
-  // Likes on plays — one per user, toggled (count denormalized on plays).
+  // DEPRECATED — the social layer moved to the `posts` tables below. Kept only
+  // so existing rows validate until `posts:backfillFromPlays` migrates them;
+  // remove in a follow-up once prod is migrated. No code writes these anymore.
   playReactions: defineTable(playReactionValidator)
     .index("by_user_and_play", ["userId", "playId"])
     .index("by_play", ["playId"]),
-
-  // Comments on public plays (count denormalized on plays).
   playComments: defineTable(playCommentValidator)
     .index("by_play_and_created", ["playId", "createdAt"])
+    .index("by_user", ["userId"]),
+  commentReactions: defineTable(commentReactionValidator)
+    .index("by_user_and_comment", ["userId", "commentId"])
+    .index("by_comment", ["commentId"]),
+
+  // The social feed. One post per shared item (play / image / toplist). Holds
+  // only shared content and references plays/lists rather than duplicating them.
+  posts: defineTable(postRowValidator)
+    .index("by_visibility_and_created", ["visibility", "createdAt"]) // the feed
+    .index("by_user_and_created", ["userId", "createdAt"]) // a user's posts
+    .index("by_play", ["playId"]), // upsert/unshare a play's post
+
+  // Likes on posts — one per user, toggled (count denormalized on the post).
+  postReactions: defineTable(postReactionValidator)
+    .index("by_user_and_post", ["userId", "postId"])
+    .index("by_post", ["postId"]),
+
+  // Comments on public posts (count denormalized on the post).
+  postComments: defineTable(postCommentValidator)
+    .index("by_post_and_created", ["postId", "createdAt"])
     .index("by_user", ["userId"]), // aggregate a user's received comment likes
 
-  // Likes on comments — one per user, toggled (count denormalized on comment).
-  commentReactions: defineTable(commentReactionValidator)
+  // Likes on post comments — one per user, toggled (count on the comment).
+  postCommentReactions: defineTable(postCommentReactionValidator)
     .index("by_user_and_comment", ["userId", "commentId"])
     .index("by_comment", ["commentId"]),
 

@@ -38,7 +38,7 @@ function renderBody(text: string) {
 }
 
 type CommentItem = FunctionReturnType<
-  typeof api.plays.listComments
+  typeof api.posts.listComments
 >["page"][number];
 
 /** One comment: like + ⋮ menu (edit/delete) on the header line; inline edit. */
@@ -206,28 +206,28 @@ function activeMention(value: string, caret: number): { start: number; query: st
 }
 
 /**
- * Comments for a play — a bottom sheet on mobile, a right-hand sidebar on
+ * Comments for a post — a bottom sheet on mobile, a right-hand sidebar on
  * desktop. Comments on top (scrollable), composer pinned at the bottom with
  * @mention autocomplete.
  */
 export function CommentsDrawer({
   open,
   onClose,
-  playId,
+  postId,
 }: {
   open: boolean;
   onClose: () => void;
-  playId: Id<"plays">;
+  postId: Id<"posts">;
 }) {
   const { results, status, loadMore } = usePaginatedQuery(
-    api.plays.listComments,
-    open ? { playId } : "skip",
+    api.posts.listComments,
+    open ? { postId } : "skip",
     { initialNumItems: 20 },
   );
-  const add = useMutation(api.plays.addComment);
-  const del = useMutation(api.plays.deleteComment);
-  const editC = useMutation(api.plays.editComment);
-  const likeComment = useMutation(api.plays.toggleCommentReaction);
+  const add = useMutation(api.posts.addComment);
+  const del = useMutation(api.posts.deleteComment);
+  const editC = useMutation(api.posts.editComment);
+  const likeComment = useMutation(api.posts.toggleCommentReaction);
   const { isAuthenticated } = useConvexAuth();
   const toast = useToast();
 
@@ -302,7 +302,7 @@ export function CommentsDrawer({
     if (!body) return;
     setBusy(true);
     try {
-      await add({ playId, text: body });
+      await add({ postId, text: body });
       setText("");
       setMention(null);
     } catch (e) {
