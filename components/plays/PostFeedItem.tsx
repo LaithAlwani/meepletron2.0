@@ -1,10 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useMutation, useConvexAuth } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
-import { Heart, MessageCircle, Trophy, Dices } from "lucide-react";
+import { Heart, MessageCircle, Trophy, Dices, MoreVertical, Trash2 } from "lucide-react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { Thumb } from "@/components/top-games/Thumb";
@@ -12,6 +12,7 @@ import { FORMAT_LABEL, playDate, AvatarStack } from "@/components/plays/PlayCard
 import { CommentsDrawer } from "@/components/plays/CommentsDrawer";
 import { PhotoCarousel } from "@/components/plays/PhotoCarousel";
 import { useToast } from "@/components/ui/Toast";
+import { useConfirm } from "@/components/ui/Confirm";
 import { relativeTime } from "@/lib/format";
 import { topListTitle } from "@/lib/topGamesTitle";
 import { categoryLabel, DEFAULT_CATEGORY } from "@/convex/lib/topGamesCategories";
@@ -69,6 +70,7 @@ export function PostFeedItem({ item }: { item: FeedItem }) {
           )}
           <p className="text-xs text-subtle">{relativeTime(item.createdAt)}</p>
         </div>
+        {item.isMine && <OwnerMenu item={item} />}
       </div>
 
       {/* Content by kind */}
@@ -105,6 +107,78 @@ export function PostFeedItem({ item }: { item: FeedItem }) {
         postId={item._id as Id<"posts">}
       />
     </article>
+  );
+}
+
+/** Owner "⋯" menu — delete an image/toplist post, or unshare a play post
+ *  (making it private again). Shown only on the viewer's own posts. */
+function OwnerMenu({ item }: { item: FeedItem }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const toast = useToast();
+  const confirm = useConfirm();
+  const deletePost = useMutation(api.posts.deletePost);
+  const setVisibility = useMutation(api.plays.setPlayVisibility);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [open]);
+
+  const isPlay = item.kind === "play";
+
+  async function remove() {
+    setOpen(false);
+    const ok = await confirm({
+      title: isPlay ? "Remove from feed?" : "Delete post?",
+      message: isPlay
+        ? "This makes the play private and removes it from the feed. The play itself is kept."
+        : item.kind === "image"
+          ? "This permanently removes the post and its photos. This can't be undone."
+          : "This permanently removes the post. This can't be undone.",
+      confirmText: isPlay ? "Remove" : "Delete",
+      danger: true,
+    });
+    if (!ok) return;
+    try {
+      if (item.kind === "play") {
+        await setVisibility({ playId: item.playId, visibility: "private" });
+        toast("Removed from feed.", "success");
+      } else {
+        await deletePost({ postId: item._id as Id<"posts"> });
+        toast("Post deleted.", "success");
+      }
+    } catch (e) {
+      toast(e instanceof Error ? e.message : "Couldn't remove.", "error");
+    }
+  }
+
+  return (
+    <div ref={ref} className="relative shrink-0">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        aria-label="Post options"
+        aria-expanded={open}
+        className="flex h-8 w-8 items-center justify-center rounded-lg text-subtle transition-colors hover:bg-surface-2 hover:text-foreground"
+      >
+        <MoreVertical className="h-4.5 w-4.5" />
+      </button>
+      {open && (
+        <div className="animate-in absolute right-0 top-full z-10 mt-1 w-44 rounded-xl border border-border bg-surface p-1 shadow-xl">
+          <button
+            onClick={remove}
+            className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-sm font-medium text-muted transition-colors hover:bg-red-500/10 hover:text-red-500"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+            {isPlay ? "Remove from feed" : "Delete post"}
+          </button>
+        </div>
+      )}
+    </div>
   );
 }
 

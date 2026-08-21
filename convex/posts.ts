@@ -1,13 +1,7 @@
 import { v } from "convex/values";
 import { paginationOptsValidator } from "convex/server";
-import {
-  query,
-  mutation,
-  internalMutation,
-  type QueryCtx,
-} from "./_generated/server";
+import { query, mutation, type QueryCtx } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
-import { internal } from "./_generated/api";
 import { getCurrentUser, requireUser } from "./lib/auth";
 import { clearPostSocial } from "./lib/feed";
 import { playCard, keepImages } from "./plays";
@@ -23,8 +17,6 @@ import { topListPreview } from "./topGames";
  * Conventions mirror convex/plays.ts: reads use getCurrentUser, writes use
  * requireUser + an ownership check, two-arg ctx.db.get, bounded reads.
  */
-
-const MIGRATE_BATCH = 100;
 
 /* -------------------------------------------------------------------------- */
 /* Helpers                                                                    */
@@ -71,6 +63,7 @@ async function buildFeedItem(
     reactionCount: post.reactionCount ?? 0,
     commentCount: post.commentCount ?? 0,
     myReaction,
+    isMine: viewer != null && viewer._id === post.userId,
   };
 
   if (post.kind === "play") {
@@ -386,104 +379,5 @@ export const toggleCommentReaction = mutation({
       likeCount: (c.likeCount ?? 0) + 1,
     });
     return { liked: true };
-  },
-});
-
-/* -------------------------------------------------------------------------- */
-/* Migration: create posts for existing public plays + move their social       */
-/* -------------------------------------------------------------------------- */
-
-/**
- * One-time, idempotent, cursor-paged: for each public play create a "play" post
- * (if missing) and move its `playReactions`/`playComments`(+`commentReactions`)
- * into the new `postReactions`/`postComments`/`postCommentReactions` tables.
- * Run: `npx convex run posts:backfillFromPlays`. Safe to re-run.
- */
-export const backfillFromPlays = internalMutation({
-  args: { cursor: v.optional(v.union(v.string(), v.null())) },
-  handler: async (ctx, { cursor }) => {
-    const batch = await ctx.db
-      .query("plays")
-      .withIndex("by_visibility_and_date", (q) => q.eq("visibility", "public"))
-      .paginate({ numItems: MIGRATE_BATCH, cursor: cursor ?? null });
-
-    let created = 0;
-    for (const play of batch.page) {
-      let post = await ctx.db
-        .query("posts")
-        .withIndex("by_play", (q) => q.eq("playId", play._id))
-        .unique();
-      if (!post) {
-        const id = await ctx.db.insert("posts", {
-          userId: play.userId,
-          kind: "play",
-          playId: play._id,
-          visibility: "public",
-          reactionCount: play.reactionCount ?? 0,
-          commentCount: play.commentCount ?? 0,
-          createdAt: play.createdAt,
-          updatedAt: play.updatedAt,
-        });
-        post = await ctx.db.get("posts", id);
-        created++;
-      }
-      if (!post) continue;
-
-      const reactions = await ctx.db
-        .query("playReactions")
-        .withIndex("by_play", (q) => q.eq("playId", play._id))
-        .collect();
-      for (const r of reactions) {
-        const dup = await ctx.db
-          .query("postReactions")
-          .withIndex("by_user_and_post", (q) =>
-            q.eq("userId", r.userId).eq("postId", post._id),
-          )
-          .unique();
-        if (!dup) {
-          await ctx.db.insert("postReactions", {
-            postId: post._id,
-            userId: r.userId,
-            createdAt: r.createdAt,
-          });
-        }
-        await ctx.db.delete("playReactions", r._id);
-      }
-
-      const comments = await ctx.db
-        .query("playComments")
-        .withIndex("by_play_and_created", (q) => q.eq("playId", play._id))
-        .collect();
-      for (const c of comments) {
-        const newId = await ctx.db.insert("postComments", {
-          postId: post._id,
-          userId: c.userId,
-          text: c.text,
-          createdAt: c.createdAt,
-          editedAt: c.editedAt,
-          likeCount: c.likeCount,
-        });
-        const cLikes = await ctx.db
-          .query("commentReactions")
-          .withIndex("by_comment", (q) => q.eq("commentId", c._id))
-          .collect();
-        for (const l of cLikes) {
-          await ctx.db.insert("postCommentReactions", {
-            commentId: newId,
-            userId: l.userId,
-            createdAt: l.createdAt,
-          });
-          await ctx.db.delete("commentReactions", l._id);
-        }
-        await ctx.db.delete("playComments", c._id);
-      }
-    }
-
-    if (!batch.isDone) {
-      await ctx.scheduler.runAfter(0, internal.posts.backfillFromPlays, {
-        cursor: batch.continueCursor,
-      });
-    }
-    return { done: batch.isDone, created };
   },
 });
