@@ -520,6 +520,7 @@ function StatCard({
 
 type PrefKey =
   | "showName"
+  | "findableByName"
   | "showAvatar"
   | "showTopLists"
   | "showOwned"
@@ -527,8 +528,24 @@ type PrefKey =
   | "showWishlist"
   | "showPlays";
 
-const SHARE_TOGGLES: { key: PrefKey; label: string; def: boolean }[] = [
-  { key: "showName", label: "Name", def: true },
+const SHARE_TOGGLES: {
+  key: PrefKey;
+  label: string;
+  def: boolean;
+  hint?: string;
+}[] = [
+  {
+    key: "showName",
+    label: "Show my real name",
+    def: false,
+    hint: "Shown under your username on your profile. Everywhere else you're your username.",
+  },
+  {
+    key: "findableByName",
+    label: "Findable by name",
+    def: false,
+    hint: "Let people find you by your real name when tagging players.",
+  },
   { key: "showAvatar", label: "Profile photo", def: true },
   { key: "showTopLists", label: "Top Games lists", def: true },
   { key: "showPlays", label: "Plays", def: false },
@@ -621,8 +638,16 @@ function PublicProfileCard({ me }: { me: Doc<"users"> }) {
           {SHARE_TOGGLES.map((t) => {
             const checked = prefs[t.key] ?? t.def;
             return (
-              <div key={t.key} className="flex items-center justify-between py-2.5">
-                <span className="text-sm text-foreground">{t.label}</span>
+              <div
+                key={t.key}
+                className="flex items-center justify-between gap-3 py-2.5"
+              >
+                <div className="min-w-0">
+                  <span className="text-sm text-foreground">{t.label}</span>
+                  {t.hint && (
+                    <p className="mt-0.5 text-xs text-subtle">{t.hint}</p>
+                  )}
+                </div>
                 <Switch
                   checked={checked}
                   onChange={(v) => set(t.key, v)}

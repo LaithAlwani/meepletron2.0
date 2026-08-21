@@ -96,6 +96,9 @@ export default function ProfilePage({
           <h1 className="font-display text-2xl font-extrabold tracking-tight">
             {author?.username ?? "Player"}
           </h1>
+          {author?.realName && (
+            <p className="text-sm text-muted">{author.realName}</p>
+          )}
           {engagement &&
             (engagement.likesReceived > 0 || engagement.commentsReceived > 0) && (
               <div className="mt-1 flex gap-3 text-xs text-subtle">

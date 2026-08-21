@@ -78,10 +78,12 @@ async function authorInfo(ctx: QueryCtx, userId: Id<"users">) {
       ? await ctx.storage.getUrl(u.avatarStorageId)
       : (u.image ?? null)
     : null;
-  // Public identity is the username, never the real name.
+  // Public identity is the username. `realName` is only populated when the user
+  // opted into showing it, and is only rendered on their own profile page.
   return {
     username: u.username ?? null,
     name: u.username ?? null,
+    realName: (p.showName ?? false) ? (u.name ?? null) : null,
     avatarUrl,
   };
 }

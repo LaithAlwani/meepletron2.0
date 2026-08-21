@@ -57,7 +57,8 @@ export default defineSchema({
     // All optional; read with defaults (name/avatar/top-lists on, collection off).
     publicProfile: v.optional(
       v.object({
-        showName: v.optional(v.boolean()),
+        showName: v.optional(v.boolean()), // show real name on your profile
+        findableByName: v.optional(v.boolean()), // matchable by real name in search
         showAvatar: v.optional(v.boolean()),
         showTopLists: v.optional(v.boolean()),
         showOwned: v.optional(v.boolean()),

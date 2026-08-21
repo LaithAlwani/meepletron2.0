@@ -112,24 +112,29 @@ export const searchUsers = query({
     if (t.length < 2) return [];
     const rows = await ctx.db.query("users").take(1000);
     const matched = rows
-      .filter(
-        (u) =>
-          u._id !== me._id &&
-          u.isAnonymous !== true &&
-          !!u.username &&
-          ((u.name?.toLowerCase().includes(t) ?? false) ||
-            (u.usernameLower?.includes(t) ?? false)),
-      )
+      .filter((u) => {
+        if (u._id === me._id || u.isAnonymous === true || !u.username) return false;
+        const byUsername = u.usernameLower?.includes(t) ?? false;
+        // Real name only matches for users who opted into being findable by name.
+        const findable = u.publicProfile?.findableByName ?? false;
+        const byName = findable && (u.name?.toLowerCase().includes(t) ?? false);
+        return byUsername || byName;
+      })
       .slice(0, 8);
     return await Promise.all(
-      matched.map(async (u) => ({
-        _id: u._id,
-        name: u.name ?? u.username ?? "Player",
-        username: u.username ?? null,
-        avatarUrl: u.avatarStorageId
-          ? await ctx.storage.getUrl(u.avatarStorageId)
-          : (u.image ?? null),
-      })),
+      matched.map(async (u) => {
+        // Show the real name in results only for users findable by name;
+        // otherwise the public username stands in for it.
+        const findable = u.publicProfile?.findableByName ?? false;
+        return {
+          _id: u._id,
+          name: (findable ? u.name : null) ?? u.username ?? "Player",
+          username: u.username ?? null,
+          avatarUrl: u.avatarStorageId
+            ? await ctx.storage.getUrl(u.avatarStorageId)
+            : (u.image ?? null),
+        };
+      }),
     );
   },
 });
@@ -141,6 +146,7 @@ export const searchUsers = query({
 export const setPublicProfile = mutation({
   args: {
     showName: v.optional(v.boolean()),
+    findableByName: v.optional(v.boolean()),
     showAvatar: v.optional(v.boolean()),
     showTopLists: v.optional(v.boolean()),
     showOwned: v.optional(v.boolean()),
