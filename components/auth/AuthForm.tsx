@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthActions } from "@convex-dev/auth/react";
 import { useQuery, useMutation } from "convex/react";
@@ -18,6 +18,11 @@ export function AuthForm() {
   const [flow, setFlow] = useState<Flow>("signIn");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // When set, we've emailed a code and are waiting for the user to enter it.
+  const [pendingEmail, setPendingEmail] = useState<string | null>(null);
+  // Synchronous guard so a rapid double-click can't fire two requests before
+  // `submitting` re-renders the disabled button (avoids duplicate codes).
+  const inFlight = useRef(false);
 
   // When a guest signs up/in, stash a claim token first so their chats and
   // favorites can migrate to the new account (Convex Auth doesn't auto-link).
@@ -33,12 +38,20 @@ export function AuthForm() {
   }
 
   async function handlePassword(formData: FormData) {
+    if (inFlight.current) return;
+    inFlight.current = true;
     setSubmitting(true);
     setError(null);
     try {
       await stashGuestUpgrade();
       formData.set("flow", flow);
-      await signIn("password", formData);
+      const res = await signIn("password", formData);
+      // When email verification is required, Convex Auth emails a code and does
+      // NOT sign in yet — switch to the code-entry step.
+      if (!res.signingIn) {
+        setPendingEmail(String(formData.get("email") ?? ""));
+        return;
+      }
       router.push("/boardgames");
     } catch {
       setError(
@@ -47,11 +60,35 @@ export function AuthForm() {
           : "Could not sign up. That email may already be in use.",
       );
     } finally {
+      inFlight.current = false;
+      setSubmitting(false);
+    }
+  }
+
+  async function handleVerifyCode(formData: FormData) {
+    if (inFlight.current) return;
+    inFlight.current = true;
+    setSubmitting(true);
+    setError(null);
+    try {
+      const res = await signIn("password", {
+        email: pendingEmail ?? "",
+        code: String(formData.get("code") ?? "").trim(),
+        flow: "email-verification",
+      });
+      if (res.signingIn) router.push("/boardgames");
+      else setError("That code didn't work. Check it and try again.");
+    } catch {
+      setError("That code didn't work. Check it and try again.");
+    } finally {
+      inFlight.current = false;
       setSubmitting(false);
     }
   }
 
   async function handleProvider(provider: "google" | "anonymous") {
+    if (inFlight.current) return;
+    inFlight.current = true;
     setSubmitting(true);
     setError(null);
     try {
@@ -64,8 +101,58 @@ export function AuthForm() {
       if (provider === "anonymous") router.push("/boardgames");
     } catch {
       setError("Sign-in failed. Please try again.");
+      inFlight.current = false;
       setSubmitting(false);
     }
+  }
+
+  if (pendingEmail) {
+    return (
+      <div className="w-full max-w-sm">
+        <div className="mb-6 text-center">
+          <h1 className="text-2xl font-bold">Check your email</h1>
+          <p className="mt-1 text-sm text-muted">
+            We emailed a 6-digit code to{" "}
+            <span className="font-semibold text-foreground">{pendingEmail}</span>.
+            Enter it to continue.
+          </p>
+        </div>
+        <form action={handleVerifyCode} className="space-y-3">
+          <input
+            name="code"
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            pattern="[0-9]*"
+            maxLength={6}
+            required
+            autoFocus
+            placeholder="123456"
+            className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-center text-lg tracking-[0.4em] outline-none focus:ring-2 focus:ring-ring"
+          />
+          {error && (
+            <p role="alert" className="text-sm text-red-600 dark:text-red-400">
+              {error}
+            </p>
+          )}
+          <button
+            type="submit"
+            disabled={submitting}
+            className="w-full rounded-lg bg-accent px-4 py-2.5 font-semibold text-accent-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
+          >
+            {submitting ? "Verifying…" : "Verify"}
+          </button>
+        </form>
+        <button
+          onClick={() => {
+            setPendingEmail(null);
+            setError(null);
+          }}
+          className="mt-4 w-full text-center text-sm font-medium text-muted hover:text-foreground"
+        >
+          Use a different email
+        </button>
+      </div>
+    );
   }
 
   return (
@@ -85,6 +172,21 @@ export function AuthForm() {
         <div className="mb-4 rounded-lg border border-accent/40 bg-accent/10 px-4 py-2.5 text-center text-sm">
           You&apos;re a guest — {flow === "signIn" ? "signing in" : "signing up"}{" "}
           will keep your current chats and favourites.
+        </div>
+      )}
+
+      {!isGuest && (
+        <div className="mb-4 rounded-lg border border-border bg-surface-2 px-4 py-3 text-sm">
+          <p className="font-semibold">Been here before?</p>
+          <p className="mt-1 text-muted">
+            We&apos;ve moved to a new sign-in. If you used{" "}
+            <span className="font-medium text-foreground">Google</span>, just tap
+            Continue with Google — your account and username are still yours. If
+            you used a{" "}
+            <span className="font-medium text-foreground">password</span>, tap
+            Create account with your same email and we&apos;ll email you a code to
+            get your account back.
+          </p>
         </div>
       )}
 

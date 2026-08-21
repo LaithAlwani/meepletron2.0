@@ -1,5 +1,6 @@
 import { v, ConvexError } from "convex/values";
 import { query, mutation, internalQuery, internalMutation } from "./_generated/server";
+import { internal } from "./_generated/api";
 import { getCurrentUser, requireUser, requireAdmin } from "./lib/auth";
 import { tokenLimitFor } from "./chat";
 import { finite } from "./lib/num";
@@ -372,5 +373,40 @@ export const makeAdmin = internalMutation({
     if (!user) throw new Error(`No user with email ${email}`);
     await ctx.db.patch("users", user._id, { role: "admin" });
     return user._id;
+  },
+});
+
+/**
+ * When a **verified** account's email matches a reserved imported row (see
+ * convex/migrations.ts importOldUsers), adopt that row's identity onto the
+ * account and delete the reserved row. Scheduled from `afterUserCreatedOrUpdated`
+ * so it runs with the app's typed db (the auth callback's ctx.db is generic).
+ * Idempotent + a no-op once no reserved twin remains.
+ */
+export const adoptReservedRow = internalMutation({
+  args: { userId: v.id("users") },
+  handler: async (ctx, { userId }) => {
+    const user = await ctx.db.get("users", userId);
+    if (!user?.email || user.emailVerificationTime === undefined) return;
+    const reserved = (
+      await ctx.db
+        .query("users")
+        .withIndex("email", (q) => q.eq("email", user.email))
+        .collect()
+    ).find((o) => o._id !== userId && o.importedAt !== undefined);
+    if (!reserved) return;
+    await ctx.db.patch("users", userId, {
+      username: user.username ?? reserved.username,
+      usernameLower: user.usernameLower ?? reserved.usernameLower,
+      name: user.name ?? reserved.name,
+      publicProfile: user.publicProfile ?? reserved.publicProfile,
+      createdAt: reserved.createdAt,
+      updatedAt: reserved.updatedAt,
+    });
+    await ctx.db.delete("users", reserved._id);
+    await ctx.scheduler.runAfter(0, internal.plays.claimPlaysByEmail, {
+      userId,
+      email: user.email,
+    });
   },
 });

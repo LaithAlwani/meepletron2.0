@@ -28,10 +28,10 @@ export default function PlaysPage() {
           <Link
             href="/plays/people"
             className={buttonClasses("ghost", "md")}
-            title="Manage people"
+            title="Manage friends"
           >
             <Users className="h-4 w-4" />
-            <span className="hidden sm:inline">People</span>
+            <span className="hidden sm:inline">Friends</span>
           </Link>
           <button
             onClick={() => setWizardOpen(true)}

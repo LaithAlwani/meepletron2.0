@@ -2,6 +2,10 @@ import { v } from "convex/values";
 import { internalMutation } from "./_generated/server";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
+import { OLD_USERS } from "./data/oldUsers";
+
+/** Public-handle format, mirrors `setUsername` in convex/users.ts. */
+const USERNAME_RE = /^[a-zA-Z0-9_.]{3,20}$/;
 
 /**
  * One-off: delete collection rows that are in none of the four lists (own /
@@ -174,5 +178,95 @@ export const backfillIsStub = internalMutation({
       }
     }
     return { scanned: all.length, updated };
+  },
+});
+
+/**
+ * One-off: import users exported from the old Clerk/Mongo app (see
+ * `convex/data/oldUsers.ts`). Match by email; **patch** an existing row's mapped
+ * fields (never its `role`/auth/`emailVerificationTime`), or **insert** a reserved
+ * row (`importedAt` + `emailVerificationTime` so Google sign-in auto-adopts it —
+ * see `convex/auth.ts`). Usernames that are invalid or already taken are skipped.
+ * Idempotent: re-running only patches. Run: `npx convex run migrations:importOldUsers`.
+ */
+export const importOldUsers = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    // Dedupe input by email, keeping the most recently updated record.
+    const byEmail = new Map<string, (typeof OLD_USERS)[number]>();
+    for (const u of OLD_USERS) {
+      const prev = byEmail.get(u.email);
+      if (!prev || u.updatedAt > prev.updatedAt) byEmail.set(u.email, u);
+    }
+
+    let inserted = 0;
+    let patched = 0;
+    let usernamesSkipped = 0;
+    const assignedLower = new Set<string>();
+
+    for (const u of byEmail.values()) {
+      const name =
+        [u.firstName, u.lastName].filter(Boolean).join(" ").trim() || undefined;
+
+      // Resolve a usable username: valid format, and not already held by a
+      // different account (or claimed earlier in this run).
+      let username: string | undefined;
+      let usernameLower: string | undefined;
+      if (u.username && USERNAME_RE.test(u.username)) {
+        const lower = u.username.toLowerCase();
+        const clash = await ctx.db
+          .query("users")
+          .withIndex("by_username_lower", (q) => q.eq("usernameLower", lower))
+          .first();
+        if ((clash && clash.email !== u.email) || assignedLower.has(lower)) {
+          usernamesSkipped++;
+        } else {
+          username = u.username;
+          usernameLower = lower;
+          assignedLower.add(lower);
+        }
+      } else if (u.username) {
+        usernamesSkipped++;
+      }
+
+      const existing = (
+        await ctx.db
+          .query("users")
+          .withIndex("email", (q) => q.eq("email", u.email))
+          .collect()
+      )[0];
+
+      const tokenFields = {
+        ...(u.tokensUsedToday != null ? { tokensUsedToday: u.tokensUsedToday } : {}),
+        ...(u.tokensResetAt != null ? { tokensResetAt: u.tokensResetAt } : {}),
+      };
+
+      if (existing) {
+        // Override only the mapped fields; leave role/auth/avatar untouched.
+        await ctx.db.patch("users", existing._id, {
+          ...(name ? { name } : {}),
+          ...(username ? { username, usernameLower } : {}),
+          ...tokenFields,
+          createdAt: u.createdAt,
+          updatedAt: u.updatedAt,
+        });
+        patched++;
+      } else {
+        await ctx.db.insert("users", {
+          email: u.email,
+          ...(name ? { name } : {}),
+          ...(username ? { username, usernameLower } : {}),
+          role: "user",
+          emailVerificationTime: u.createdAt,
+          importedAt: Date.now(),
+          ...tokenFields,
+          createdAt: u.createdAt,
+          updatedAt: u.updatedAt,
+        });
+        inserted++;
+      }
+    }
+
+    return { total: byEmail.size, inserted, patched, usernamesSkipped };
   },
 });

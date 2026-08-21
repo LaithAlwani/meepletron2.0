@@ -202,3 +202,36 @@ export const sendPlayTagEmail = internalAction({
     }
   },
 });
+
+/**
+ * Email a one-time verification code (used by the Password provider's `verify`
+ * flow — see convex/otp/EmailOtp.ts). Throws on failure so the sign-in surfaces
+ * an error rather than leaving the user waiting for a code that never arrives.
+ */
+export const sendVerificationCode = internalAction({
+  args: { to: v.string(), code: v.string() },
+  handler: async (_ctx, { to, code }) => {
+    const t = transporter();
+    const from = process.env.MAIL_FROM || `Meepletron <${SUPPORT_EMAIL}>`;
+    const safe = escapeHtml(code);
+    const body = `
+      <h2 style="margin:0 0 12px 0;font-size:20px;color:${TEXT_HEADING};font-weight:700;">Confirm your email</h2>
+      <p style="margin:0 0 16px 0;">Enter this code to finish signing in to Meepletron. It expires in 15 minutes.</p>
+      <div style="margin:0 0 20px 0;padding:16px 0;text-align:center;border:1px solid ${BORDER};border-radius:12px;background-color:${BG};">
+        <span style="font-size:34px;font-weight:800;letter-spacing:10px;color:${TEXT_HEADING};font-family:'Courier New',monospace;">${safe}</span>
+      </div>
+      <p style="margin:0;color:${TEXT_MUTED};font-size:13px;">If you didn't try to sign in, you can safely ignore this email.</p>`;
+    await t.sendMail({
+      from,
+      to,
+      subject: `Your Meepletron code: ${code}`,
+      text: `Your Meepletron verification code is ${code}. It expires in 15 minutes.\n\nIf you didn't try to sign in, you can ignore this email.`,
+      html: emailLayout({
+        previewText: `Your Meepletron code is ${code}`,
+        bodyHtml: body,
+        footerNote:
+          "You're receiving this because this email was used to sign in to Meepletron.",
+      }),
+    });
+  },
+});

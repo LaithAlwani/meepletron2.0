@@ -69,6 +69,12 @@ export default defineSchema({
     ),
     tokensUsedToday: v.optional(v.number()),
     tokensResetAt: v.optional(v.number()), // ms timestamp of the current budget window's start
+    // Preserved timestamps from the old (Clerk) database on import (Convex's
+    // `_creationTime` can't be overwritten). `importedAt` marks a reserved row
+    // (imported, no auth account yet) so a later verified sign-in can adopt it.
+    createdAt: v.optional(v.number()),
+    updatedAt: v.optional(v.number()),
+    importedAt: v.optional(v.number()),
     // Guest→account upgrade: a short-lived claim token set while anonymous, then
     // redeemed after signing up to migrate the guest's data to the new account.
     upgradeToken: v.optional(v.string()),

@@ -32,9 +32,9 @@ export default function PeoplePage() {
         <ArrowLeft className="h-4 w-4" />
         My plays
       </Link>
-      <PageTitle>People</PageTitle>
+      <PageTitle>Friends</PageTitle>
       <p className="mt-1 text-sm text-muted">
-        Players you&apos;ve added who aren&apos;t on Meepletron. Fix a name or
+        Friends you&apos;ve added who aren&apos;t on Meepletron yet. Fix a name or
         email, or remove someone you added by mistake.
       </p>
 
@@ -44,7 +44,7 @@ export default function PeoplePage() {
         </AuthLoading>
         <Unauthenticated>
           <div className="rounded-2xl border border-border bg-surface p-6 text-center">
-            <p className="text-sm text-muted">Sign in to manage your players.</p>
+            <p className="text-sm text-muted">Sign in to manage your friends.</p>
             <Link href="/auth" className={`mt-4 ${buttonClasses("primary", "sm")}`}>
               Sign in
             </Link>
@@ -64,7 +64,7 @@ function PeopleList() {
   if (people.length === 0) {
     return (
       <div className="rounded-2xl border border-dashed border-border p-10 text-center text-muted">
-        <p className="font-medium">No saved players yet.</p>
+        <p className="font-medium">No friends yet.</p>
         <p className="mt-1 text-sm">
           People you add when logging a play show up here.
         </p>
