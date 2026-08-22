@@ -4,9 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import {
   User,
-  Dices,
   Scissors,
-  Settings,
   Shield,
   Hand,
   Info,
@@ -60,11 +58,9 @@ export function UserMenu({
     headerNav?: boolean;
     touchOnly?: boolean;
   }[] = [
-    { href: "/profile", label: "Profile", icon: User },
-    { href: "/plays", label: "My plays", icon: Dices },
+    { href: username ? `/user/${username}` : "/profile", label: "Profile", icon: User },
     { href: "/tuckbox", label: "Tuckbox", icon: Scissors },
     { href: "/who-goes-first", label: "First Player", icon: Hand, touchOnly: true },
-    { href: "/settings", label: "Settings", icon: Settings },
     { href: "/about", label: "About", icon: Info },
     ...(isAdmin
       ? [{ href: "/admin", label: "Admin", icon: Shield as LucideIcon }]

@@ -13,7 +13,6 @@ import { Home, LayoutGrid, MessageCircle, Trophy, LogIn } from "lucide-react";
 import { api } from "@/convex/_generated/api";
 import { UserMenu } from "@/components/UserMenu";
 import { NotificationsBell } from "@/components/notifications/NotificationsBell";
-import { buttonClasses } from "@/components/ui/Button";
 import { cn } from "@/lib/cn";
 
 const NAV = [
@@ -52,8 +51,12 @@ export function Header() {
   const isGuest = me?.isAnonymous === true;
   const pathname = usePathname() ?? "";
 
+  // Styled to mirror the "Sign out" button (bordered/muted), not a loud CTA.
   const signIn = (
-    <Link href="/auth" className={buttonClasses("primary", "sm")}>
+    <Link
+      href="/auth"
+      className="inline-flex items-center gap-2 rounded-xl border border-border px-4 py-2 text-sm font-medium text-muted transition-all hover:bg-surface-2 hover:text-foreground"
+    >
       <LogIn className="h-4 w-4" />
       Sign in
     </Link>

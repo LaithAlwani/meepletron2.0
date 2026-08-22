@@ -808,7 +808,45 @@ export const myPlayPeople = query({
   },
 });
 
-/** Recent public plays for a user (by username) — for their public profile. */
+/**
+ * Deduped play ids (newest first) for every PUBLIC play a user takes part in —
+ * whether they logged it or a friend tagged them (by account or by their email).
+ * Reads the denormalized `visibility` on the participant links (kept in sync by
+ * the play mutations), so it covers plays owned by *other* users too. Powers the
+ * profile Plays tab + its count.
+ */
+export async function publicParticipantPlayIds(
+  ctx: QueryCtx,
+  user: { _id: Id<"users">; email?: string | null },
+): Promise<Id<"plays">[]> {
+  const email = user.email?.toLowerCase();
+  const byUser = await ctx.db
+    .query("playParticipants")
+    .withIndex("by_user_and_date", (q) => q.eq("userId", user._id))
+    .filter((q) => q.eq(q.field("visibility"), "public"))
+    .collect();
+  const byEmail = email
+    ? await ctx.db
+        .query("playParticipants")
+        .withIndex("by_email", (q) => q.eq("emailLower", email))
+        .filter((q) => q.eq(q.field("visibility"), "public"))
+        .collect()
+    : [];
+  const links = [...byUser, ...byEmail].sort((a, b) =>
+    a.date < b.date ? 1 : a.date > b.date ? -1 : 0,
+  );
+  const seen = new Set<string>();
+  const ids: Id<"plays">[] = [];
+  for (const link of links) {
+    if (seen.has(link.playId)) continue;
+    seen.add(link.playId);
+    ids.push(link.playId);
+  }
+  return ids;
+}
+
+/** Recent public plays for a user (by username) — for their public profile.
+ *  Includes plays a friend logged and tagged them into, not just their own. */
 export const userPublicPlays = query({
   args: { username: v.string() },
   handler: async (ctx, { username }) => {
@@ -821,13 +859,11 @@ export const userPublicPlays = query({
     if (!user) return [];
     const viewer = await getCurrentUser(ctx);
     if (!(await canViewProfile(ctx, user, viewer?._id ?? null))) return [];
-    const rows = await ctx.db
-      .query("plays")
-      .withIndex("by_user_and_date", (q) => q.eq("userId", user._id))
-      .order("desc")
-      .filter((q) => q.eq(q.field("visibility"), "public"))
-      .take(12);
-    return await Promise.all(rows.map((p) => playCard(ctx, p)));
+    const ids = await publicParticipantPlayIds(ctx, user);
+    const plays = (
+      await Promise.all(ids.slice(0, 30).map((id) => ctx.db.get("plays", id)))
+    ).filter((p): p is PlayDoc => p !== null && p.visibility === "public");
+    return await Promise.all(plays.map((p) => playCard(ctx, p)));
   },
 });
 

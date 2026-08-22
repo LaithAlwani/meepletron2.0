@@ -1,8 +1,10 @@
 "use client";
 
-import { use, useState } from "react";
+import { use, useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useQuery, useMutation } from "convex/react";
+import { useAuthActions } from "@convex-dev/auth/react";
 import type { FunctionReturnType } from "convex/server";
 import {
   Trophy,
@@ -13,7 +15,12 @@ import {
   Heart,
   Lock,
   Globe,
-  Pencil,
+  Settings,
+  Bell,
+  BarChart3,
+  LogOut,
+  Loader2,
+  Settings2,
   type LucideIcon,
 } from "lucide-react";
 import { api } from "@/convex/_generated/api";
@@ -70,8 +77,7 @@ export default function ProfilePage({
   const isPrivate = data.private;
   const isSelf = data.isSelf;
   const initial = (author?.username ?? "?").charAt(0).toUpperCase();
-  const postCount = photos?.length ?? 0;
-  const playCount = plays?.length ?? 0;
+  const counts = data.counts;
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-8">
@@ -95,7 +101,7 @@ export default function ProfilePage({
               {author?.username ?? "Player"}
             </h1>
             {isSelf ? (
-              <SelfControls isPublic={me?.publicProfile?.isPublic ?? true} />
+              <OwnerControls isPublic={me?.publicProfile?.isPublic ?? true} />
             ) : (
               author?.username && <FriendButton username={author.username} />
             )}
@@ -103,19 +109,17 @@ export default function ProfilePage({
           {author?.realName && (
             <p className="mt-0.5 text-sm text-muted">{author.realName}</p>
           )}
-          {!isPrivate && (
-            <div className="mt-3 flex gap-6 text-sm">
-              <Stat n={postCount} label="posts" />
-              <Stat n={playCount} label="plays" />
-              <Stat n={lists.length} label="lists" />
-            </div>
-          )}
+          <div className="mt-3 flex gap-6 text-sm">
+            <Stat n={counts.posts} label="posts" />
+            <Stat n={counts.plays} label="plays" />
+            <Stat n={counts.lists} label="lists" />
+          </div>
         </div>
       </div>
 
       {isPrivate ? (
         <div className="mt-8 rounded-2xl border border-dashed border-border p-10 text-center text-muted">
-          <Lock className="mx-auto h-8 w-8 text-subtle" />
+          <Lock className="mx-auto h-7 w-7 text-subtle" />
           <p className="mt-3 font-medium">This profile is private.</p>
           <p className="mt-1 text-sm">
             Add {author?.username ?? "them"} as a friend to see their posts,
@@ -178,33 +182,119 @@ function Stat({ n, label }: { n: number; label: string }) {
   );
 }
 
-function SelfControls({ isPublic }: { isPublic: boolean }) {
+/** The owner's controls: one Public/Private toggle + a gear menu. */
+function OwnerControls({ isPublic }: { isPublic: boolean }) {
   const setPublicProfile = useMutation(api.users.setPublicProfile);
   const toast = useToast();
+  const [saving, setSaving] = useState(false);
+
+  async function toggle() {
+    setSaving(true);
+    try {
+      await setPublicProfile({ isPublic: !isPublic });
+      toast(
+        isPublic ? "Profile is now private." : "Profile is now public.",
+        "success",
+      );
+    } catch {
+      toast("Couldn't update.", "error");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return (
     <div className="flex items-center gap-2">
       <button
-        onClick={async () => {
-          try {
-            await setPublicProfile({ isPublic: !isPublic });
-            toast(
-              isPublic ? "Profile is now private." : "Profile is now public.",
-              "success",
-            );
-          } catch {
-            toast("Couldn't update.", "error");
-          }
-        }}
+        onClick={toggle}
+        disabled={saving}
         className={buttonClasses("subtle", "sm")}
         title={isPublic ? "Make private" : "Make public"}
       >
-        {isPublic ? <Globe className="h-4 w-4" /> : <Lock className="h-4 w-4" />}
+        {saving ? (
+          <Loader2 className="h-4 w-4 animate-spin" />
+        ) : isPublic ? (
+          <Globe className="h-4 w-4" />
+        ) : (
+          <Lock className="h-4 w-4" />
+        )}
         {isPublic ? "Public" : "Private"}
       </button>
-      <Link href="/profile" className={buttonClasses("ghost", "sm")}>
-        <Pencil className="h-4 w-4" />
-        <span className="hidden sm:inline">Edit</span>
-      </Link>
+      <ProfileMenu />
+    </div>
+  );
+}
+
+const MENU_ITEMS: { href: string; label: string; icon: LucideIcon }[] = [
+  { href: "/settings", label: "Settings", icon: Settings },
+  { href: "/notifications", label: "Notifications", icon: Bell },
+  { href: "/stats", label: "Stats", icon: BarChart3 },
+  { href: "/plays", label: "My plays", icon: Dices },
+];
+
+/** The owner's gear menu — settings, notifications, stats, plays, sign out. */
+function ProfileMenu() {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const { signOut } = useAuthActions();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  async function handleSignOut() {
+    setOpen(false);
+    await signOut();
+    router.push("/");
+  }
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        aria-label="Profile menu"
+        aria-expanded={open}
+        className={buttonClasses("ghost", "sm")}
+      >
+        <Settings2 className="h-4 w-4" />
+      </button>
+      {open && (
+        <div className="animate-in absolute right-0 top-full z-20 mt-1 w-48 rounded-xl border border-border bg-surface p-1 shadow-xl">
+          {MENU_ITEMS.map((it) => {
+            const Icon = it.icon;
+            return (
+              <Link
+                key={it.href}
+                href={it.href}
+                onClick={() => setOpen(false)}
+                className="flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
+              >
+                <Icon className="h-4 w-4 shrink-0" />
+                {it.label}
+              </Link>
+            );
+          })}
+          <div className="my-1 border-t border-border" />
+          <button
+            onClick={handleSignOut}
+            className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm font-medium text-muted transition-colors hover:bg-surface-2 hover:text-red-500"
+          >
+            <LogOut className="h-4 w-4 shrink-0" />
+            Sign out
+          </button>
+        </div>
+      )}
     </div>
   );
 }

@@ -9,6 +9,7 @@ import {
 import type { Doc, Id } from "./_generated/dataModel";
 import { getCurrentUser, requireUser } from "./lib/auth";
 import { canViewProfile } from "./friends";
+import { publicParticipantPlayIds } from "./plays";
 import { DEFAULT_CATEGORY, isTopCategory } from "./lib/topGamesCategories";
 import { isGameSort } from "./lib/gameSort";
 
@@ -66,26 +67,46 @@ async function gameThumb(ctx: QueryCtx, gameId: Id<"games">) {
 }
 
 /**
- * Public author info for a shared list / profile header, honouring the user's
- * sharing choices: name and avatar are withheld unless opted in (default on).
+ * Public author info for a shared list / profile header. Public identity is the
+ * username; the avatar and real name show on the profile. (Elsewhere — feed,
+ * shares, links — only `name`/the username is used, never `realName`.)
  */
 async function authorInfo(ctx: QueryCtx, userId: Id<"users">) {
   const u = await ctx.db.get("users", userId);
   if (!u) return null;
-  const p = u.publicProfile ?? {};
-  const showAvatar = p.showAvatar ?? true;
-  const avatarUrl = showAvatar
-    ? u.avatarStorageId
-      ? await ctx.storage.getUrl(u.avatarStorageId)
-      : (u.image ?? null)
-    : null;
-  // Public identity is the username. `realName` is only populated when the user
-  // opted into showing it, and is only rendered on their own profile page.
+  const avatarUrl = u.avatarStorageId
+    ? await ctx.storage.getUrl(u.avatarStorageId)
+    : (u.image ?? null);
   return {
     username: u.username ?? null,
     name: u.username ?? null,
-    realName: (p.showName ?? false) ? (u.name ?? null) : null,
+    realName: u.name ?? null,
     avatarUrl,
+  };
+}
+
+/**
+ * The three headline counts shown on a profile (public content only) — surfaced
+ * even for a private profile, whose counts are visible while its content isn't.
+ */
+async function profileCounts(ctx: QueryCtx, user: Doc<"users">) {
+  const posts = await ctx.db
+    .query("posts")
+    .withIndex("by_user_and_created", (q) => q.eq("userId", user._id))
+    .collect();
+  const lists = await ctx.db
+    .query("topGamesLists")
+    .withIndex("by_user", (q) => q.eq("userId", user._id))
+    .collect();
+  // Plays counts every public play the user is in (own + tagged), matching the
+  // profile Plays tab.
+  const playIds = await publicParticipantPlayIds(ctx, user);
+  return {
+    posts: posts.filter((p) => p.kind === "image" && p.visibility === "public")
+      .length,
+    plays: playIds.length,
+    lists: lists.filter((r) => r.visibility === "public" && r.status === "finalized")
+      .length,
   };
 }
 
@@ -575,58 +596,57 @@ export const publicProfile = query({
     const viewer = await getCurrentUser(ctx);
     const isSelf = viewer?._id === user._id;
     const author = await authorInfo(ctx, user._id);
+    // Counts show even for a private profile — the numbers are public, the
+    // content behind them isn't.
+    const counts = await profileCounts(ctx, user);
 
     // A private profile only opens up to the owner or an accepted friend;
-    // everyone else sees just the handle + avatar and an "Add friend" prompt.
+    // everyone else sees just the handle + avatar + counts and an "Add friend"
+    // prompt (real name withheld — private shows the handle only).
     const canView = await canViewProfile(ctx, user, viewer?._id ?? null);
     if (!canView) {
       return {
         author: author ? { ...author, realName: null } : null,
         private: true,
         isSelf,
+        counts,
         lists: [],
-        showPlays: false,
         owned: null,
         forTrade: null,
         wishlist: null,
       };
     }
 
-    const p = user.publicProfile ?? {};
-    const showTopLists = p.showTopLists ?? true;
-
-    let lists: Awaited<ReturnType<typeof listCard>>[] = [];
-    if (showTopLists) {
-      const rows = await ctx.db
-        .query("topGamesLists")
-        .withIndex("by_user", (q) => q.eq("userId", user._id))
-        .collect();
-      const filtered = rows
-        .filter((r) => r.visibility === "public" && r.status === "finalized")
-        .sort((a, b) => b.year - a.year || b.size - a.size);
-      lists = await Promise.all(filtered.map((r) => listCard(ctx, r)));
-    }
+    // Public (or self / friend): everything is visible — one Public/Private
+    // toggle governs the whole profile now.
+    const rows = await ctx.db
+      .query("topGamesLists")
+      .withIndex("by_user", (q) => q.eq("userId", user._id))
+      .collect();
+    const filtered = rows
+      .filter((r) => r.visibility === "public" && r.status === "finalized")
+      .sort((a, b) => b.year - a.year || b.size - a.size);
+    const lists = await Promise.all(filtered.map((r) => listCard(ctx, r)));
 
     return {
       author,
       private: false,
       isSelf,
+      counts,
       lists,
-      // Whether to show a plays section — the plays themselves are fetched by the
-      // page via api.plays.userPublicPlays (keeps the play projection in one place).
-      showPlays: p.showPlays ?? false,
-      owned:
-        (p.showOwned ?? false)
-          ? await collectionSection(ctx, user._id, (r) => r.own === true, 30)
-          : null,
-      forTrade:
-        (p.showForTrade ?? false)
-          ? await collectionSection(ctx, user._id, (r) => r.forTrade === true, 30)
-          : null,
-      wishlist:
-        (p.showWishlist ?? false)
-          ? await collectionSection(ctx, user._id, (r) => r.wishlist === true, 30)
-          : null,
+      owned: await collectionSection(ctx, user._id, (r) => r.own === true, 30),
+      forTrade: await collectionSection(
+        ctx,
+        user._id,
+        (r) => r.forTrade === true,
+        30,
+      ),
+      wishlist: await collectionSection(
+        ctx,
+        user._id,
+        (r) => r.wishlist === true,
+        30,
+      ),
     };
   },
 });
@@ -646,17 +666,6 @@ type CollectionList = "owned" | "for-trade" | "wishlist";
 function collectionField(list: CollectionList): "own" | "forTrade" | "wishlist" {
   return list === "owned" ? "own" : list === "for-trade" ? "forTrade" : "wishlist";
 }
-function isShared(
-  prefs: NonNullable<Doc<"users">["publicProfile"]>,
-  list: CollectionList,
-): boolean {
-  return list === "owned"
-    ? (prefs.showOwned ?? false)
-    : list === "for-trade"
-      ? (prefs.showForTrade ?? false)
-      : (prefs.showWishlist ?? false);
-}
-
 async function userByUsername(ctx: QueryCtx, username: string) {
   const lower = username.trim().toLowerCase();
   if (!lower) return null;
@@ -669,12 +678,14 @@ async function userByUsername(ctx: QueryCtx, username: string) {
 /** Header info + whether a given collection list is shared, for the browse page. */
 export const publicCollectionMeta = query({
   args: { username: v.string(), list: collectionListValidator },
-  handler: async (ctx, { username, list }) => {
+  handler: async (ctx, { username }) => {
     const user = await userByUsername(ctx, username);
     if (!user) return null;
+    const viewer = await getCurrentUser(ctx);
     return {
       author: await authorInfo(ctx, user._id),
-      shared: isShared(user.publicProfile ?? {}, list),
+      // Collections are visible whenever the profile is (public / friend / self).
+      shared: await canViewProfile(ctx, user, viewer?._id ?? null),
     };
   },
 });
@@ -695,7 +706,9 @@ export const publicCollectionPage = query({
   handler: async (ctx, { username, list, paginationOpts, sort }) => {
     const empty = { page: [], isDone: true, continueCursor: "" };
     const user = await userByUsername(ctx, username);
-    if (!user || !isShared(user.publicProfile ?? {}, list)) return empty;
+    if (!user) return empty;
+    const viewer = await getCurrentUser(ctx);
+    if (!(await canViewProfile(ctx, user, viewer?._id ?? null))) return empty;
 
     const field = collectionField(list);
     const thumbItem = async (

@@ -6,9 +6,6 @@ import { usePathname } from "next/navigation";
 import { useQuery } from "convex/react";
 import {
   User,
-  Bell,
-  Dices,
-  Settings,
   Scissors,
   Hand,
   Shield,
@@ -20,7 +17,6 @@ import {
 import { api } from "@/convex/_generated/api";
 import { AvatarImg } from "@/components/ui/Avatar";
 import { ThemeMenu } from "@/components/ThemeToggle";
-import { buttonClasses } from "@/components/ui/buttonStyles";
 import { cn } from "@/lib/cn";
 
 /**
@@ -57,10 +53,11 @@ export function MoreSheet({
   const initial = (me?.name || me?.email || "?").charAt(0).toUpperCase();
 
   const items: { href: string; label: string; icon: LucideIcon }[] = [
-    { href: "/profile", label: "Profile", icon: User },
-    { href: "/notifications", label: "Notifications", icon: Bell },
-    { href: "/plays", label: "My plays", icon: Dices },
-    { href: "/settings", label: "Settings", icon: Settings },
+    {
+      href: me?.username ? `/user/${me.username}` : "/profile",
+      label: "Profile",
+      icon: User,
+    },
     { href: "/tuckbox", label: "Tuckbox", icon: Scissors },
     { href: "/who-goes-first", label: "Who goes first", icon: Hand },
     { href: "/about", label: "About", icon: Info },
@@ -132,7 +129,7 @@ export function MoreSheet({
               <Link
                 href="/auth"
                 onClick={onClose}
-                className={cn("w-full", buttonClasses("primary", "md"))}
+                className="flex w-full items-center justify-center gap-2 rounded-xl border border-border px-4 py-2.5 text-sm font-medium text-muted transition-all hover:bg-surface-2 hover:text-foreground"
               >
                 <LogIn className="h-4 w-4" />
                 Sign in

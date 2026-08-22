@@ -14,6 +14,7 @@ import {
   type Preferences,
 } from "@/lib/usePreferences";
 import { BggAccountCard } from "@/components/settings/BggAccountCard";
+import { AccountSection } from "@/components/settings/AccountSection";
 
 export default function SettingsPage() {
   return (
@@ -60,6 +61,14 @@ function SettingsBody() {
 
   return (
     <div className="space-y-6">
+      {/* Account */}
+      <div>
+        <p className="mb-2 px-1 text-xs font-semibold uppercase tracking-widest text-subtle">
+          Account
+        </p>
+        <AccountSection />
+      </div>
+
       {/* BoardGameGeek */}
       <Section title="BoardGameGeek">
         <BggAccountCard />
