@@ -1,14 +1,23 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Trophy, Lock, Clock, Dices } from "lucide-react";
 import { Thumb } from "@/components/top-games/Thumb";
 import { formatPlayTime } from "@/lib/format";
 import { cn } from "@/lib/cn";
 
-type PlayerBadge = { name: string; avatarUrl: string | null };
+type PlayerBadge = {
+  name: string;
+  avatarUrl: string | null;
+  username?: string | null;
+};
 
-/** Overlapping player avatars (member photo, else the first letter of the name). */
+/**
+ * Overlapping player avatars (member photo, else the first letter of the name).
+ * A player who's a member (has a username) is tappable → their profile. Uses
+ * onClick navigation (not a nested <Link>) so it's safe inside a parent link.
+ */
 export function AvatarStack({
   players,
   ringClass = "ring-background",
@@ -18,37 +27,50 @@ export function AvatarStack({
   ringClass?: string;
   max?: number;
 }) {
+  const router = useRouter();
   const shown = players.slice(0, max);
   const extra = players.length - shown.length;
+
   return (
-    <div className="flex -space-x-1.5">
-      {shown.map((p, i) =>
-        p.avatarUrl ? (
+    <div className="flex -space-x-1">
+      {shown.map((p, i) => {
+        const clickable = !!p.username;
+        const go = (e: React.MouseEvent) => {
+          if (!p.username) return;
+          e.preventDefault();
+          e.stopPropagation();
+          router.push(`/user/${p.username}`);
+        };
+        const base = cn(
+          "relative flex h-8 w-8 items-center justify-center rounded-full ring-2 transition-transform",
+          ringClass,
+          clickable && "cursor-pointer hover:z-10 hover:scale-110",
+        );
+        return p.avatarUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
             key={i}
             src={p.avatarUrl}
             alt=""
             title={p.name}
-            className={cn("h-5 w-5 rounded-full object-cover ring-2", ringClass)}
+            onClick={clickable ? go : undefined}
+            className={cn(base, "object-cover")}
           />
         ) : (
           <span
             key={i}
             title={p.name}
-            className={cn(
-              "flex h-5 w-5 items-center justify-center rounded-full bg-surface-2 text-[9px] font-bold text-muted ring-2",
-              ringClass,
-            )}
+            onClick={clickable ? go : undefined}
+            className={cn(base, "bg-surface-2 text-xs font-bold text-muted")}
           >
             {p.name.replace(/^@/, "").charAt(0).toUpperCase()}
           </span>
-        ),
-      )}
+        );
+      })}
       {extra > 0 && (
         <span
           className={cn(
-            "flex h-5 w-5 items-center justify-center rounded-full bg-surface-2 text-[9px] font-bold text-muted ring-2",
+            "flex h-8 w-8 items-center justify-center rounded-full bg-surface-2 text-xs font-bold text-muted ring-2",
             ringClass,
           )}
         >
@@ -90,7 +112,7 @@ export type PlayCardData = {
   format: string;
   visibility: "private" | "public";
   playerCount: number;
-  players: { name: string; avatarUrl: string | null }[];
+  players: { name: string; avatarUrl: string | null; username?: string | null }[];
   winners: string[];
 };
 

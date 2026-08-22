@@ -10,6 +10,7 @@ import {
 import type { Doc, Id } from "./_generated/dataModel";
 import { internal } from "./_generated/api";
 import { getCurrentUser, requireUser } from "./lib/auth";
+import { canViewProfile } from "./friends";
 import {
   playFormatValidator,
   playScoreModeValidator,
@@ -68,10 +69,10 @@ async function gameCover(ctx: QueryCtx, gameId?: Id<"games">) {
 async function withHandles<T extends { name: string; userId?: Id<"users"> }>(
   ctx: QueryCtx,
   players: T[],
-): Promise<(T & { avatarUrl: string | null })[]> {
+): Promise<(T & { username: string | null; avatarUrl: string | null })[]> {
   return await Promise.all(
     players.map(async (p) => {
-      if (!p.userId) return { ...p, avatarUrl: null };
+      if (!p.userId) return { ...p, username: null, avatarUrl: null };
       const u = await ctx.db.get("users", p.userId);
       const avatarUrl = u?.avatarStorageId
         ? await ctx.storage.getUrl(u.avatarStorageId)
@@ -80,6 +81,7 @@ async function withHandles<T extends { name: string; userId?: Id<"users"> }>(
       return {
         ...p,
         name: u?.username ?? p.name,
+        username: u?.username ?? null,
         avatarUrl,
       };
     }),
@@ -117,6 +119,7 @@ export async function playCard(ctx: QueryCtx, play: PlayDoc) {
     playerCount: play.players.length,
     players: resolved.map((p) => ({
       name: p.name,
+      username: p.username,
       avatarUrl: p.avatarUrl,
       isWinner: !!p.isWinner,
       score: p.score ?? null,
@@ -351,6 +354,27 @@ async function scheduleTagEmails(
   }
 }
 
+/** In-app "you were added to a play" notifications for tagged account players. */
+async function notifyTaggedPlayers(
+  ctx: MutationCtx,
+  opts: { playId: Id<"plays">; ownerId: Id<"users">; userIds: Id<"users">[] },
+) {
+  const now = Date.now();
+  const seen = new Set<string>();
+  for (const uid of opts.userIds) {
+    if (uid === opts.ownerId || seen.has(uid)) continue;
+    seen.add(uid);
+    await ctx.db.insert("notifications", {
+      userId: uid,
+      type: "play_tagged",
+      actorId: opts.ownerId,
+      playId: opts.playId,
+      read: false,
+      createdAt: now,
+    });
+  }
+}
+
 /** Write the indexed participant links for a play. */
 async function writeParticipants(
   ctx: MutationCtx,
@@ -448,6 +472,14 @@ export const logPlay = mutation({
       playTitle: args.title.trim() || "a game",
       notify,
     });
+    // In-app notification for tagged account players.
+    await notifyTaggedPlayers(ctx, {
+      playId,
+      ownerId: user._id,
+      userIds: participants
+        .filter((p) => p.userId)
+        .map((p) => p.userId as Id<"users">),
+    });
     return playId;
   },
 });
@@ -518,6 +550,17 @@ export const updatePlay = mutation({
       playTitle: args.title.trim() || play.title,
       notify,
     });
+    // Notify only account players added in this edit (not the ones already on it).
+    const oldUserIds = new Set(
+      play.players.filter((p) => p.userId).map((p) => String(p.userId)),
+    );
+    await notifyTaggedPlayers(ctx, {
+      playId,
+      ownerId: user._id,
+      userIds: participants
+        .filter((p) => p.userId && !oldUserIds.has(String(p.userId)))
+        .map((p) => p.userId as Id<"users">),
+    });
   },
 });
 
@@ -534,19 +577,31 @@ export const deletePlay = mutation({
   },
 });
 
+/**
+ * Set a play's visibility on the play row + its denormalized participant links,
+ * WITHOUT touching its feed post. The caller manages the post (via syncPlayPost,
+ * or by re-pointing an existing post when editing which play a post shows).
+ */
+export async function writePlayVisibility(
+  ctx: MutationCtx,
+  playId: Id<"plays">,
+  visibility: PlayDoc["visibility"],
+) {
+  await ctx.db.patch("plays", playId, { visibility, updatedAt: Date.now() });
+  const parts = await ctx.db
+    .query("playParticipants")
+    .withIndex("by_play", (q) => q.eq("playId", playId))
+    .collect();
+  for (const p of parts) await ctx.db.patch("playParticipants", p._id, { visibility });
+}
+
 export const setPlayVisibility = mutation({
   args: { playId: v.id("plays"), visibility: playVisibilityValidator },
   handler: async (ctx, { playId, visibility }) => {
     const user = await requireUser(ctx);
     const play = await ctx.db.get("plays", playId);
     if (!play || play.userId !== user._id) throw new Error("Play not found");
-    await ctx.db.patch("plays", playId, { visibility, updatedAt: Date.now() });
-    // Keep the denormalized visibility on participant links in step.
-    const parts = await ctx.db
-      .query("playParticipants")
-      .withIndex("by_play", (q) => q.eq("playId", playId))
-      .collect();
-    for (const p of parts) await ctx.db.patch("playParticipants", p._id, { visibility });
+    await writePlayVisibility(ctx, playId, visibility);
     // Add/remove the feed post.
     await syncPlayPost(ctx, { _id: playId, userId: user._id, visibility });
   },
@@ -764,7 +819,8 @@ export const userPublicPlays = query({
       .withIndex("by_username_lower", (q) => q.eq("usernameLower", lower))
       .unique();
     if (!user) return [];
-    if (!(user.publicProfile?.showPlays ?? false)) return [];
+    const viewer = await getCurrentUser(ctx);
+    if (!(await canViewProfile(ctx, user, viewer?._id ?? null))) return [];
     const rows = await ctx.db
       .query("plays")
       .withIndex("by_user_and_date", (q) => q.eq("userId", user._id))

@@ -17,7 +17,7 @@ import { buttonClasses } from "@/components/ui/Button";
 import { cn } from "@/lib/cn";
 
 const NAV = [
-  { href: "/", label: "Home", icon: Home },
+  { href: "/feed", label: "Home", icon: Home },
   { href: "/boardgames", label: "Library", icon: LayoutGrid },
   { href: "/top-games", label: "Top Games", icon: Trophy },
   { href: "/chats", label: "Chats", icon: MessageCircle },
@@ -26,7 +26,7 @@ const NAV = [
 function Brand() {
   return (
     <Link
-      href="/"
+      href="/feed"
       aria-label="Meepletron home"
       className="flex items-center gap-2"
     >

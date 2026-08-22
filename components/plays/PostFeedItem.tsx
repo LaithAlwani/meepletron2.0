@@ -4,16 +4,26 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useMutation, useConvexAuth } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
-import { Heart, MessageCircle, Trophy, Dices, MoreVertical, Trash2 } from "lucide-react";
+import {
+  Heart,
+  MessageCircle,
+  Trophy,
+  Dices,
+  MoreVertical,
+  EyeOff,
+  Pencil,
+} from "lucide-react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { Thumb } from "@/components/top-games/Thumb";
 import { FORMAT_LABEL, playDate, AvatarStack } from "@/components/plays/PlayCard";
 import { CommentsDrawer } from "@/components/plays/CommentsDrawer";
+import { EditPostModal } from "@/components/plays/EditPostModal";
 import { PhotoCarousel } from "@/components/plays/PhotoCarousel";
 import { ShareButton } from "@/components/boardgames/ShareButton";
 import { useToast } from "@/components/ui/Toast";
 import { useConfirm } from "@/components/ui/Confirm";
+import { friendlyError } from "@/lib/friendlyError";
 import { relativeTime } from "@/lib/format";
 import { topListTitle } from "@/lib/topGamesTitle";
 import { categoryLabel, DEFAULT_CATEGORY } from "@/convex/lib/topGamesCategories";
@@ -33,6 +43,7 @@ export function PostFeedItem({ item }: { item: FeedItem }) {
   const { isAuthenticated } = useConvexAuth();
   const toast = useToast();
   const [commentsOpen, setCommentsOpen] = useState(false);
+  const [editing, setEditing] = useState(false);
 
   function like() {
     if (!isAuthenticated) {
@@ -67,21 +78,25 @@ export function PostFeedItem({ item }: { item: FeedItem }) {
           {item.owner.username ? (
             <Link
               href={`/user/${item.owner.username}`}
-              className="truncate text-sm font-semibold hover:text-accent"
+              className="block truncate text-sm font-semibold hover:text-accent"
             >
               {item.owner.name}
             </Link>
           ) : (
-            <span className="truncate text-sm font-semibold">{item.owner.name}</span>
+            <span className="block truncate text-sm font-semibold">
+              {item.owner.name}
+            </span>
           )}
           <Link
             href={`/posts/${item._id}`}
-            className="text-xs text-subtle hover:text-muted"
+            className="mt-0.5 block text-xs text-subtle hover:text-muted"
           >
-            {relativeTime(item.createdAt)}
+            {item.editedAt
+              ? `Edited · ${relativeTime(item.editedAt)}`
+              : relativeTime(item.createdAt)}
           </Link>
         </div>
-        {item.isMine && <OwnerMenu item={item} />}
+        {item.isMine && <OwnerMenu item={item} onEdit={() => setEditing(true)} />}
       </div>
 
       {/* Content by kind */}
@@ -123,19 +138,28 @@ export function PostFeedItem({ item }: { item: FeedItem }) {
         onClose={() => setCommentsOpen(false)}
         postId={item._id as Id<"posts">}
       />
+
+      {editing && (
+        <EditPostModal
+          postId={item._id as Id<"posts">}
+          kind={item.kind}
+          onClose={() => setEditing(false)}
+        />
+      )}
     </article>
   );
 }
 
-/** Owner "⋯" menu — delete an image/toplist post, or unshare a play post
- *  (making it private again). Shown only on the viewer's own posts. */
-function OwnerMenu({ item }: { item: FeedItem }) {
+/** Owner "⋯" menu — Edit the caption, or Hide the post from the feed (make it
+ *  private). To delete permanently, open the play / list / post itself. Shown
+ *  only on your posts. */
+function OwnerMenu({ item, onEdit }: { item: FeedItem; onEdit: () => void }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const toast = useToast();
   const confirm = useConfirm();
-  const deletePost = useMutation(api.posts.deletePost);
-  const setVisibility = useMutation(api.plays.setPlayVisibility);
+  const setPlayVisibility = useMutation(api.plays.setPlayVisibility);
+  const setPostVisibility = useMutation(api.posts.setPostVisibility);
 
   useEffect(() => {
     if (!open) return;
@@ -146,31 +170,28 @@ function OwnerMenu({ item }: { item: FeedItem }) {
     return () => document.removeEventListener("mousedown", onDoc);
   }, [open]);
 
-  const isPlay = item.kind === "play";
-
-  async function remove() {
+  async function hide() {
     setOpen(false);
     const ok = await confirm({
-      title: isPlay ? "Remove from feed?" : "Delete post?",
-      message: isPlay
-        ? "This makes the play private and removes it from the feed. The play itself is kept."
-        : item.kind === "image"
-          ? "This permanently removes the post and its photos. This can't be undone."
-          : "This permanently removes the post. This can't be undone.",
-      confirmText: isPlay ? "Remove" : "Delete",
-      danger: true,
+      title: "Hide this from the feed?",
+      message:
+        "It becomes private and leaves the feed. You can still find it on your own pages, and delete it there if you want.",
+      confirmText: "Hide",
+      suppressKey: "mp:confirm-hide-post",
     });
     if (!ok) return;
     try {
       if (item.kind === "play") {
-        await setVisibility({ playId: item.playId, visibility: "private" });
-        toast("Removed from feed.", "success");
+        await setPlayVisibility({ playId: item.playId, visibility: "private" });
       } else {
-        await deletePost({ postId: item._id as Id<"posts"> });
-        toast("Post deleted.", "success");
+        await setPostVisibility({
+          postId: item._id as Id<"posts">,
+          visibility: "private",
+        });
       }
+      toast("Hidden from the feed.", "success");
     } catch (e) {
-      toast(e instanceof Error ? e.message : "Couldn't remove.", "error");
+      toast(friendlyError(e, "Couldn't hide it."), "error");
     }
   }
 
@@ -185,13 +206,23 @@ function OwnerMenu({ item }: { item: FeedItem }) {
         <MoreVertical className="h-4.5 w-4.5" />
       </button>
       {open && (
-        <div className="animate-in absolute right-0 top-full z-10 mt-1 w-44 rounded-xl border border-border bg-surface p-1 shadow-xl">
+        <div className="animate-in absolute right-0 top-full z-10 mt-1 w-40 rounded-xl border border-border bg-surface p-1 shadow-xl">
           <button
-            onClick={remove}
-            className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-sm font-medium text-muted transition-colors hover:bg-red-500/10 hover:text-red-500"
+            onClick={() => {
+              setOpen(false);
+              onEdit();
+            }}
+            className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-sm font-medium text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
           >
-            <Trash2 className="h-3.5 w-3.5" />
-            {isPlay ? "Remove from feed" : "Delete post"}
+            <Pencil className="h-3.5 w-3.5" />
+            Edit
+          </button>
+          <button
+            onClick={hide}
+            className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-sm font-medium text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
+          >
+            <EyeOff className="h-3.5 w-3.5" />
+            Hide from feed
           </button>
         </div>
       )}

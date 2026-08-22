@@ -152,6 +152,7 @@ export function GlobalAssistant() {
   const pathname = usePathname() ?? "";
   const router = useRouter();
   const hidden =
+    pathname === "/" ||
     pathname === "/auth" ||
     pathname === "/who-goes-first" ||
     /^\/boardgames\/[^/]+\/chat/.test(pathname);

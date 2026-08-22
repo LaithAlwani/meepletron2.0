@@ -19,7 +19,7 @@ export function PhotoCarousel({ images }: { images: string[] }) {
       <img
         src={images[0]}
         alt=""
-        className="aspect-video w-full object-cover"
+        className="aspect-4/3 w-full bg-surface-2 object-cover"
       />
     );
   }
@@ -48,7 +48,7 @@ export function PhotoCarousel({ images }: { images: string[] }) {
             key={i}
             src={src}
             alt=""
-            className="aspect-video w-full shrink-0 snap-center object-cover"
+            className="aspect-4/3 w-full shrink-0 snap-center bg-surface-2 object-cover"
           />
         ))}
       </div>

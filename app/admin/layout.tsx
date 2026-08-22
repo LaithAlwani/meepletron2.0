@@ -38,7 +38,7 @@ export default function AdminLayout({
           You need an admin account to view this area.
         </p>
         <Link
-          href="/"
+          href="/feed"
           className="mt-4 inline-block rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-accent-foreground"
         >
           Back home

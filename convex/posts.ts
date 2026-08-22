@@ -8,8 +8,10 @@ import {
 } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
 import { getCurrentUser, requireUser } from "./lib/auth";
-import { clearPostSocial } from "./lib/feed";
-import { playCard, keepImages } from "./plays";
+import { canViewProfile } from "./friends";
+import { postVisibilityValidator } from "./lib/postTypes";
+import { clearPostSocial, syncPlayPost } from "./lib/feed";
+import { playCard, keepImages, writePlayVisibility } from "./plays";
 import { topListPreview } from "./topGames";
 
 /**
@@ -51,7 +53,7 @@ async function notify(
   ctx: MutationCtx,
   n: {
     userId: Id<"users">;
-    type: "post_like" | "post_comment" | "comment_mention";
+    type: "post_like" | "post_comment" | "comment_like" | "comment_mention";
     actorId: Id<"users">;
     postId?: Id<"posts">;
     commentId?: Id<"postComments">;
@@ -102,6 +104,7 @@ async function buildFeedItem(
     _id: post._id,
     caption: post.caption ?? null,
     createdAt: post.createdAt,
+    editedAt: post.editedAt ?? null,
     owner: await postOwner(ctx, post.userId),
     reactionCount: post.reactionCount ?? 0,
     commentCount: post.commentCount ?? 0,
@@ -237,6 +240,40 @@ export const createTopListPost = mutation({
   },
 });
 
+/**
+ * Share one of the caller's own plays to the feed with an optional caption.
+ * Makes the play public if it isn't (which creates its feed post), sets the
+ * caption, and bumps it to the top of the feed. Idempotent — one post per play.
+ */
+export const sharePlayPost = mutation({
+  args: { playId: v.id("plays"), caption: v.optional(v.string()) },
+  handler: async (ctx, { playId, caption }): Promise<Id<"posts"> | null> => {
+    const user = await requireUser(ctx);
+    const play = await ctx.db.get("plays", playId);
+    if (!play || play.userId !== user._id) throw new Error("Play not found");
+
+    const now = Date.now();
+    // Make the play public so it appears in the feed (and on the profile).
+    if (play.visibility !== "public") {
+      await writePlayVisibility(ctx, playId, "public");
+    }
+    // Ensure the play's feed post exists.
+    await syncPlayPost(ctx, { _id: playId, userId: user._id, visibility: "public" });
+    const post = await ctx.db
+      .query("posts")
+      .withIndex("by_play", (q) => q.eq("playId", playId))
+      .unique();
+    if (!post) return null;
+    // Set the caption and resurface it to the top of the feed.
+    await ctx.db.patch("posts", post._id, {
+      caption: caption?.trim() || undefined,
+      createdAt: now,
+      updatedAt: now,
+    });
+    return post._id;
+  },
+});
+
 /** Delete the caller's own post (image / toplist / play-share) + its social. */
 export const deletePost = mutation({
   args: { postId: v.id("posts") },
@@ -250,6 +287,119 @@ export const deletePost = mutation({
     }
     await clearPostSocial(ctx, postId);
     await ctx.db.delete("posts", postId);
+  },
+});
+
+/** Hide/unhide an image or toplist post from the feed (its own visibility).
+ *  Play posts are controlled via the play's visibility instead. */
+export const setPostVisibility = mutation({
+  args: { postId: v.id("posts"), visibility: postVisibilityValidator },
+  handler: async (ctx, { postId, visibility }) => {
+    const user = await requireUser(ctx);
+    const post = await ctx.db.get("posts", postId);
+    if (!post || post.userId !== user._id) return;
+    await ctx.db.patch("posts", postId, { visibility, updatedAt: Date.now() });
+  },
+});
+
+/** The raw, editable content of the caller's own post — used to seed the editor
+ *  (which photos / play / list it currently points at, plus the caption). */
+export const getPostForEdit = query({
+  args: { postId: v.id("posts") },
+  handler: async (ctx, { postId }) => {
+    const viewer = await getCurrentUser(ctx);
+    const post = await ctx.db.get("posts", postId);
+    if (!post || !viewer || post.userId !== viewer._id) return null;
+    return {
+      kind: post.kind,
+      caption: post.caption ?? "",
+      playId: post.playId ?? null,
+      topListId: post.topListId ?? null,
+      photos:
+        post.kind === "image"
+          ? await Promise.all(
+              (post.photoIds ?? []).map(async (id) => ({
+                id,
+                url: await ctx.storage.getUrl(id),
+              })),
+            )
+          : [],
+    };
+  },
+});
+
+/**
+ * Edit the caller's own post — the caption, and (for a mistake) which play,
+ * image set, or Top Games list it shows. Stamps `editedAt` so the feed shows an
+ * "Edited" marker with the new time. Only the fields for the post's kind apply.
+ */
+export const editPost = mutation({
+  args: {
+    postId: v.id("posts"),
+    caption: v.optional(v.string()),
+    photoIds: v.optional(v.array(v.id("_storage"))), // kind "image"
+    topListId: v.optional(v.id("topGamesLists")), // kind "toplist"
+    playId: v.optional(v.id("plays")), // kind "play"
+  },
+  handler: async (ctx, { postId, caption, photoIds, topListId, playId }) => {
+    const user = await requireUser(ctx);
+    const post = await ctx.db.get("posts", postId);
+    if (!post || post.userId !== user._id) throw new Error("Post not found");
+    const now = Date.now();
+    const patch: Partial<Doc<"posts">> = {
+      caption: caption?.trim() || undefined,
+      updatedAt: now,
+      editedAt: now,
+    };
+
+    if (post.kind === "image" && photoIds) {
+      const kept = await keepImages(ctx, photoIds);
+      if (!kept || kept.length === 0) throw new Error("Add at least one photo.");
+      // Delete blobs that were dropped from this post (they're post-owned).
+      const keptSet = new Set<string>(kept);
+      for (const id of post.photoIds ?? []) {
+        if (!keptSet.has(id)) await ctx.storage.delete(id);
+      }
+      patch.photoIds = kept;
+    }
+
+    if (post.kind === "toplist" && topListId && topListId !== post.topListId) {
+      const list = await ctx.db.get("topGamesLists", topListId);
+      if (!list || list.userId !== user._id) throw new Error("List not found");
+      if (list.status !== "finalized") {
+        throw new Error("Finalize the list before sharing it.");
+      }
+      if (list.visibility !== "public") {
+        await ctx.db.patch("topGamesLists", topListId, {
+          visibility: "public",
+          updatedAt: now,
+        });
+      }
+      patch.topListId = topListId;
+    }
+
+    if (post.kind === "play" && playId && playId !== post.playId) {
+      const target = await ctx.db.get("plays", playId);
+      if (!target || target.userId !== user._id) throw new Error("Play not found");
+      // A play has exactly one feed post — don't create a second one.
+      const targetPost = await ctx.db
+        .query("posts")
+        .withIndex("by_play", (q) => q.eq("playId", playId))
+        .unique();
+      if (targetPost && targetPost._id !== post._id) {
+        throw new Error("That play is already shared to your feed.");
+      }
+      // Point this post at the new play (public); the old play loses its post.
+      if (target.visibility !== "public") {
+        await writePlayVisibility(ctx, playId, "public");
+      }
+      if (post.playId) {
+        await writePlayVisibility(ctx, post.playId, "private");
+      }
+      patch.playId = playId;
+    }
+
+    await ctx.db.patch("posts", postId, patch);
   },
 });
 
@@ -462,6 +612,13 @@ export const toggleCommentReaction = mutation({
     await ctx.db.patch("postComments", commentId, {
       likeCount: (c.likeCount ?? 0) + 1,
     });
+    await notify(ctx, {
+      userId: c.userId,
+      type: "comment_like",
+      actorId: user._id,
+      postId: c.postId,
+      commentId,
+    });
     return { liked: true };
   },
 });
@@ -495,6 +652,8 @@ export const userImagePosts = query({
       .withIndex("by_username_lower", (q) => q.eq("usernameLower", lower))
       .unique();
     if (!user) return [];
+    const viewer = await getCurrentUser(ctx);
+    if (!(await canViewProfile(ctx, user, viewer?._id ?? null))) return [];
     const rows = await ctx.db
       .query("posts")
       .withIndex("by_user_and_created", (q) => q.eq("userId", user._id))
@@ -544,6 +703,10 @@ async function notificationView(ctx: QueryCtx, nt: Doc<"notifications">) {
       }
     }
   }
+  if (nt.playId) {
+    // play_tagged — link straight to the play.
+    title = (await ctx.db.get("plays", nt.playId))?.title ?? null;
+  }
   if (nt.commentId) {
     snippet = (await ctx.db.get("postComments", nt.commentId))?.text.slice(0, 120) ?? null;
   }
@@ -554,6 +717,7 @@ async function notificationView(ctx: QueryCtx, nt: Doc<"notifications">) {
     createdAt: nt.createdAt,
     actor,
     postId: nt.postId ?? null,
+    playId: nt.playId ?? null,
     postKind,
     title,
     thumbUrl,

@@ -519,6 +519,7 @@ function StatCard({
 }
 
 type PrefKey =
+  | "isPublic"
   | "showName"
   | "findableByName"
   | "showAvatar"
@@ -535,6 +536,12 @@ const SHARE_TOGGLES: {
   hint?: string;
 }[] = [
   {
+    key: "isPublic",
+    label: "Public profile",
+    def: true,
+    hint: "Anyone can view it. Turn off to show your profile to friends only — others just see an Add friend button.",
+  },
+  {
     key: "showName",
     label: "Show my real name",
     def: false,
@@ -548,7 +555,6 @@ const SHARE_TOGGLES: {
   },
   { key: "showAvatar", label: "Profile photo", def: true },
   { key: "showTopLists", label: "Top Games lists", def: true },
-  { key: "showPlays", label: "Plays", def: false },
   { key: "showOwned", label: "Owned games", def: false },
   { key: "showForTrade", label: "Games for trade", def: false },
   { key: "showWishlist", label: "Wishlist", def: false },

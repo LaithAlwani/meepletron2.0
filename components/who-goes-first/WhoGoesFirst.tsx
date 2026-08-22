@@ -7,8 +7,10 @@ import { useCoarsePointer } from "@/lib/useCoarsePointer";
 
 const COUNTDOWN_MS = 3000;
 const MIN_PLAYERS = 2;
-// How long the winner's color takes to paint across the screen.
-const FLOOD_MS = 2000;
+// Winner reveal: hold the lone winner for a beat, then paint the color in from
+// the screen edges/corners down to the winner's ring.
+const FILL_DELAY_MS = 700;
+const FILL_MS = 1100;
 
 // Vivid, well-separated colors, assigned to fingers in touch order.
 const COLORS = [
@@ -33,6 +35,7 @@ const R = DOT / 2 + GAP + RING_W / 2; // ring centerline
 const SVG = 2 * R + RING_W + 8; // ring box + stroke + padding
 const MID = SVG / 2;
 const CIRC = 2 * Math.PI * R;
+const RING_OUTER = 2 * R + RING_W; // the color fill converges to this circle
 
 // A second contact within a fingertip's width of an existing one is the same
 // finger (people press with the pad, not the tip) — ignore it so one finger
@@ -72,10 +75,11 @@ export function WhoGoesFirst() {
     touchesRef.current = touches;
   }, [touches]);
 
-  // Flip the top bar to white once the color reveal has covered the screen.
+  // Flip the top bar to white once the color has reached the edges (the corners
+  // fill first, so shortly after the fill starts).
   useEffect(() => {
     if (!winner) return;
-    const id = setTimeout(() => setRevealed(true), 1750);
+    const id = setTimeout(() => setRevealed(true), FILL_DELAY_MS + 350);
     return () => clearTimeout(id);
   }, [winner]);
 
@@ -199,7 +203,7 @@ export function WhoGoesFirst() {
     >
       <style>{`
         @keyframes wgf-ring { from { stroke-dashoffset: 0 } to { stroke-dashoffset: ${CIRC} } }
-        @keyframes wgf-flood { from { transform: translate(-50%, -50%) scale(0.01) } to { transform: translate(-50%, -50%) scale(32) } }
+        @keyframes wgf-fill { from { width: 260vmax; height: 260vmax } to { width: ${RING_OUTER}px; height: ${RING_OUTER}px } }
         @keyframes wgf-fade { from { opacity: 0 } to { opacity: 1 } }
       `}</style>
 
@@ -289,23 +293,26 @@ export function WhoGoesFirst() {
           </div>
         ))}
 
-      {/* Winner's color paints outward from their finger to fill the screen. */}
+      {/* After a beat with just the winner's finger showing, the winner's color
+          paints IN from the screen edges/corners down to their ring. A circle at
+          the winner casts a huge colored box-shadow (color everywhere but the
+          circle); shrinking it from screen-covering to the ring reveals the
+          color from the corners inward. */}
       {flooded && (
         <div
-          className="pointer-events-none absolute z-10 h-60 w-60 rounded-full"
+          className="pointer-events-none absolute left-0 top-0 z-10 rounded-full"
           style={{
             left: winner!.x,
             top: winner!.y,
-            backgroundColor: winner!.color,
-            transform: "translate(-50%, -50%) scale(0.01)",
-            animation: `wgf-flood ${FLOOD_MS}ms ease-out forwards`,
+            transform: "translate(-50%, -50%)",
+            boxShadow: `0 0 0 100vmax ${winner!.color}`,
+            animation: `wgf-fill ${FILL_MS}ms ease-in-out ${FILL_DELAY_MS}ms both`,
           }}
         />
       )}
 
-      {/* The winner's touch stays exactly as it looked in play — their dot with
-          a transparent gap around it (mirroring the countdown ring's gap), and
-          the flooded color fills in around that. */}
+      {/* The winner's finger stays exactly as it looked in play — dot + ring —
+          on top of the fill, visible immediately. */}
       {flooded && (
         <div
           className="pointer-events-none absolute z-20"
@@ -313,16 +320,18 @@ export function WhoGoesFirst() {
             left: winner!.x,
             top: winner!.y,
             transform: "translate(-50%, -50%)",
-            animation: "wgf-fade 500ms ease-out 1000ms both",
           }}
         >
-          {/* transparent gap: reveals the page background, separating the dot
-              from the flooded color the way the gap separates dot from ring */}
-          <span
-            className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-background"
-            style={{ width: DOT + 2 * GAP, height: DOT + 2 * GAP }}
-          />
-          {/* the winner's dot, identical to the in-play marker */}
+          <svg width={SVG} height={SVG} viewBox={`0 0 ${SVG} ${SVG}`} className="block">
+            <circle
+              cx={MID}
+              cy={MID}
+              r={R}
+              fill="none"
+              stroke={winner!.color}
+              strokeWidth={RING_W}
+            />
+          </svg>
           <span
             className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full"
             style={{
@@ -339,8 +348,10 @@ export function WhoGoesFirst() {
           the prompt to start over. Fades in once the color has spread a bit. */}
       {flooded && (
         <div
-          className="absolute inset-0 z-20 flex flex-col items-center justify-center px-6 text-center text-white"
-          style={{ animation: "wgf-fade 500ms ease-out 1200ms both" }}
+          className="absolute inset-x-0 bottom-0 z-20 flex flex-col items-center px-6 pb-[calc(env(safe-area-inset-bottom)+2rem)] text-center text-white"
+          style={{
+            animation: `wgf-fade 500ms ease-out ${FILL_DELAY_MS + FILL_MS}ms both`,
+          }}
         >
           <p className="font-display text-2xl font-bold drop-shadow-sm">
             Tap anywhere to restart

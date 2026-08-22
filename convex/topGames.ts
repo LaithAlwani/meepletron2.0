@@ -8,6 +8,7 @@ import {
 } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
 import { getCurrentUser, requireUser } from "./lib/auth";
+import { canViewProfile } from "./friends";
 import { DEFAULT_CATEGORY, isTopCategory } from "./lib/topGamesCategories";
 import { isGameSort } from "./lib/gameSort";
 
@@ -571,6 +572,26 @@ export const publicProfile = query({
       .unique();
     if (!user) return null;
 
+    const viewer = await getCurrentUser(ctx);
+    const isSelf = viewer?._id === user._id;
+    const author = await authorInfo(ctx, user._id);
+
+    // A private profile only opens up to the owner or an accepted friend;
+    // everyone else sees just the handle + avatar and an "Add friend" prompt.
+    const canView = await canViewProfile(ctx, user, viewer?._id ?? null);
+    if (!canView) {
+      return {
+        author: author ? { ...author, realName: null } : null,
+        private: true,
+        isSelf,
+        lists: [],
+        showPlays: false,
+        owned: null,
+        forTrade: null,
+        wishlist: null,
+      };
+    }
+
     const p = user.publicProfile ?? {};
     const showTopLists = p.showTopLists ?? true;
 
@@ -587,7 +608,9 @@ export const publicProfile = query({
     }
 
     return {
-      author: await authorInfo(ctx, user._id),
+      author,
+      private: false,
+      isSelf,
       lists,
       // Whether to show a plays section — the plays themselves are fetched by the
       // page via api.plays.userPublicPlays (keeps the play projection in one place).

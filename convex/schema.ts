@@ -20,6 +20,7 @@ import {
   postCommentValidator,
   postCommentReactionValidator,
   notificationValidator,
+  friendshipValidator,
 } from "./lib/postTypes";
 
 /**
@@ -57,6 +58,7 @@ export default defineSchema({
     // All optional; read with defaults (name/avatar/top-lists on, collection off).
     publicProfile: v.optional(
       v.object({
+        isPublic: v.optional(v.boolean()), // profile visible to anyone (else friends only)
         showName: v.optional(v.boolean()), // show real name on your profile
         findableByName: v.optional(v.boolean()), // matchable by real name in search
         showAvatar: v.optional(v.boolean()),
@@ -579,11 +581,17 @@ export default defineSchema({
     .index("by_user_and_comment", ["userId", "commentId"])
     .index("by_comment", ["commentId"]),
 
-  // In-app notifications (likes / comments / mentions on your posts).
+  // In-app notifications (likes / comments / mentions / friend requests).
   notifications: defineTable(notificationValidator)
     .index("by_user_and_created", ["userId", "createdAt"]) // the list
     .index("by_user_and_read", ["userId", "read"]) // unread badge count
     .index("by_post", ["postId"]), // cleanup on post delete
+
+  // Friendships + pending requests, one row per pair (userA id < userB id).
+  friendships: defineTable(friendshipValidator)
+    .index("by_userA", ["userA"])
+    .index("by_userB", ["userB"])
+    .index("by_pair", ["userA", "userB"]),
 
   // A user's ranked "Top N games" list for a given year. Entries are a bounded
   // (≤ ~250) inline array — array index = rank − 1 — so a drag-reorder is one

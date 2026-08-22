@@ -16,6 +16,10 @@ type ConfirmOptions = {
   confirmText?: string;
   cancelText?: string;
   danger?: boolean;
+  // When set, shows a "Don't ask again" checkbox; if the user confirms with it
+  // checked, this localStorage key is set and future confirms with the same key
+  // resolve true immediately (no dialog).
+  suppressKey?: string;
 };
 
 const ConfirmContext = createContext<
@@ -24,20 +28,39 @@ const ConfirmContext = createContext<
 
 export function ConfirmProvider({ children }: { children: ReactNode }) {
   const [options, setOptions] = useState<ConfirmOptions | null>(null);
+  const [dontAsk, setDontAsk] = useState(false);
   const resolver = useRef<((value: boolean) => void) | null>(null);
 
   const confirm = useCallback((opts: ConfirmOptions) => {
+    if (
+      opts.suppressKey &&
+      typeof window !== "undefined" &&
+      localStorage.getItem(opts.suppressKey) === "1"
+    ) {
+      return Promise.resolve(true);
+    }
     return new Promise<boolean>((resolve) => {
       resolver.current = resolve;
+      setDontAsk(false);
       setOptions(opts);
     });
   }, []);
 
-  const close = useCallback((value: boolean) => {
-    resolver.current?.(value);
-    resolver.current = null;
-    setOptions(null);
-  }, []);
+  const close = useCallback(
+    (value: boolean) => {
+      if (value && options?.suppressKey && dontAsk) {
+        try {
+          localStorage.setItem(options.suppressKey, "1");
+        } catch {
+          /* private mode — ignore */
+        }
+      }
+      resolver.current?.(value);
+      resolver.current = null;
+      setOptions(null);
+    },
+    [options, dontAsk],
+  );
 
   useEffect(() => {
     if (!options) return;
@@ -66,6 +89,17 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
             <h2 className="text-lg font-semibold">{options.title}</h2>
             {options.message && (
               <p className="mt-2 text-sm text-muted">{options.message}</p>
+            )}
+            {options.suppressKey && (
+              <label className="mt-4 flex cursor-pointer items-center gap-2 text-sm text-muted">
+                <input
+                  type="checkbox"
+                  checked={dontAsk}
+                  onChange={(e) => setDontAsk(e.target.checked)}
+                  className="h-4 w-4 rounded border-border accent-accent"
+                />
+                Don&apos;t ask me again
+              </label>
             )}
             <div className="mt-5 flex justify-end gap-2">
               <button

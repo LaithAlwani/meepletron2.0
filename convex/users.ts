@@ -146,6 +146,7 @@ export const searchUsers = query({
  */
 export const setPublicProfile = mutation({
   args: {
+    isPublic: v.optional(v.boolean()),
     showName: v.optional(v.boolean()),
     findableByName: v.optional(v.boolean()),
     showAvatar: v.optional(v.boolean()),

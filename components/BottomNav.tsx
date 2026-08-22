@@ -14,7 +14,7 @@ import { cn } from "@/lib/cn";
 import { MoreSheet } from "@/components/MoreSheet";
 
 const TABS = [
-  { href: "/", label: "Home", icon: Home },
+  { href: "/feed", label: "Home", icon: Home },
   { href: "/boardgames", label: "Library", icon: LayoutGrid },
   { href: "/top-games", label: "Top Games", icon: Trophy },
   { href: "/chats", label: "Chats", icon: MessageCircle },
@@ -30,6 +30,7 @@ export function BottomNav() {
   const pathname = usePathname() ?? "";
   const [moreOpen, setMoreOpen] = useState(false);
   const hidden =
+    pathname === "/" ||
     pathname === "/auth" ||
     pathname === "/who-goes-first" ||
     /^\/boardgames\/[^/]+\/chat/.test(pathname);

@@ -37,6 +37,7 @@ export const postRowValidator = v.object({
   commentCount: v.optional(v.number()), // denormalized
   createdAt: v.number(),
   updatedAt: v.number(),
+  editedAt: v.optional(v.number()), // set when the owner edits the caption
 });
 
 /** A "like" on a post — one per user, toggled. Count denormalized on the post. */
@@ -69,11 +70,30 @@ export const notificationValidator = v.object({
   type: v.union(
     v.literal("post_like"),
     v.literal("post_comment"),
+    v.literal("comment_like"),
     v.literal("comment_mention"),
+    v.literal("play_tagged"),
+    v.literal("friend_request"),
+    v.literal("friend_accept"),
   ),
   actorId: v.id("users"), // who triggered it
   postId: v.optional(v.id("posts")),
   commentId: v.optional(v.id("postComments")),
+  playId: v.optional(v.id("plays")), // for play_tagged
   read: v.boolean(),
   createdAt: v.number(),
+});
+
+/**
+ * A friendship (or pending request) between two accounts. Stored once per pair
+ * with a canonical order (`userA` id < `userB` id); `requestedBy` records the
+ * initiator so a pending row has a direction.
+ */
+export const friendshipValidator = v.object({
+  userA: v.id("users"),
+  userB: v.id("users"),
+  status: v.union(v.literal("pending"), v.literal("accepted")),
+  requestedBy: v.id("users"),
+  createdAt: v.number(),
+  updatedAt: v.number(),
 });

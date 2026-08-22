@@ -20,7 +20,7 @@ export default function PostPage({
   return (
     <div className="mx-auto max-w-xl px-4 py-6 sm:py-8">
       <Link
-        href="/"
+        href="/feed"
         className="mb-4 inline-flex items-center gap-1 text-sm font-medium text-muted transition-colors hover:text-foreground"
       >
         <ArrowLeft className="h-4 w-4" />

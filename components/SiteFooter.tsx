@@ -5,7 +5,7 @@ import { Footer } from "./Footer";
 
 export function SiteFooter() {
   const pathname = usePathname();
-  // The footer only appears on the home / landing route.
-  if (pathname !== "/") return null;
+  // The footer only appears on the feed (home) route.
+  if (pathname !== "/feed") return null;
   return <Footer />;
 }

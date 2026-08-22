@@ -2,20 +2,22 @@
 
 import { useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { useMutation, useQuery } from "convex/react";
-import { ImagePlus, Trophy, Dices, X, Loader2, Check } from "lucide-react";
+import { useMutation, usePaginatedQuery, useQuery } from "convex/react";
+import { ImagePlus, Trophy, Dices, X, Loader2, Check, Plus } from "lucide-react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { compressImage } from "@/lib/imageCompress";
 import { buttonClasses } from "@/components/ui/Button";
 import { useToast } from "@/components/ui/Toast";
 import { LogPlayWizard } from "@/components/plays/LogPlayWizard";
+import { FORMAT_LABEL, playDate } from "@/components/plays/PlayCard";
+import { Thumb } from "@/components/top-games/Thumb";
 import { useUsernameGate } from "@/components/feed/UsernameGate";
 import { topListTitle } from "@/lib/topGamesTitle";
 import { categoryLabel, DEFAULT_CATEGORY } from "@/convex/lib/topGamesCategories";
 import { cn } from "@/lib/cn";
 
-type Mode = null | "photo" | "list" | "play";
+type Mode = null | "photo" | "list" | "playShare" | "play";
 
 /** The top-of-feed composer: a bar with three ways to post (photo / list / play). */
 export function PostComposer() {
@@ -52,11 +54,17 @@ export function PostComposer() {
       <div className="mt-2.5 flex items-center gap-1 border-t border-border-muted pt-2.5">
         <ComposerTab icon={<ImagePlus className="h-4 w-4" />} label="Photo" onClick={() => openGated("photo")} />
         <ComposerTab icon={<Trophy className="h-4 w-4" />} label="Top list" onClick={() => openGated("list")} />
-        <ComposerTab icon={<Dices className="h-4 w-4" />} label="Log a play" onClick={() => setMode("play")} />
+        <ComposerTab icon={<Dices className="h-4 w-4" />} label="Log a play" onClick={() => setMode("playShare")} />
       </div>
 
       {mode === "photo" && <PhotoDrawer onClose={() => setMode(null)} />}
       {mode === "list" && <ListDrawer onClose={() => setMode(null)} />}
+      {mode === "playShare" && (
+        <PlayShareDrawer
+          onClose={() => setMode(null)}
+          onLogNew={() => setMode("play")}
+        />
+      )}
       <LogPlayWizard open={mode === "play"} onClose={() => setMode(null)} />
     </div>
   );
@@ -74,10 +82,10 @@ function ComposerTab({
   return (
     <button
       onClick={onClick}
-      className="flex flex-1 items-center justify-center gap-1.5 rounded-lg px-2 py-1.5 text-sm font-semibold text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
+      className="flex min-w-0 flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-1.5 py-1.5 text-xs font-semibold text-muted transition-colors hover:bg-surface-2 hover:text-foreground sm:text-sm"
     >
-      {icon}
-      <span>{label}</span>
+      <span className="shrink-0">{icon}</span>
+      <span className="truncate">{label}</span>
     </button>
   );
 }
@@ -239,6 +247,145 @@ function PhotoDrawer({ onClose }: { onClose: () => void }) {
         placeholder="Say something (optional)…"
         rows={3}
         className="mt-3 w-full resize-none rounded-xl border border-border bg-surface px-3 py-2 text-sm outline-none focus:border-accent/50 focus:ring-2 focus:ring-ring/40"
+      />
+    </Drawer>
+  );
+}
+
+/** Share an already-logged play to the feed, or jump to logging a new one. */
+function PlayShareDrawer({
+  onClose,
+  onLogNew,
+}: {
+  onClose: () => void;
+  onLogNew: () => void;
+}) {
+  const { results, status, loadMore } = usePaginatedQuery(
+    api.plays.myPlays,
+    {},
+    { initialNumItems: 20 },
+  );
+  const sharePlay = useMutation(api.posts.sharePlayPost);
+  const ensureUsername = useUsernameGate();
+  const toast = useToast();
+
+  const [selected, setSelected] = useState<Id<"plays"> | null>(null);
+  const [caption, setCaption] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  async function share() {
+    if (!selected) return;
+    // Sharing puts the play in the public feed — require a username first.
+    if (!(await ensureUsername())) return;
+    setBusy(true);
+    try {
+      await sharePlay({ playId: selected, caption: caption.trim() || undefined });
+      toast("Shared to the feed!", "success");
+      onClose();
+    } catch (e) {
+      toast(e instanceof Error ? e.message : "Couldn't share", "error");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const loading = status === "LoadingFirstPage";
+
+  return (
+    <Drawer
+      title="Share a play"
+      onClose={onClose}
+      footer={
+        <button
+          onClick={share}
+          disabled={busy || !selected}
+          className={cn(buttonClasses("primary", "md"), "w-full justify-center")}
+        >
+          {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : "Share to feed"}
+        </button>
+      }
+    >
+      <button
+        onClick={onLogNew}
+        className="mb-4 flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-border py-3.5 text-sm font-semibold text-muted transition-colors hover:border-accent/40 hover:text-foreground"
+      >
+        <Plus className="h-4.5 w-4.5" />
+        Log a new play
+      </button>
+
+      <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.12em] text-subtle">
+        Or share a past play
+      </p>
+
+      {loading ? (
+        <p className="py-8 text-center text-sm text-subtle">Loading…</p>
+      ) : results.length === 0 ? (
+        <p className="py-8 text-center text-sm text-subtle">
+          You haven&apos;t logged any plays yet. Log one above to get started.
+        </p>
+      ) : (
+        <>
+          <ul className="space-y-2">
+            {results.map((p) => {
+              const active = selected === p._id;
+              return (
+                <li key={p._id}>
+                  <button
+                    onClick={() => setSelected(p._id)}
+                    className={cn(
+                      "flex w-full items-center gap-3 rounded-xl border p-2.5 text-left transition-colors",
+                      active
+                        ? "border-accent bg-accent/10"
+                        : "border-border hover:bg-surface-2",
+                    )}
+                  >
+                    <div className="h-11 w-11 shrink-0 overflow-hidden rounded-lg bg-surface-2">
+                      {p.coverUrl ? (
+                        <Thumb url={p.coverUrl} className="h-11 w-11" />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center text-subtle">
+                          <Dices className="h-5 w-5" />
+                        </div>
+                      )}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="font-display truncate font-bold">{p.title}</p>
+                      <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-subtle">
+                        <span>{playDate(p.date)}</span>
+                        <span className="rounded-full bg-surface-2 px-1.5 py-px text-[10px] font-bold uppercase tracking-wide">
+                          {FORMAT_LABEL[p.format] ?? p.format}
+                        </span>
+                        <span>
+                          {p.playerCount} player{p.playerCount === 1 ? "" : "s"}
+                        </span>
+                        {p.visibility === "public" && (
+                          <span className="font-semibold text-accent">Shared</span>
+                        )}
+                      </div>
+                    </div>
+                    {active && <Check className="h-4 w-4 shrink-0 text-accent" />}
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+          {status === "CanLoadMore" && (
+            <button
+              onClick={() => loadMore(20)}
+              className={buttonClasses("ghost", "sm", "mt-3 w-full justify-center")}
+            >
+              Load more
+            </button>
+          )}
+        </>
+      )}
+
+      <textarea
+        value={caption}
+        onChange={(e) => setCaption(e.target.value)}
+        placeholder="Say something (optional)…"
+        rows={3}
+        className="mt-4 w-full resize-none rounded-xl border border-border bg-surface px-3 py-2 text-sm outline-none focus:border-accent/50 focus:ring-2 focus:ring-ring/40"
       />
     </Drawer>
   );

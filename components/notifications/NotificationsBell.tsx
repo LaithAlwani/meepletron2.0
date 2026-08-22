@@ -10,7 +10,15 @@ import {
   useConvexAuth,
 } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
-import { Bell, Heart, MessageCircle, AtSign } from "lucide-react";
+import {
+  Bell,
+  Heart,
+  MessageCircle,
+  AtSign,
+  UserPlus,
+  UserCheck,
+  Dices,
+} from "lucide-react";
 import { api } from "@/convex/_generated/api";
 import { relativeTime } from "@/lib/format";
 import { cn } from "@/lib/cn";
@@ -30,18 +38,54 @@ function kindLabel(kind: NotifItem["postKind"]): string {
 }
 
 function verb(n: NotifItem): string {
-  if (n.type === "post_like") return `liked your ${kindLabel(n.postKind)}`;
-  if (n.type === "post_comment") return `commented on your ${kindLabel(n.postKind)}`;
-  return "mentioned you in a comment";
+  switch (n.type) {
+    case "post_like":
+      return `liked your ${kindLabel(n.postKind)}`;
+    case "post_comment":
+      return `commented on your ${kindLabel(n.postKind)}`;
+    case "comment_like":
+      return "liked your comment";
+    case "comment_mention":
+      return "mentioned you in a comment";
+    case "play_tagged":
+      return "added you to a play";
+    case "friend_request":
+      return "sent you a friend request";
+    case "friend_accept":
+      return "accepted your friend request";
+  }
+}
+
+/** Where a notification links: a play, a post, a profile, or the list. */
+function notifHref(n: NotifItem): string {
+  if (n.type === "play_tagged") {
+    return n.playId ? `/plays/${n.playId}` : "/notifications";
+  }
+  if (n.type === "friend_request" || n.type === "friend_accept") {
+    return n.actor.username ? `/user/${n.actor.username}` : "/notifications";
+  }
+  return n.postId ? `/posts/${n.postId}` : "/notifications";
 }
 
 function RowIcon({ type }: { type: NotifItem["type"] }) {
   const Icon =
-    type === "post_like" ? Heart : type === "comment_mention" ? AtSign : MessageCircle;
-  const color =
-    type === "post_like"
-      ? "text-red-500"
+    type === "post_like" || type === "comment_like"
+      ? Heart
       : type === "comment_mention"
+        ? AtSign
+        : type === "play_tagged"
+          ? Dices
+          : type === "friend_request"
+            ? UserPlus
+            : type === "friend_accept"
+              ? UserCheck
+              : MessageCircle;
+  const color =
+    type === "post_like" || type === "comment_like"
+      ? "text-red-500"
+      : type === "comment_mention" ||
+          type === "friend_request" ||
+          type === "friend_accept"
         ? "text-accent-2"
         : "text-accent";
   return <Icon className={cn("h-4 w-4 shrink-0", color)} />;
@@ -82,7 +126,7 @@ export function NotificationsList({ onNavigate }: { onNavigate?: () => void }) {
       {results.map((n) => (
         <li key={n._id}>
           <Link
-            href={n.postId ? `/posts/${n.postId}` : "/notifications"}
+            href={notifHref(n)}
             onClick={onNavigate}
             className={cn(
               "flex items-start gap-2.5 px-3 py-2.5 transition-colors hover:bg-surface-2",
@@ -182,7 +226,8 @@ export function NotificationsBell({
   // The floating bell is mobile-only and hidden where the bottom nav is hidden.
   const floatingHidden =
     variant === "floating" &&
-    (pathname === "/auth" ||
+    (pathname === "/" ||
+      pathname === "/auth" ||
       pathname === "/who-goes-first" ||
       /^\/boardgames\/[^/]+\/chat/.test(pathname));
 
