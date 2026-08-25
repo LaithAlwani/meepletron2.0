@@ -45,9 +45,9 @@ export default function BoardgamesPage() {
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-8">
-      {/* Header — the title sits on the left; a compact search + filter share the
-          line on desktop, dropping into a full-width row below on mobile. */}
-      <div className="mb-4 sm:mb-5 sm:flex sm:items-end sm:justify-between sm:gap-4">
+      {/* Header — the title gets its own line; the search + sort + filter sit on
+          the next line, aligned to the right on desktop. */}
+      <div className="mb-4 sm:mb-5">
         <div>
           <p className="mb-1 hidden text-[11px] font-bold uppercase tracking-[0.18em] text-accent sm:block">
             The library
@@ -62,8 +62,8 @@ export default function BoardgamesPage() {
           </h1>
         </div>
 
-        {/* Mobile: search on its own row, sort + filter below. Desktop: inline. */}
-        <div className="mt-4 flex flex-col gap-2 sm:mt-0 sm:flex-row sm:items-center sm:shrink-0">
+        {/* Next line: search + sort + filter, right-aligned on desktop. */}
+        <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
           <div className="relative w-full sm:w-64">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-subtle" />
             <input
