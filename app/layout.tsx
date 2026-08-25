@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Bricolage_Grotesque, Hanken_Grotesk, Geist_Mono } from "next/font/google";
+import { GoogleAnalytics } from "@next/third-parties/google";
 import "./globals.css";
 import { Providers } from "./providers";
 import { SiteHeader } from "@/components/SiteHeader";
@@ -87,6 +88,7 @@ export default function RootLayout({
           <GlobalAssistant />
         </Providers>
       </body>
+      <GoogleAnalytics gaId="G-1BPTDRXTZG" />
     </html>
   );
 }
