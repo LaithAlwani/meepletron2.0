@@ -11,7 +11,10 @@ export default function manifest(): MetadataRoute.Manifest {
   }));
 
   return {
-    name: "Meepletron — Board game rules assistant",
+    // Chrome prints `name` under the icon on the Android splash screen, so keep
+    // it to the wordmark — the descriptive version wrapped onto three lines.
+    // `description` still carries the explanation for install prompts/listings.
+    name: "Meepletron",
     short_name: "Meepletron",
     description:
       "Chat with an AI that answers board game rules questions, grounded in the actual rulebook with citations.",
