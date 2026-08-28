@@ -7,7 +7,6 @@ import { useQuery, useMutation, useConvexAuth } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import {
   ArrowLeft,
-  Trophy,
   Lock,
   Globe,
   Trash2,
@@ -21,7 +20,6 @@ import {
 } from "lucide-react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
-import { Thumb } from "@/components/top-games/Thumb";
 import { Skeleton } from "@/components/ui/Surface";
 import { buttonClasses } from "@/components/ui/Button";
 import { ShareButton } from "@/components/boardgames/ShareButton";
@@ -32,6 +30,8 @@ import {
   type WizardInitialPlay,
 } from "@/components/plays/LogPlayWizard";
 import { CommentsDrawer } from "@/components/plays/CommentsDrawer";
+import { PhotoCarousel } from "@/components/plays/PhotoCarousel";
+import { PlayersPanel } from "@/components/plays/PlayersPanel";
 import { useUsernameGate } from "@/components/feed/UsernameGate";
 import { FORMAT_LABEL, playDate } from "@/components/plays/PlayCard";
 import { formatPlayTime } from "@/lib/format";
@@ -80,7 +80,14 @@ export default function PlayPage({
 
   const isPublic = play.visibility === "public";
   const time = formatPlayTime(play.lengthMinutes ?? undefined);
-  const cover = play.photoUrls[0] ?? play.coverUrl;
+  // The play's own photos lead; with none, the game cover stands in as the
+  // single hero image.
+  const gallery =
+    play.photoUrls.length > 0
+      ? play.photoUrls
+      : play.coverUrl
+        ? [play.coverUrl]
+        : [];
 
   const toggleVisibility = async () => {
     // Making a play public puts it in the feed — require a username first.
@@ -124,69 +131,71 @@ export default function PlayPage({
       </Link>
 
       {/* Header */}
-      <div className="flex items-start gap-4">
-        <div className="h-20 w-20 shrink-0 overflow-hidden rounded-2xl bg-surface-2 ring-1 ring-border">
-          <Thumb url={cover} className="h-20 w-20" />
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <span className="rounded-full bg-surface-2 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-muted">
-              {FORMAT_LABEL[play.format] ?? play.format}
+      <div className="min-w-0">
+        <div className="flex items-center gap-2">
+          <span className="rounded-full bg-surface-2 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-muted">
+            {FORMAT_LABEL[play.format] ?? play.format}
+          </span>
+          {play.source === "bgg" && (
+            <span className="rounded-full bg-accent-2/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-accent-2">
+              BGG
             </span>
-            {play.source === "bgg" && (
-              <span className="rounded-full bg-accent-2/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-accent-2">
-                BGG
-              </span>
-            )}
-            {!isPublic && (
-              <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-subtle">
-                <Lock className="h-3 w-3" />
-                Private
-              </span>
-            )}
-          </div>
-          <h1 className="font-display mt-1 text-2xl font-extrabold tracking-tight sm:text-3xl">
-            {play.gameSlug ? (
-              <Link href={`/boardgames/${play.gameSlug}`} className="hover:text-accent">
-                {play.title}
-              </Link>
-            ) : (
-              play.title
-            )}
-          </h1>
-          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted">
-            <span>{playDate(play.date)}</span>
-            <span className="inline-flex items-center gap-1">
-              <Users className="h-3.5 w-3.5" />
-              {play.players.length}
+          )}
+          {!isPublic && (
+            <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-subtle">
+              <Lock className="h-3 w-3" />
+              Private
             </span>
-            {time && (
-              <span className="inline-flex items-center gap-1">
-                <Clock className="h-3.5 w-3.5" />
-                {time}
-              </span>
-            )}
-            {play.location && (
-              <span className="inline-flex items-center gap-1">
-                <MapPin className="h-3.5 w-3.5" />
-                {play.location}
-              </span>
-            )}
-          </div>
-          {play.ownerName && !play.isOwner && (
-            <p className="mt-1 text-sm text-subtle">
-              by{" "}
-              {play.ownerUsername ? (
-                <Link href={`/user/${play.ownerUsername}`} className="font-semibold text-foreground hover:text-accent">
-                  {play.ownerName}
-                </Link>
-              ) : (
-                <span className="font-semibold text-foreground">{play.ownerName}</span>
-              )}
-            </p>
           )}
         </div>
+        <h1 className="font-display mt-1 text-2xl font-extrabold tracking-tight sm:text-3xl">
+          {play.gameSlug ? (
+            <Link href={`/boardgames/${play.gameSlug}`} className="hover:text-accent">
+              {play.title}
+            </Link>
+          ) : (
+            play.title
+          )}
+        </h1>
+        <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted">
+          <span>{playDate(play.date)}</span>
+          <span className="inline-flex items-center gap-1">
+            <Users className="h-3.5 w-3.5" />
+            {play.players.length}
+          </span>
+          {time && (
+            <span className="inline-flex items-center gap-1">
+              <Clock className="h-3.5 w-3.5" />
+              {time}
+            </span>
+          )}
+          {play.location && (
+            <span className="inline-flex items-center gap-1">
+              <MapPin className="h-3.5 w-3.5" />
+              {play.location}
+            </span>
+          )}
+        </div>
+        {play.ownerName && !play.isOwner && (
+          <p className="mt-1 text-sm text-subtle">
+            by{" "}
+            {play.ownerUsername ? (
+              <Link href={`/user/${play.ownerUsername}`} className="font-semibold text-foreground hover:text-accent">
+                {play.ownerName}
+              </Link>
+            ) : (
+              <span className="font-semibold text-foreground">{play.ownerName}</span>
+            )}
+          </p>
+        )}
       </div>
+
+      {/* Photos — the play's own shots, else the game cover */}
+      {gallery.length > 0 && (
+        <div className="mt-5 overflow-hidden rounded-2xl ring-1 ring-border">
+          <PhotoCarousel images={gallery} />
+        </div>
+      )}
 
       {/* Actions */}
       <div className="mt-4 flex flex-wrap gap-2">
@@ -305,88 +314,12 @@ export default function PlayPage({
         </div>
       )}
 
-      {/* Teams */}
-      {play.teams && play.teams.length > 0 && (
-        <div className="mt-5 grid grid-cols-2 gap-3">
-          {play.teams.map((t, i) => (
-            <div
-              key={i}
-              className={cn(
-                "rounded-xl p-3",
-                t.isWinner ? "bg-accent/10 ring-1 ring-accent/30" : "bg-surface-2",
-              )}
-            >
-              <div className="flex items-center gap-1.5 font-display font-bold">
-                {t.isWinner && <Trophy className="h-4 w-4 text-accent" />}
-                {t.name}
-              </div>
-              <ul className="mt-1.5 space-y-0.5 text-sm text-muted">
-                {play.players
-                  .filter((p) => p.teamIndex === i)
-                  .map((p, j) => (
-                    <li key={j}>{p.name}</li>
-                  ))}
-              </ul>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Players (non-team formats) */}
-      {(!play.teams || play.teams.length === 0) && (
-        <ul className="mt-5 divide-y divide-border-muted">
-          {play.players.map((p, i) => (
-            <li key={i} className="flex items-center gap-3 px-1 py-2.5">
-              {p.isWinner ? (
-                <Trophy className="h-5 w-5 shrink-0 text-accent-2" />
-              ) : (
-                <span className="h-5 w-5 shrink-0" />
-              )}
-              <span
-                className={cn(
-                  "min-w-0 flex-1 truncate",
-                  p.isWinner ? "font-bold text-foreground" : "font-medium",
-                )}
-              >
-                {p.name}
-                {p.isNew && (
-                  <span className="ml-1.5 rounded-full bg-accent-2/15 px-1.5 py-px text-[10px] font-bold uppercase text-accent-2">
-                    new
-                  </span>
-                )}
-              </span>
-              {p.score != null && (
-                <span className="text-lg font-bold tabular-nums">{p.score}</span>
-              )}
-              {p.placement != null && (
-                <span className="text-sm font-semibold text-muted">
-                  #{p.placement}
-                </span>
-              )}
-              {p.roundsWon != null && (
-                <span className="text-sm font-semibold text-muted">
-                  {p.roundsWon} rd
-                </span>
-              )}
-            </li>
-          ))}
-        </ul>
-      )}
-
-      {/* Photos */}
-      {play.photoUrls.length > 0 && (
-        <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3">
-          {play.photoUrls.map((url, i) => (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              key={i}
-              src={url}
-              alt=""
-              className="aspect-square w-full rounded-2xl object-cover ring-1 ring-border"
-            />
-          ))}
-        </div>
-      )}
+      {/* Teams / players — ranked best-first */}
+      <PlayersPanel
+        players={play.players}
+        teams={play.teams}
+        scoreMode={play.scoreMode}
+      />
 
       {play.comments && (
         <p className="mt-5 whitespace-pre-wrap rounded-2xl border border-border bg-surface p-4 text-sm text-muted">

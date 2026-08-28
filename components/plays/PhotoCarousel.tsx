@@ -7,6 +7,10 @@ import { cn } from "@/lib/cn";
 /**
  * A swipeable photo carousel — native scroll-snap (touch/trackpad), chevron
  * arrows on desktop hover, and dot indicators. Single image renders plainly.
+ *
+ * Slides are `snap-always` (scroll-snap-stop): one swipe moves exactly one
+ * photo. Without it a quick flick keeps its momentum through every snap point
+ * and dumps you at the last image.
  */
 export function PhotoCarousel({ images }: { images: string[] }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -48,7 +52,7 @@ export function PhotoCarousel({ images }: { images: string[] }) {
             key={i}
             src={src}
             alt=""
-            className="aspect-4/3 w-full shrink-0 snap-center bg-surface-2 object-cover"
+            className="aspect-4/3 w-full shrink-0 snap-center snap-always bg-surface-2 object-cover"
           />
         ))}
       </div>
