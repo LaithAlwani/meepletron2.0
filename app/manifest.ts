@@ -19,12 +19,14 @@ export default function manifest(): MetadataRoute.Manifest {
     scope: "/",
     display: "standalone",
     orientation: "portrait",
-    background_color: "#191512",
+    // The splash screen paints this behind the icon, and the icons carry the
+    // same cream, so the launch screen reads as one light surface.
+    background_color: "#faf6ee",
     theme_color: "#191512",
     categories: ["games", "reference", "utilities"],
-    // No "maskable" variant: the current icons fill the whole square (no safe
-    // zone), so declaring them maskable makes the OS crop the logo. Using "any"
-    // shows the full logo. Add a real padded maskable icon later for Android.
+    // No "maskable" variant: the icons are padded, but the manual still reaches
+    // the bottom corners of the art, which a circular mask would clip. "any"
+    // shows the whole logo. See scripts/generateIcons.mjs.
     icons,
   };
 }
