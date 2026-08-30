@@ -79,12 +79,12 @@ function ChartCard({
 }) {
   return (
     <div
-      className={`rounded-2xl border border-border-muted bg-surface p-4 ${wide ? "sm:col-span-2" : ""}`}
+      className={`min-w-0 overflow-hidden rounded-2xl border border-border-muted bg-surface p-4 ${wide ? "sm:col-span-2" : ""}`}
     >
       <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-subtle">
         {title}
       </p>
-      {children}
+      <div className="relative w-full">{children}</div>
     </div>
   );
 }
@@ -128,7 +128,7 @@ export function GameStatsCharts({ data }: { data: Detail }) {
   const hasCoPlayers = data.topCoPlayers.length >= 1;
 
   return (
-    <div className="grid gap-4 sm:grid-cols-2">
+    <div className="grid min-w-0 gap-4 sm:grid-cols-2">
       {hasTrend && (
         <ChartCard title="Score over time" wide>
           <div className="h-56">
@@ -152,7 +152,16 @@ export function GameStatsCharts({ data }: { data: Detail }) {
               options={{
                 ...baseOpts,
                 scales: {
-                  x: axis,
+                  x: {
+                    ...axis,
+                    ticks: {
+                      ...axis.ticks,
+                      autoSkip: true,
+                      maxTicksLimit: 6,
+                      maxRotation: 0,
+                      minRotation: 0,
+                    },
+                  },
                   y: { ...axis, beginAtZero: false },
                 },
               }}
@@ -230,7 +239,16 @@ export function GameStatsCharts({ data }: { data: Detail }) {
               options={{
                 ...baseOpts,
                 scales: {
-                  x: { ...axis, grid: { display: false } },
+                  x: {
+                    ...axis,
+                    grid: { display: false },
+                    ticks: {
+                      ...axis.ticks,
+                      autoSkip: true,
+                      maxTicksLimit: 8,
+                      maxRotation: 0,
+                    },
+                  },
                   y: {
                     ...axis,
                     beginAtZero: true,
@@ -248,7 +266,9 @@ export function GameStatsCharts({ data }: { data: Detail }) {
           <div style={{ height: `${Math.max(data.topCoPlayers.length * 34, 88)}px` }}>
             <Bar
               data={{
-                labels: data.topCoPlayers.map((p) => p.name),
+                labels: data.topCoPlayers.map((p) =>
+                  p.name.length > 14 ? `${p.name.slice(0, 13)}…` : p.name,
+                ),
                 datasets: [
                   {
                     data: data.topCoPlayers.map((p) => p.plays),

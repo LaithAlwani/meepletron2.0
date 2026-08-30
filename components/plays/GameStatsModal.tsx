@@ -94,7 +94,7 @@ export function GameStatsModal({
           </button>
         </div>
 
-        <div className="themed-scroll flex-1 overflow-y-auto p-4">
+        <div className="themed-scroll flex-1 overflow-y-auto overflow-x-hidden p-4">
           {data === undefined ? (
             <div className="flex h-48 items-center justify-center text-subtle">
               <Loader2 className="h-5 w-5 animate-spin" />
