@@ -911,6 +911,13 @@ export const similarGames = query({
  * and scores in memory (O(n²), fine for the few hundred base games), so the
  * per-view scan becomes a once-a-day job. Run by a cron; also runnable manually.
  */
+/** Same ids in the same order — lets us skip a no-op write. */
+function sameIds(a: Id<"games">[] | undefined, b: Id<"games">[]): boolean {
+  if (!a || a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+  return true;
+}
+
 export const recomputeSimilarGames = internalMutation({
   args: {},
   handler: async (ctx) => {
@@ -921,11 +928,17 @@ export const recomputeSimilarGames = internalMutation({
       )
       .take(2000);
     const feats = games.map(toSimFeat);
+    let updated = 0;
     for (let i = 0; i < games.length; i++) {
       const ids = rankSimilar(feats[i], feats, 12);
-      await ctx.db.patch("games", games[i]._id, { similarIds: ids });
+      // Only write when the ranking actually changed — on a day with no
+      // catalogue change this patches ~nothing instead of all ~2,000 games.
+      if (!sameIds(games[i].similarIds, ids)) {
+        await ctx.db.patch("games", games[i]._id, { similarIds: ids });
+        updated++;
+      }
     }
-    return { updated: games.length };
+    return { scanned: games.length, updated };
   },
 });
 
