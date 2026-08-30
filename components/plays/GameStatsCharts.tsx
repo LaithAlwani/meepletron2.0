@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
+import Link from "next/link";
 import type { FunctionReturnType } from "convex/server";
 import {
   Chart as ChartJS,
@@ -263,39 +264,80 @@ export function GameStatsCharts({ data }: { data: Detail }) {
 
       {hasCoPlayers && (
         <ChartCard title="Most-played with" wide>
-          <div style={{ height: `${Math.max(data.topCoPlayers.length * 34, 88)}px` }}>
-            <Bar
-              data={{
-                labels: data.topCoPlayers.map((p) =>
-                  p.name.length > 14 ? `${p.name.slice(0, 13)}…` : p.name,
-                ),
-                datasets: [
-                  {
-                    data: data.topCoPlayers.map((p) => p.plays),
-                    backgroundColor: hexToRgba(c.accent2, 0.85),
-                    hoverBackgroundColor: c.accent2,
-                    borderRadius: 4,
-                    maxBarThickness: 22,
-                  },
-                ],
-              }}
-              options={{
-                ...baseOpts,
-                indexAxis: "y" as const,
-                scales: {
-                  x: {
-                    ...axis,
-                    beginAtZero: true,
-                    ticks: { ...axis.ticks, precision: 0 },
-                  },
-                  y: { ...axis, grid: { display: false } },
-                },
-              }}
-            />
-          </div>
+          <CoPlayersBars players={data.topCoPlayers} accent={c.accent2} />
         </ChartCard>
       )}
     </div>
+  );
+}
+
+type CoPlayer = Detail["topCoPlayers"][number];
+
+/** Horizontal "most-played with" bars — avatar labels that tooltip the name and
+ *  link to the player's profile (account players only). */
+function CoPlayersBars({
+  players,
+  accent,
+}: {
+  players: CoPlayer[];
+  accent: string;
+}) {
+  const max = Math.max(...players.map((p) => p.plays), 1);
+  return (
+    <ul className="space-y-2.5">
+      {players.map((p, i) => {
+        const pct = Math.max(Math.round((p.plays / max) * 100), 6);
+        const avatar = p.avatarUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={p.avatarUrl}
+            alt={p.name}
+            className="h-8 w-8 rounded-full object-cover"
+          />
+        ) : (
+          <span className="flex h-8 w-8 items-center justify-center rounded-full bg-accent/12 text-xs font-bold text-accent">
+            {p.name.charAt(0).toUpperCase()}
+          </span>
+        );
+        // The avatar tooltips the name; account players link to their profile.
+        const avatarNode = p.username ? (
+          <Link
+            href={`/user/${p.username}`}
+            title={p.name}
+            aria-label={p.name}
+            className="group relative shrink-0 rounded-full ring-2 ring-transparent transition hover:ring-accent/40"
+          >
+            {avatar}
+            <span className="pointer-events-none absolute left-full top-1/2 z-30 ml-2 hidden -translate-y-1/2 whitespace-nowrap rounded-md bg-foreground px-2 py-1 text-[11px] font-medium text-background shadow-lg group-hover:block">
+              {p.name}
+            </span>
+          </Link>
+        ) : (
+          <span
+            title={p.name}
+            className="group relative shrink-0 cursor-default"
+          >
+            {avatar}
+            <span className="pointer-events-none absolute left-full top-1/2 z-30 ml-2 hidden -translate-y-1/2 whitespace-nowrap rounded-md bg-foreground px-2 py-1 text-[11px] font-medium text-background shadow-lg group-hover:block">
+              {p.name}
+            </span>
+          </span>
+        );
+        return (
+          <li key={i} className="flex items-center gap-3">
+            {avatarNode}
+            <div className="h-6 min-w-0 flex-1 overflow-hidden rounded-md bg-surface-2">
+              <div
+                className="flex h-full items-center justify-end rounded-md px-2 text-[11px] font-bold text-white transition-[width] duration-500"
+                style={{ width: `${pct}%`, backgroundColor: accent }}
+              >
+                {p.plays}
+              </div>
+            </div>
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 
