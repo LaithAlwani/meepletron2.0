@@ -19,7 +19,9 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { api } from "@/convex/_generated/api";
+import type { Id } from "@/convex/_generated/dataModel";
 import { PlayerStatsCard } from "@/components/plays/PlayerStatsCard";
+import { GameStatsModal } from "@/components/plays/GameStatsModal";
 import { PageTitle } from "@/components/ui/PageTitle";
 import { Skeleton } from "@/components/ui/Surface";
 import { Thumb } from "@/components/top-games/Thumb";
@@ -62,6 +64,10 @@ function StatsBody() {
     monthStartDate: monthStart,
   });
   const engagement = useQuery(api.plays.playEngagement, {});
+  const [selected, setSelected] = useState<{
+    gameId: Id<"games"> | null;
+    title: string;
+  } | null>(null);
 
   const ratingPct =
     stats && stats.correctRatings + stats.wrongRatings > 0
@@ -95,7 +101,11 @@ function StatsBody() {
         By game
       </p>
       <div className="mb-6">
-        <PerGameStats games={playStats?.games} capped={playStats?.capped ?? false} />
+        <PerGameStats
+          games={playStats?.games}
+          capped={playStats?.capped ?? false}
+          onOpen={setSelected}
+        />
       </div>
 
       {/* Activity */}
@@ -127,6 +137,14 @@ function StatsBody() {
           />
         )}
       </div>
+
+      {selected && (
+        <GameStatsModal
+          gameId={selected.gameId}
+          title={selected.title}
+          onClose={() => setSelected(null)}
+        />
+      )}
     </div>
   );
 }
@@ -140,9 +158,11 @@ const GAMES_CAP = 25;
 function PerGameStats({
   games,
   capped,
+  onOpen,
 }: {
   games: GameStats | undefined;
   capped: boolean;
+  onOpen: (g: { gameId: Id<"games"> | null; title: string }) => void;
 }) {
   const [showAll, setShowAll] = useState(false);
   if (games === undefined) {
@@ -173,7 +193,8 @@ function PerGameStats({
             {shown.map((g) => (
               <tr
                 key={g.gameId ?? g.title}
-                className="border-b border-border-muted last:border-0"
+                onClick={() => onOpen({ gameId: g.gameId, title: g.title })}
+                className="cursor-pointer border-b border-border-muted transition-colors last:border-0 hover:bg-surface-2"
               >
                 <td className="px-4 py-2.5">
                   <div className="flex items-center gap-2.5">
@@ -186,18 +207,9 @@ function PerGameStats({
                         </div>
                       )}
                     </div>
-                    {g.slug ? (
-                      <Link
-                        href={`/boardgames/${g.slug}`}
-                        className="min-w-0 truncate font-semibold hover:text-accent"
-                      >
-                        {g.title}
-                      </Link>
-                    ) : (
-                      <span className="min-w-0 truncate font-semibold">
-                        {g.title}
-                      </span>
-                    )}
+                    <span className="min-w-0 truncate font-semibold">
+                      {g.title}
+                    </span>
                   </div>
                 </td>
                 <td className="px-2 py-2.5 text-center tabular-nums">{g.plays}</td>

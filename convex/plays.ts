@@ -1017,6 +1017,124 @@ export const myPlayStats = query({
   },
 });
 
+/**
+ * Deep-dive stats for one game the caller has played — powers the /stats
+ * drill-down (charts). Matches plays by gameId when set, else by title (plays
+ * with no linked catalogue game). Self only; returns null if they've no plays.
+ */
+export const gameDetailStats = query({
+  args: { gameId: v.optional(v.id("games")), title: v.string() },
+  handler: async (ctx, { gameId, title }) => {
+    const viewer = await getCurrentUser(ctx);
+    if (!viewer) return null;
+
+    const links = await ctx.db
+      .query("playParticipants")
+      .withIndex("by_user_and_date", (q) => q.eq("userId", viewer._id))
+      .order("desc")
+      .take(STATS_SCAN);
+
+    const seen = new Set<string>();
+    const playIds: Id<"plays">[] = [];
+    for (const l of links) {
+      const match = gameId ? l.gameId === gameId : !l.gameId;
+      if (!match || seen.has(l.playId)) continue;
+      seen.add(l.playId);
+      playIds.push(l.playId);
+    }
+    let plays = (
+      await Promise.all(playIds.map((id) => ctx.db.get("plays", id)))
+    ).filter((p): p is PlayDoc => p !== null);
+    if (!gameId) plays = plays.filter((p) => p.title === title);
+    if (plays.length === 0) return null;
+    // Oldest → newest for the trend line.
+    plays.sort((a, b) =>
+      a.date < b.date ? -1 : a.date > b.date ? 1 : a.createdAt - b.createdAt,
+    );
+
+    let wins = 0;
+    let decided = 0;
+    let bestScore: number | null = null;
+    let scoreSum = 0;
+    let scoreCount = 0;
+    const scoreHistory: { date: string; score: number }[] = [];
+    const months = new Map<string, number>();
+    const coPlayers = new Map<string, number>();
+
+    const scoreOf = (play: PlayDoc) => {
+      const me = play.players.find((p) => p.userId === viewer._id);
+      const s =
+        me?.score ??
+        (play.format === "cooperative" ? (play.coopScore ?? null) : null);
+      return { me, score: typeof s === "number" ? s : null };
+    };
+
+    for (const play of plays) {
+      const { me, score } = scoreOf(play);
+      if (me?.isWinner !== undefined) {
+        decided++;
+        if (me.isWinner) wins++;
+      }
+      if (score !== null) {
+        scoreHistory.push({ date: play.date, score });
+        scoreSum += score;
+        scoreCount++;
+        bestScore = bestScore === null ? score : Math.max(bestScore, score);
+      }
+      const m = play.date.slice(0, 7);
+      months.set(m, (months.get(m) ?? 0) + 1);
+      for (const p of play.players) {
+        if (p.userId === viewer._id) continue;
+        coPlayers.set(p.name, (coPlayers.get(p.name) ?? 0) + 1);
+      }
+    }
+
+    const recent = [...plays]
+      .reverse()
+      .slice(0, 5)
+      .map((play) => {
+        const { me, score } = scoreOf(play);
+        return {
+          playId: play._id,
+          date: play.date,
+          score,
+          isWinner: me?.isWinner ?? null,
+          opponents: play.players
+            .filter((p) => p.userId !== viewer._id)
+            .map((p) => p.name),
+        };
+      });
+
+    const game = gameId ? await ctx.db.get("games", gameId) : null;
+
+    return {
+      title: game?.title ?? title,
+      slug: game?.slug ?? null,
+      coverUrl: game ? await thumbUrl(ctx, game) : null,
+      totals: {
+        plays: plays.length,
+        wins,
+        decided,
+        winPct: decided > 0 ? Math.round((wins / decided) * 100) : null,
+        bestScore,
+        avgScore:
+          scoreCount > 0 ? Math.round((scoreSum / scoreCount) * 10) / 10 : null,
+        firstPlayed: plays[0].date,
+        lastPlayed: plays[plays.length - 1].date,
+      },
+      scoreHistory,
+      playsByMonth: [...months.entries()]
+        .sort((a, b) => (a[0] < b[0] ? -1 : 1))
+        .map(([month, count]) => ({ month, count })),
+      topCoPlayers: [...coPlayers.entries()]
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 8)
+        .map(([name, count]) => ({ name, plays: count })),
+      recent,
+    };
+  },
+});
+
 /* -------------------------------------------------------------------------- */
 /* Engagement                                                                 */
 /* -------------------------------------------------------------------------- */
