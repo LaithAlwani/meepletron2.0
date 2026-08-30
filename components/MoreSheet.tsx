@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { Sheet } from "@/components/ui/Sheet";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useQuery } from "convex/react";
@@ -34,20 +34,6 @@ export function MoreSheet({
   const me = useQuery(api.users.me);
   const pathname = usePathname() ?? "";
 
-  useEffect(() => {
-    if (!open) return;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    window.addEventListener("keydown", onKey);
-    return () => {
-      document.body.style.overflow = prev;
-      window.removeEventListener("keydown", onKey);
-    };
-  }, [open, onClose]);
-
-  if (!open) return null;
-
   const signedIn = !!me && me.isAnonymous !== true;
   const name = me?.name || me?.email || "Guest";
   const initial = (me?.name || me?.email || "?").charAt(0).toUpperCase();
@@ -67,13 +53,7 @@ export function MoreSheet({
   ];
 
   return (
-    <>
-      <div
-        aria-hidden
-        onClick={onClose}
-        className="fixed inset-0 z-50 bg-foreground/30 backdrop-blur-[1px] sm:hidden"
-      />
-      <div className="animate-in fixed inset-x-0 bottom-0 z-50 flex max-h-[85vh] flex-col rounded-t-2xl border border-border bg-background pb-[env(safe-area-inset-bottom)] shadow-2xl sm:hidden">
+    <Sheet open={open} onClose={onClose} mobileMaxH="max-h-[85vh]">
         <div className="flex items-center gap-3 border-b border-border px-4 py-3">
           {signedIn ? (
             <>
@@ -164,7 +144,6 @@ export function MoreSheet({
           <div className="my-1 border-t border-border" />
           <ThemeMenu />
         </div>
-      </div>
-    </>
+    </Sheet>
   );
 }

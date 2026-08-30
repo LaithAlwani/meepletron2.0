@@ -1,7 +1,5 @@
 "use client";
 
-import { useEffect } from "react";
-import { createPortal } from "react-dom";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { useQuery } from "convex/react";
@@ -10,6 +8,7 @@ import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { Thumb } from "@/components/top-games/Thumb";
 import { playDate } from "@/components/plays/PlayCard";
+import { Sheet } from "@/components/ui/Sheet";
 
 // Chart.js is heavy — load it only when the drill-down actually opens.
 const GameStatsCharts = dynamic(
@@ -25,10 +24,12 @@ const GameStatsCharts = dynamic(
 );
 
 export function GameStatsModal({
+  open,
   gameId,
   title,
   onClose,
 }: {
+  open: boolean;
   gameId: Id<"games"> | null;
   title: string;
   onClose: () => void;
@@ -38,63 +39,44 @@ export function GameStatsModal({
     title,
   });
 
-  useEffect(() => {
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    window.addEventListener("keydown", onKey);
-    return () => {
-      document.body.style.overflow = prev;
-      window.removeEventListener("keydown", onKey);
-    };
-  }, [onClose]);
-
-  return createPortal(
-    <>
-      <div
-        aria-hidden
-        onClick={onClose}
-        className="fixed inset-0 z-70 bg-foreground/40 backdrop-blur-[1px]"
-      />
-      <div
-        role="dialog"
-        aria-modal="true"
-        className="animate-in fixed inset-x-0 bottom-0 z-70 flex max-h-[92vh] flex-col rounded-t-2xl border border-border bg-background shadow-2xl sm:inset-0 sm:m-auto sm:h-fit sm:max-h-[88vh] sm:max-w-2xl sm:rounded-2xl"
-      >
-        {/* Header */}
-        <div className="flex items-center gap-3 border-b border-border px-4 py-3">
-          <div className="h-10 w-10 shrink-0 overflow-hidden rounded-lg bg-surface-2">
-            {data?.coverUrl ? (
-              <Thumb url={data.coverUrl} className="h-10 w-10" />
-            ) : (
-              <div className="flex h-full w-full items-center justify-center text-subtle">
-                <Dices className="h-5 w-5" />
-              </div>
-            )}
+  const header = (
+    <div className="flex items-center gap-3 border-b border-border px-4 py-3">
+      <div className="h-10 w-10 shrink-0 overflow-hidden rounded-lg bg-surface-2">
+        {data?.coverUrl ? (
+          <Thumb url={data.coverUrl} className="h-10 w-10" />
+        ) : (
+          <div className="flex h-full w-full items-center justify-center text-subtle">
+            <Dices className="h-5 w-5" />
           </div>
-          <div className="min-w-0 flex-1">
-            <p className="font-display truncate text-lg font-extrabold leading-tight">
-              {data?.title ?? title}
-            </p>
-            {data?.slug && (
-              <Link
-                href={`/boardgames/${data.slug}`}
-                className="text-xs font-semibold text-accent hover:underline"
-              >
-                View game
-              </Link>
-            )}
-          </div>
-          <button
-            onClick={onClose}
-            aria-label="Close"
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-muted hover:bg-surface-2 hover:text-foreground"
+        )}
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="font-display truncate text-lg font-extrabold leading-tight">
+          {data?.title ?? title}
+        </p>
+        {data?.slug && (
+          <Link
+            href={`/boardgames/${data.slug}`}
+            className="text-xs font-semibold text-accent hover:underline"
           >
-            <X className="h-4.5 w-4.5" />
-          </button>
-        </div>
+            View game
+          </Link>
+        )}
+      </div>
+      <button
+        onClick={onClose}
+        aria-label="Close"
+        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-muted hover:bg-surface-2 hover:text-foreground"
+      >
+        <X className="h-4.5 w-4.5" />
+      </button>
+    </div>
+  );
 
-        <div className="themed-scroll flex-1 overflow-y-auto overflow-x-hidden p-4">
+  return (
+    <Sheet open={open} onClose={onClose} desktop="center" desktopWidth="sm:max-w-2xl">
+      {header}
+      <div className="themed-scroll flex-1 overflow-y-auto overflow-x-hidden p-4">
           {data === undefined ? (
             <div className="flex h-48 items-center justify-center text-subtle">
               <Loader2 className="h-5 w-5 animate-spin" />
@@ -175,10 +157,8 @@ export function GameStatsModal({
               )}
             </>
           )}
-        </div>
       </div>
-    </>,
-    document.body,
+    </Sheet>
   );
 }
 

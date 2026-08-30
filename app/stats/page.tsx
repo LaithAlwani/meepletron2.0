@@ -68,6 +68,7 @@ function StatsBody() {
     gameId: Id<"games"> | null;
     title: string;
   } | null>(null);
+  const [statsOpen, setStatsOpen] = useState(false);
 
   const ratingPct =
     stats && stats.correctRatings + stats.wrongRatings > 0
@@ -104,7 +105,10 @@ function StatsBody() {
         <PerGameStats
           games={playStats?.games}
           capped={playStats?.capped ?? false}
-          onOpen={setSelected}
+          onOpen={(g) => {
+            setSelected(g);
+            setStatsOpen(true);
+          }}
         />
       </div>
 
@@ -140,9 +144,10 @@ function StatsBody() {
 
       {selected && (
         <GameStatsModal
+          open={statsOpen}
           gameId={selected.gameId}
           title={selected.title}
-          onClose={() => setSelected(null)}
+          onClose={() => setStatsOpen(false)}
         />
       )}
     </div>

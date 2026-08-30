@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { createPortal } from "react-dom";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { Sheet } from "@/components/ui/Sheet";
 import { useMutation } from "convex/react";
 import { X, Plus, Minus } from "lucide-react";
 import { api } from "@/convex/_generated/api";
@@ -55,20 +55,6 @@ export function CreateListDrawer({
   const [year, setYear] = useState(CURRENT_YEAR);
   const [busy, setBusy] = useState(false);
 
-  useEffect(() => {
-    if (!open) return;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    window.addEventListener("keydown", onKey);
-    return () => {
-      document.body.style.overflow = prev;
-      window.removeEventListener("keydown", onKey);
-    };
-  }, [open, onClose]);
-
-  if (!open) return null;
-
   const stepYear = (d: number) =>
     setYear((y) => Math.max(1970, Math.min(2200, (y || CURRENT_YEAR) + d)));
 
@@ -102,15 +88,8 @@ export function CreateListDrawer({
 
   // Portal to the body so the drawer escapes the page's stacking context and
   // paints above the bottom nav (same pattern as the library FilterDrawer).
-  return createPortal(
-    <>
-      <div
-        aria-hidden
-        onClick={onClose}
-        className="fixed inset-0 z-70 bg-foreground/30 backdrop-blur-[1px]"
-      />
-      {/* Bottom sheet on mobile; right-hand side drawer on desktop. */}
-      <div className="animate-in fixed inset-x-0 bottom-0 z-70 flex max-h-[90vh] flex-col rounded-t-2xl border border-border bg-background shadow-2xl sm:inset-y-0 sm:left-auto sm:right-0 sm:max-h-none sm:w-96 sm:rounded-none sm:rounded-l-2xl">
+  return (
+    <Sheet open={open} onClose={onClose} desktopWidth="sm:w-96" mobileMaxH="max-h-[90vh]">
         <div className="flex items-center justify-between border-b border-border px-4 py-3">
           <h2 className="font-display text-lg font-bold">New list</h2>
           <button
@@ -206,8 +185,6 @@ export function CreateListDrawer({
             Create list
           </button>
         </div>
-      </div>
-    </>,
-    document.body,
+    </Sheet>
   );
 }

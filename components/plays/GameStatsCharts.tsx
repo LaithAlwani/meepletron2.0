@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import type { FunctionReturnType } from "convex/server";
 import {
   Chart as ChartJS,
@@ -67,6 +68,40 @@ const dayLabel = (d: string) => {
     day: "numeric",
   });
 };
+
+/** Renders its children only once it scrolls into view, so a below-the-fold
+ *  chart animates when the user reaches it rather than silently on load. */
+function InView({
+  className,
+  children,
+}: {
+  className?: string;
+  children: React.ReactNode;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [shown, setShown] = useState(false);
+  useEffect(() => {
+    if (shown) return;
+    const el = ref.current;
+    if (!el) return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) {
+          setShown(true);
+          io.disconnect();
+        }
+      },
+      { threshold: 0.3 },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [shown]);
+  return (
+    <div ref={ref} className={className}>
+      {shown ? children : null}
+    </div>
+  );
+}
 
 function ChartCard({
   title,
@@ -172,7 +207,7 @@ export function GameStatsCharts({ data }: { data: Detail }) {
 
       {hasWinLoss && (
         <ChartCard title="Win / loss">
-          <div className="relative mx-auto h-56 max-w-64">
+          <InView className="relative mx-auto h-56 max-w-64">
             <Doughnut
               data={{
                 labels: ["Wins", "Losses"],
@@ -200,7 +235,7 @@ export function GameStatsCharts({ data }: { data: Detail }) {
               </span>
               <span className="text-xs text-subtle">win rate</span>
             </div>
-          </div>
+          </InView>
           <div className="mt-3 flex justify-center gap-4 text-xs">
             <span className="inline-flex items-center gap-1.5 text-muted">
               <span
@@ -222,7 +257,7 @@ export function GameStatsCharts({ data }: { data: Detail }) {
 
       {hasMonths && (
         <ChartCard title="Plays by month" wide={!hasWinLoss}>
-          <div className="h-56">
+          <InView className="h-56">
             <Bar
               data={{
                 labels: data.playsByMonth.map((m) => monthLabel(m.month)),
@@ -257,45 +292,103 @@ export function GameStatsCharts({ data }: { data: Detail }) {
                 },
               }}
             />
-          </div>
+          </InView>
         </ChartCard>
       )}
 
       {hasCoPlayers && (
         <ChartCard title="Most-played with" wide>
-          <div style={{ height: `${Math.max(data.topCoPlayers.length * 34, 88)}px` }}>
-            <Bar
-              data={{
-                labels: data.topCoPlayers.map((p) =>
-                  p.name.length > 14 ? `${p.name.slice(0, 13)}…` : p.name,
-                ),
-                datasets: [
-                  {
-                    data: data.topCoPlayers.map((p) => p.plays),
-                    backgroundColor: hexToRgba(c.accent2, 0.85),
-                    hoverBackgroundColor: c.accent2,
-                    borderRadius: 4,
-                    maxBarThickness: 22,
-                  },
-                ],
-              }}
-              options={{
-                ...baseOpts,
-                indexAxis: "y" as const,
-                scales: {
-                  x: {
-                    ...axis,
-                    beginAtZero: true,
-                    ticks: { ...axis.ticks, precision: 0 },
-                  },
-                  y: { ...axis, grid: { display: false } },
-                },
-              }}
-            />
-          </div>
+          <CoPlayersBars players={data.topCoPlayers} accent={c.accent2} />
         </ChartCard>
       )}
     </div>
+  );
+}
+
+type CoPlayer = Detail["topCoPlayers"][number];
+
+/** Horizontal "most-played with" bars — avatar labels that tooltip the name and
+ *  link to the player's profile (account players only). Bars grow in when the
+ *  section scrolls into view. */
+function CoPlayersBars({
+  players,
+  accent,
+}: {
+  players: CoPlayer[];
+  accent: string;
+}) {
+  const max = Math.max(...players.map((p) => p.plays), 1);
+  const ref = useRef<HTMLUListElement>(null);
+  const [grown, setGrown] = useState(false);
+  useEffect(() => {
+    if (grown) return;
+    const el = ref.current;
+    if (!el) return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) {
+          setGrown(true);
+          io.disconnect();
+        }
+      },
+      { threshold: 0.3 },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [grown]);
+
+  return (
+    <ul ref={ref} className="space-y-2.5">
+      {players.map((p, i) => {
+        const pct = Math.max(Math.round((p.plays / max) * 100), 6);
+        const avatar = p.avatarUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={p.avatarUrl}
+            alt={p.name}
+            className="h-8 w-8 rounded-full object-cover"
+          />
+        ) : (
+          <span className="flex h-8 w-8 items-center justify-center rounded-full bg-accent/12 text-xs font-bold text-accent">
+            {p.name.charAt(0).toUpperCase()}
+          </span>
+        );
+        const tooltip = (
+          <span className="pointer-events-none absolute left-full top-1/2 z-30 ml-2 hidden -translate-y-1/2 whitespace-nowrap rounded-md bg-foreground px-2 py-1 text-[11px] font-medium text-background shadow-lg group-hover:block">
+            {p.name}
+          </span>
+        );
+        const avatarNode = p.username ? (
+          <Link
+            href={`/user/${p.username}`}
+            title={p.name}
+            aria-label={p.name}
+            className="group relative shrink-0 rounded-full ring-2 ring-transparent transition hover:ring-accent/40"
+          >
+            {avatar}
+            {tooltip}
+          </Link>
+        ) : (
+          <span title={p.name} className="group relative shrink-0 cursor-default">
+            {avatar}
+            {tooltip}
+          </span>
+        );
+        return (
+          <li key={i} className="flex items-center gap-3">
+            {avatarNode}
+            <div className="h-6 min-w-0 flex-1 overflow-hidden rounded-md bg-surface-2">
+              <div
+                className="flex h-full items-center justify-end rounded-md px-2 text-[11px] font-bold text-white transition-[width] duration-700 ease-out"
+                style={{ width: grown ? `${pct}%` : "0%", backgroundColor: accent }}
+              >
+                {p.plays}
+              </div>
+            </div>
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 

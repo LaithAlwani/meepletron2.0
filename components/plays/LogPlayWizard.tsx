@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { createPortal } from "react-dom";
+import { Sheet } from "@/components/ui/Sheet";
 import { useRouter } from "next/navigation";
 import { useAction, useMutation, useQuery } from "convex/react";
 import {
@@ -219,17 +219,6 @@ export function LogPlayWizard({
     return () => cancelAnimationFrame(id);
   }, [open, me, players.length]);
 
-  useEffect(() => {
-    if (!open) return;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    window.addEventListener("keydown", onKey);
-    return () => {
-      document.body.style.overflow = prev;
-      window.removeEventListener("keydown", onKey);
-    };
-  }, [open, onClose]);
 
   const isTeams = format === "teams" || format === "onevsall";
 
@@ -348,22 +337,14 @@ export function LogPlayWizard({
     }
   }
 
-  if (!open) return null;
-
   const canNext =
     (step === 0 && !!game) ||
     (step === 1 && !!game) ||
     step === 2 ||
     step === 3;
 
-  return createPortal(
-    <>
-      <div
-        aria-hidden
-        onClick={close}
-        className="fixed inset-0 z-70 bg-foreground/30 backdrop-blur-[1px]"
-      />
-      <div className="animate-in fixed inset-x-0 bottom-0 z-70 flex max-h-[92vh] flex-col rounded-t-2xl border border-border bg-background shadow-2xl sm:inset-y-0 sm:left-auto sm:right-0 sm:max-h-none sm:w-104 sm:rounded-none sm:rounded-l-2xl">
+  return (
+    <Sheet open={open} onClose={close} mobileMaxH="max-h-[92vh]">
         {/* Header + step dots */}
         <div className="flex items-center justify-between gap-2 border-b border-border px-4 py-3">
           <div className="flex items-center gap-2">
@@ -493,9 +474,7 @@ export function LogPlayWizard({
             </button>
           )}
         </div>
-      </div>
-    </>,
-    document.body,
+    </Sheet>
   );
 }
 

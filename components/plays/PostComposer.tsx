@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { createPortal } from "react-dom";
+import { Sheet } from "@/components/ui/Sheet";
 import { useMutation, usePaginatedQuery, useQuery } from "convex/react";
 import { ImagePlus, Trophy, Dices, X, Loader2, Check, Plus } from "lucide-react";
 import { api } from "@/convex/_generated/api";
@@ -57,14 +57,13 @@ export function PostComposer() {
         <ComposerTab icon={<Dices className="h-4 w-4" />} label="Log a play" onClick={() => setMode("playShare")} />
       </div>
 
-      {mode === "photo" && <PhotoDrawer onClose={() => setMode(null)} />}
-      {mode === "list" && <ListDrawer onClose={() => setMode(null)} />}
-      {mode === "playShare" && (
-        <PlayShareDrawer
-          onClose={() => setMode(null)}
-          onLogNew={() => setMode("play")}
-        />
-      )}
+      <PhotoDrawer open={mode === "photo"} onClose={() => setMode(null)} />
+      <ListDrawer open={mode === "list"} onClose={() => setMode(null)} />
+      <PlayShareDrawer
+        open={mode === "playShare"}
+        onClose={() => setMode(null)}
+        onLogNew={() => setMode("play")}
+      />
       <LogPlayWizard open={mode === "play"} onClose={() => setMode(null)} />
     </div>
   );
@@ -92,43 +91,43 @@ function ComposerTab({
 
 /** A bottom-sheet / right-sidebar shell (matches CommentsDrawer). */
 function Drawer({
+  open,
   title,
   onClose,
   children,
   footer,
 }: {
+  open: boolean;
   title: string;
   onClose: () => void;
   children: React.ReactNode;
   footer: React.ReactNode;
 }) {
-  return createPortal(
-    <>
-      <div
-        aria-hidden
-        onClick={onClose}
-        className="fixed inset-0 z-70 bg-foreground/30 backdrop-blur-[1px]"
-      />
-      <div className="animate-in fixed inset-x-0 bottom-0 z-70 flex max-h-[85vh] flex-col rounded-t-2xl border border-border bg-background shadow-2xl sm:inset-y-0 sm:left-auto sm:right-0 sm:max-h-none sm:w-104 sm:rounded-none sm:rounded-l-2xl">
-        <div className="flex items-center justify-between border-b border-border px-4 py-3">
-          <h2 className="font-display text-lg font-bold">{title}</h2>
-          <button
-            onClick={onClose}
-            aria-label="Close"
-            className="flex h-8 w-8 items-center justify-center rounded-lg text-muted hover:bg-surface-2 hover:text-foreground"
-          >
-            <X className="h-4.5 w-4.5" />
-          </button>
-        </div>
-        <div className="themed-scroll flex-1 overflow-y-auto p-4">{children}</div>
-        <div className="border-t border-border p-3">{footer}</div>
+  return (
+    <Sheet open={open} onClose={onClose} mobileMaxH="max-h-[85vh]">
+      <div className="flex items-center justify-between border-b border-border px-4 py-3">
+        <h2 className="font-display text-lg font-bold">{title}</h2>
+        <button
+          onClick={onClose}
+          aria-label="Close"
+          className="flex h-8 w-8 items-center justify-center rounded-lg text-muted hover:bg-surface-2 hover:text-foreground"
+        >
+          <X className="h-4.5 w-4.5" />
+        </button>
       </div>
-    </>,
-    document.body,
+      <div className="themed-scroll flex-1 overflow-y-auto p-4">{children}</div>
+      <div className="border-t border-border p-3">{footer}</div>
+    </Sheet>
   );
 }
 
-function PhotoDrawer({ onClose }: { onClose: () => void }) {
+function PhotoDrawer({
+  open,
+  onClose,
+}: {
+  open: boolean;
+  onClose: () => void;
+}) {
   const genUpload = useMutation(api.plays.generatePlayPhotoUploadUrl);
   const createImagePost = useMutation(api.posts.createImagePost);
   const toast = useToast();
@@ -188,6 +187,7 @@ function PhotoDrawer({ onClose }: { onClose: () => void }) {
 
   return (
     <Drawer
+      open={open}
       title="New photo post"
       onClose={onClose}
       footer={
@@ -254,15 +254,17 @@ function PhotoDrawer({ onClose }: { onClose: () => void }) {
 
 /** Share an already-logged play to the feed, or jump to logging a new one. */
 function PlayShareDrawer({
+  open,
   onClose,
   onLogNew,
 }: {
+  open: boolean;
   onClose: () => void;
   onLogNew: () => void;
 }) {
   const { results, status, loadMore } = usePaginatedQuery(
     api.plays.myPlays,
-    {},
+    open ? {} : "skip",
     { initialNumItems: 20 },
   );
   const sharePlay = useMutation(api.posts.sharePlayPost);
@@ -293,6 +295,7 @@ function PlayShareDrawer({
 
   return (
     <Drawer
+      open={open}
       title="Share a play"
       onClose={onClose}
       footer={
@@ -391,8 +394,14 @@ function PlayShareDrawer({
   );
 }
 
-function ListDrawer({ onClose }: { onClose: () => void }) {
-  const lists = useQuery(api.topGames.listMine);
+function ListDrawer({
+  open,
+  onClose,
+}: {
+  open: boolean;
+  onClose: () => void;
+}) {
+  const lists = useQuery(api.topGames.listMine, open ? {} : "skip");
   const createTopListPost = useMutation(api.posts.createTopListPost);
   const toast = useToast();
 
@@ -418,6 +427,7 @@ function ListDrawer({ onClose }: { onClose: () => void }) {
 
   return (
     <Drawer
+      open={open}
       title="Share a Top Games list"
       onClose={onClose}
       footer={

@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { createPortal } from "react-dom";
+import { useState } from "react";
+import { Sheet } from "@/components/ui/Sheet";
 import { useQuery } from "convex/react";
 import { X, Bot, ChevronDown } from "lucide-react";
 import { api } from "@/convex/_generated/api";
@@ -124,20 +124,6 @@ export function FilterDrawer({
 }) {
   const facets = useQuery(api.games.filterFacets, open ? {} : "skip");
 
-  useEffect(() => {
-    if (!open) return;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    window.addEventListener("keydown", onKey);
-    return () => {
-      document.body.style.overflow = prev;
-      window.removeEventListener("keydown", onKey);
-    };
-  }, [open, onClose]);
-
-  if (!open) return null;
-
   const toggleArray = (key: "categories" | "mechanics", value: string) => {
     const cur = filters[key];
     setFilters({
@@ -148,17 +134,8 @@ export function FilterDrawer({
     });
   };
 
-  // Portal to the body so the drawer escapes the page's `main` stacking context
-  // (z-10) and actually paints above the root-level bottom nav.
-  return createPortal(
-    <>
-      <div
-        aria-hidden
-        onClick={onClose}
-        className="fixed inset-0 z-70 bg-foreground/30 backdrop-blur-[1px]"
-      />
-      {/* Bottom sheet on mobile; right-hand side drawer on desktop. */}
-      <div className="animate-in fixed inset-x-0 bottom-0 z-70 flex max-h-[82vh] flex-col rounded-t-2xl border border-border bg-background shadow-2xl sm:inset-y-0 sm:left-auto sm:right-0 sm:max-h-none sm:w-96 sm:rounded-none sm:rounded-l-2xl">
+  return (
+    <Sheet open={open} onClose={onClose} desktopWidth="sm:w-96" mobileMaxH="max-h-[82vh]">
         <div className="flex items-center justify-between border-b border-border px-4 py-3">
           <h2 className="font-display text-lg font-bold">Filters</h2>
           <div className="flex items-center gap-1">
@@ -259,9 +236,7 @@ export function FilterDrawer({
             Show results
           </button>
         </div>
-      </div>
-    </>,
-    document.body,
+    </Sheet>
   );
 }
 

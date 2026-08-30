@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 import Link from "next/link";
 import {
   usePaginatedQuery,
@@ -19,6 +18,7 @@ import type { Id } from "@/convex/_generated/dataModel";
 import type { FunctionReturnType } from "convex/server";
 import { useToast } from "@/components/ui/Toast";
 import { relativeTime } from "@/lib/format";
+import { Sheet } from "@/components/ui/Sheet";
 
 /** Split a comment into text + clickable @mentions. */
 function renderBody(text: string) {
@@ -248,18 +248,6 @@ export function CommentsDrawer({
     ) ?? [];
 
   useEffect(() => {
-    if (!open) return;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    window.addEventListener("keydown", onKey);
-    return () => {
-      document.body.style.overflow = prev;
-      window.removeEventListener("keydown", onKey);
-    };
-  }, [open, onClose]);
-
-  useEffect(() => {
     const el = sentinel.current;
     if (!el || status !== "CanLoadMore") return;
     const io = new IntersectionObserver(
@@ -269,8 +257,6 @@ export function CommentsDrawer({
     io.observe(el);
     return () => io.disconnect();
   }, [status, loadMore]);
-
-  if (!open) return null;
 
   function onChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
     const value = e.target.value;
@@ -312,14 +298,8 @@ export function CommentsDrawer({
     }
   }
 
-  return createPortal(
-    <>
-      <div
-        aria-hidden
-        onClick={onClose}
-        className="fixed inset-0 z-70 bg-foreground/30 backdrop-blur-[1px]"
-      />
-      <div className="animate-in fixed inset-x-0 bottom-0 z-70 flex max-h-[85vh] flex-col rounded-t-2xl border border-border bg-background shadow-2xl sm:inset-y-0 sm:left-auto sm:right-0 sm:max-h-none sm:w-96 sm:rounded-none sm:rounded-l-2xl">
+  return (
+    <Sheet open={open} onClose={onClose} desktopWidth="sm:w-96" mobileMaxH="max-h-[85vh]">
         <div className="flex items-center justify-between border-b border-border px-4 py-3">
           <h2 className="font-display text-lg font-bold">Comments</h2>
           <button
@@ -430,8 +410,6 @@ export function CommentsDrawer({
             </p>
           </Unauthenticated>
         </div>
-      </div>
-    </>,
-    document.body,
+    </Sheet>
   );
 }
