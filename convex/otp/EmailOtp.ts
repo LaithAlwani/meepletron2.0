@@ -8,7 +8,7 @@ import { internal } from "../_generated/api";
  * (wired into `Password({ verify })` in convex/auth.ts). Convex Auth invokes
  * `sendVerificationRequest` in an action context (passed as the 2nd arg at
  * runtime, though the library's type only declares the first), so we schedule
- * the branded email through convex/email.ts (nodemailer). 6-digit, 15-min expiry.
+ * the branded email through convex/email.ts (Resend). 6-digit, 15-min expiry.
  */
 export const EmailOtp = Email({
   id: "email-otp",
