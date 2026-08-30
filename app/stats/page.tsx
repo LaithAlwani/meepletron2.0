@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import {
   useQuery,
@@ -8,17 +8,21 @@ import {
   Unauthenticated,
   AuthLoading,
 } from "convex/react";
+import type { FunctionReturnType } from "convex/server";
 import {
   MessageSquare,
   MessagesSquare,
   Bot,
   ThumbsUp,
   Library,
+  Dices,
   type LucideIcon,
 } from "lucide-react";
 import { api } from "@/convex/_generated/api";
 import { PlayerStatsCard } from "@/components/plays/PlayerStatsCard";
 import { PageTitle } from "@/components/ui/PageTitle";
+import { Skeleton } from "@/components/ui/Surface";
+import { Thumb } from "@/components/top-games/Thumb";
 
 export default function StatsPage() {
   return (
@@ -86,6 +90,14 @@ function StatsBody() {
         <PlayerStatsCard stats={playStats} engagement={engagement} />
       </div>
 
+      {/* By game */}
+      <p className="mb-2 px-1 text-xs font-semibold uppercase tracking-widest text-subtle">
+        By game
+      </p>
+      <div className="mb-6">
+        <PerGameStats games={playStats?.games} capped={playStats?.capped ?? false} />
+      </div>
+
       {/* Activity */}
       <p className="mb-2 px-1 text-xs font-semibold uppercase tracking-widest text-subtle">
         Activity
@@ -115,6 +127,113 @@ function StatsBody() {
           />
         )}
       </div>
+    </div>
+  );
+}
+
+type GameStats = NonNullable<
+  FunctionReturnType<typeof api.plays.myPlayStats>
+>["games"];
+
+const GAMES_CAP = 25;
+
+function PerGameStats({
+  games,
+  capped,
+}: {
+  games: GameStats | undefined;
+  capped: boolean;
+}) {
+  const [showAll, setShowAll] = useState(false);
+  if (games === undefined) {
+    return <Skeleton className="h-40 w-full rounded-2xl" />;
+  }
+  if (games.length === 0) {
+    return (
+      <p className="rounded-2xl border border-dashed border-border p-8 text-center text-sm text-muted">
+        Log a play to start building your per-game record.
+      </p>
+    );
+  }
+  const shown = showAll ? games : games.slice(0, GAMES_CAP);
+  return (
+    <div className="overflow-hidden rounded-2xl border border-border-muted bg-surface">
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-110 text-sm">
+          <thead>
+            <tr className="border-b border-border-muted text-[11px] uppercase tracking-wider text-subtle">
+              <th className="px-4 py-2.5 text-left font-semibold">Game</th>
+              <th className="px-2 py-2.5 text-center font-semibold">Plays</th>
+              <th className="px-2 py-2.5 text-center font-semibold">Won</th>
+              <th className="px-2 py-2.5 text-center font-semibold">Win %</th>
+              <th className="px-4 py-2.5 text-right font-semibold">Best</th>
+            </tr>
+          </thead>
+          <tbody>
+            {shown.map((g) => (
+              <tr
+                key={g.gameId ?? g.title}
+                className="border-b border-border-muted last:border-0"
+              >
+                <td className="px-4 py-2.5">
+                  <div className="flex items-center gap-2.5">
+                    <div className="h-9 w-9 shrink-0 overflow-hidden rounded-md bg-surface-2">
+                      {g.coverUrl ? (
+                        <Thumb url={g.coverUrl} className="h-9 w-9" />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center text-subtle">
+                          <Dices className="h-4 w-4" />
+                        </div>
+                      )}
+                    </div>
+                    {g.slug ? (
+                      <Link
+                        href={`/boardgames/${g.slug}`}
+                        className="min-w-0 truncate font-semibold hover:text-accent"
+                      >
+                        {g.title}
+                      </Link>
+                    ) : (
+                      <span className="min-w-0 truncate font-semibold">
+                        {g.title}
+                      </span>
+                    )}
+                  </div>
+                </td>
+                <td className="px-2 py-2.5 text-center tabular-nums">{g.plays}</td>
+                <td className="px-2 py-2.5 text-center tabular-nums">{g.wins}</td>
+                <td className="px-2 py-2.5 text-center tabular-nums">
+                  {g.winPct === null ? (
+                    <span className="text-subtle">—</span>
+                  ) : (
+                    `${g.winPct}%`
+                  )}
+                </td>
+                <td className="px-4 py-2.5 text-right font-semibold tabular-nums">
+                  {g.bestScore === null ? (
+                    <span className="font-normal text-subtle">—</span>
+                  ) : (
+                    g.bestScore
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {games.length > GAMES_CAP && (
+        <button
+          onClick={() => setShowAll((v) => !v)}
+          className="w-full border-t border-border-muted py-2.5 text-center text-xs font-semibold text-accent transition-colors hover:bg-surface-2"
+        >
+          {showAll ? "Show less" : `Show all ${games.length} games`}
+        </button>
+      )}
+      {capped && (
+        <p className="border-t border-border-muted px-4 py-2.5 text-center text-[11px] text-subtle">
+          Based on your 1,000 most recent plays.
+        </p>
+      )}
     </div>
   );
 }

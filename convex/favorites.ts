@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { query, mutation } from "./_generated/server";
 import { getCurrentUser, requireUser } from "./lib/auth";
+import { thumbUrl } from "./lib/gameCover";
 
 /** Toggle a game as a favourite for the current user. Returns the new state. */
 export const toggle = mutation({
@@ -54,12 +55,11 @@ export const list = query({
     for (const f of favs) {
       const game = await ctx.db.get("games", f.gameId);
       if (!game) continue;
-      const mediaId = game.thumbnailId ?? game.imageId;
       out.push({
         gameId: game._id,
         slug: game.slug,
         title: game.title,
-        thumbnailUrl: mediaId ? await ctx.storage.getUrl(mediaId) : null,
+        thumbnailUrl: await thumbUrl(ctx, game),
       });
     }
     return out;

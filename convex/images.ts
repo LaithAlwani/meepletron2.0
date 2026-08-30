@@ -184,8 +184,10 @@ async function enrichGameFromBgg(
     return;
   }
 
-  // Strip imageUrl — it's fetched here, not a `games` field.
-  const { imageUrl, ...meta } = parseFullItem(block);
+  // Pull the BGG image URLs out of `meta` — they're stored on the game as
+  // `bggImageUrl`/`bggThumbUrl` (served directly from BGG's CDN) and also used
+  // to fetch the fallback blob below.
+  const { imageUrl, thumbnailUrl, ...meta } = parseFullItem(block);
   const bgg = { ...parseItem(block), fetchedAt: Date.now() };
   const isExpansion = parseItemType(block) === "boardgameexpansion";
 
@@ -219,6 +221,8 @@ async function enrichGameFromBgg(
     bgg,
     imageId: cover.imageId,
     thumbnailId: cover.thumbnailId,
+    bggImageUrl: imageUrl,
+    bggThumbUrl: thumbnailUrl,
     isExpansion,
     parentId,
   });

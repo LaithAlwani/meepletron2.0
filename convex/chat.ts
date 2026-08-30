@@ -10,6 +10,7 @@ import {
 import type { Doc, Id } from "./_generated/dataModel";
 import { getCurrentUser, requireUser, requireAdmin } from "./lib/auth";
 import { finite } from "./lib/num";
+import { thumbUrl } from "./lib/gameCover";
 
 /** Daily token budgets: guests get a smaller allowance to nudge sign-up. */
 export const DAILY_TOKEN_LIMIT = 50_000;
@@ -257,12 +258,7 @@ export const listMyChats = query({
     const resolved = await Promise.all(
       [...byBase.entries()].map(async ([baseId, chat]) => {
         const baseGame = await ctx.db.get("games", baseId);
-        const thumbnailUrl =
-          baseGame?.thumbnailId ?? baseGame?.imageId
-            ? await ctx.storage.getUrl(
-                (baseGame.thumbnailId ?? baseGame.imageId)!,
-              )
-            : null;
+        const thumbnailUrl = baseGame ? await thumbUrl(ctx, baseGame) : null;
         return {
           ...chat,
           gameTitle: baseGame?.title ?? "Unknown game",

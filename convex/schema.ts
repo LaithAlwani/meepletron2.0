@@ -112,9 +112,16 @@ export default defineSchema({
     slug: v.string(),
     isExpansion: v.boolean(),
     parentId: v.optional(v.id("games")),
-    // media — Convex storage ids (served via ctx.storage.getUrl)
+    // media — Convex storage ids (served via ctx.storage.getUrl). Kept as a
+    // fallback; covers are served from BGG's CDN when the URLs below are set.
     imageId: v.optional(v.id("_storage")),
     thumbnailId: v.optional(v.id("_storage")),
+    // Original BoardGameGeek image URLs (cf.geekdo-images.com). Preferred over
+    // the stored Convex blob when serving covers, so BGG's CDN carries the image
+    // egress instead of our storage. `bggThumbUrl` = small (<thumbnail>) for
+    // cards/lists; `bggImageUrl` = full (<image>) for the detail hero.
+    bggImageUrl: v.optional(v.string()),
+    bggThumbUrl: v.optional(v.string()),
     // metadata (entered manually in the admin form)
     year: v.optional(v.string()),
     minPlayers: v.optional(v.number()),
@@ -171,6 +178,10 @@ export default defineSchema({
     .index("by_bgg_id", ["bggId"])
     // The catalogue's real read path: non-stub base games / expansions.
     .index("by_isStub_and_isExpansion", ["isStub", "isExpansion"])
+    // Stalest-first refresh queue: non-stub games ordered by when they were last
+    // checked, so the BGG refresh cron reads only the handful that are due
+    // (range on bggCheckedAt) instead of scanning the whole catalogue.
+    .index("by_isStub_and_bggCheckedAt", ["isStub", "bggCheckedAt"])
     // Sorted catalogue reads: same (isStub, isExpansion) prefix, then the sort
     // key, so the library paginates ordered without a scan.
     .index("by_lib_title", ["isStub", "isExpansion", "sortTitle"])

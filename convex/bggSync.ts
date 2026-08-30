@@ -32,6 +32,7 @@ import {
 } from "./lib/bggSyncTypes";
 import { slugifyUnique } from "./lib/slug";
 import { sortKeys, isGameSort, type GameSortKey } from "./lib/gameSort";
+import { coverUrls } from "./lib/gameCover";
 
 /**
  * BoardGameGeek account linking + collection sync.
@@ -315,17 +316,13 @@ async function collectionCard(
   row: Doc<"bggCollection">,
   game: Doc<"games">,
 ) {
-  const [imageUrl, storedThumb] = await Promise.all([
-    game.imageId ? ctx.storage.getUrl(game.imageId) : Promise.resolve(null),
-    game.thumbnailId
-      ? ctx.storage.getUrl(game.thumbnailId)
-      : Promise.resolve(null),
-  ]);
-  // Fall back to the BGG thumbnail on the row when there's no stored cover.
+  // Prefer the row's BGG CDN URLs (zero egress); fall back to the game's cover
+  // (its own BGG URL, else the stored Convex blob).
+  const { imageUrl, thumbnailUrl } = await coverUrls(ctx, game);
   return {
     ...game,
-    imageUrl,
-    thumbnailUrl: storedThumb ?? row.thumbnailUrl ?? null,
+    imageUrl: row.imageUrl ?? imageUrl,
+    thumbnailUrl: row.thumbnailUrl ?? thumbnailUrl,
   };
 }
 

@@ -37,10 +37,12 @@ crons.daily(
 );
 
 // Refresh the stalest games' BGG stats. This replaced a public action the game
-// detail page called on view — see convex/bgg.ts:refreshOne.
-crons.cron(
+// detail page called on view — see convex/bgg.ts:refreshOne. BGG ratings barely
+// move, so a slow cadence is fine (every 3 days) — the index range scan in
+// dueForRefresh keeps each run cheap regardless.
+crons.interval(
   "refresh stale bgg stats",
-  "0 * * * *",
+  { hours: 72 },
   internal.bgg.refreshStale,
   {},
 );

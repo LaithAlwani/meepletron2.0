@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Users, Clock, Star } from "lucide-react";
-import type { GameWithMedia } from "@/convex/games";
+import type { GameCardData } from "@/convex/games";
 import { formatPlayTime } from "@/lib/format";
 import { CollectionButton } from "./CollectionButton";
 import { CollectionTags } from "./CollectionTags";
@@ -10,7 +10,7 @@ export function GameCard({
   game,
   index = 0,
 }: {
-  game: GameWithMedia;
+  game: GameCardData;
   index?: number;
 }) {
   const players =
@@ -21,7 +21,7 @@ export function GameCard({
       : null;
   const time = formatPlayTime(game.minPlayTime, game.maxPlayTime);
   const cover = game.thumbnailUrl ?? game.imageUrl ?? "";
-  const rating = game.bgg?.rating;
+  const rating = game.bggRating;
 
   return (
     <div

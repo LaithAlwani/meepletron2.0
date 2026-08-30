@@ -117,11 +117,16 @@ export function parseFullItem(block: string) {
   const year = strVal(/<yearpublished value="([^"]*)"/);
   const age = strVal(/<minage value="(\d+)"/);
   const descMatch = block.match(/<description>([\s\S]*?)<\/description>/);
-  const image =
-    block.match(/<image>([^<]+)<\/image>/)?.[1] ??
-    block.match(/<thumbnail>([^<]+)<\/thumbnail>/)?.[1];
+  const imageTag = block.match(/<image>([^<]+)<\/image>/)?.[1];
+  const thumbTag = block.match(/<thumbnail>([^<]+)<\/thumbnail>/)?.[1];
+  const image = imageTag ?? thumbTag;
+  const thumb = thumbTag ?? imageTag;
   return {
+    // Full cover (falls back to thumbnail). Kept as `imageUrl` for existing
+    // callers that download it into storage.
     imageUrl: image ? decodeEntities(image).trim() : undefined,
+    // Small BGG thumbnail (falls back to the full image) for cards/lists.
+    thumbnailUrl: thumb ? decodeEntities(thumb).trim() : undefined,
     title:
       strVal(/<name type="primary"[^>]*value="([^"]*)"/) ??
       strVal(/<name[^>]*value="([^"]*)"/),

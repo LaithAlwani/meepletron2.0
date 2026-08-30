@@ -49,6 +49,7 @@ import type * as lib_chunker from "../lib/chunker.js";
 import type * as lib_embedding from "../lib/embedding.js";
 import type * as lib_extraction from "../lib/extraction.js";
 import type * as lib_feed from "../lib/feed.js";
+import type * as lib_gameCover from "../lib/gameCover.js";
 import type * as lib_gameSearch from "../lib/gameSearch.js";
 import type * as lib_gameSort from "../lib/gameSort.js";
 import type * as lib_num from "../lib/num.js";
@@ -123,6 +124,7 @@ declare const fullApi: ApiFromModules<{
   "lib/embedding": typeof lib_embedding;
   "lib/extraction": typeof lib_extraction;
   "lib/feed": typeof lib_feed;
+  "lib/gameCover": typeof lib_gameCover;
   "lib/gameSearch": typeof lib_gameSearch;
   "lib/gameSort": typeof lib_gameSort;
   "lib/num": typeof lib_num;

@@ -1,12 +1,12 @@
 import Link from "next/link";
 import { Star } from "lucide-react";
-import type { GameWithMedia } from "@/convex/games";
+import type { GameCardData } from "@/convex/games";
 import { formatPlayTime } from "@/lib/format";
 import { CollectionButton } from "./CollectionButton";
 import { CollectionTags } from "./CollectionTags";
 import { Die } from "@/components/ui/icons";
 
-export function GameListItem({ game }: { game: GameWithMedia }) {
+export function GameListItem({ game }: { game: GameCardData }) {
   const players =
     game.minPlayers && game.maxPlayers
       ? game.minPlayers === game.maxPlayers
@@ -19,7 +19,7 @@ export function GameListItem({ game }: { game: GameWithMedia }) {
     game.year,
   ].filter(Boolean);
   const cover = game.thumbnailUrl ?? game.imageUrl ?? null;
-  const rating = game.bgg?.rating;
+  const rating = game.bggRating;
   const iconBtn =
     "flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted transition-colors hover:text-accent";
 

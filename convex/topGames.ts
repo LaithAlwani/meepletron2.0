@@ -12,6 +12,7 @@ import { canViewProfile } from "./friends";
 import { publicParticipantPlayIds } from "./plays";
 import { DEFAULT_CATEGORY, isTopCategory } from "./lib/topGamesCategories";
 import { isGameSort } from "./lib/gameSort";
+import { thumbUrl as gameThumbUrl } from "./lib/gameCover";
 
 /**
  * Top Games — a user's ranked "Top N" list for a given year, with year-over-year
@@ -52,17 +53,12 @@ type ListDoc = Doc<"topGamesLists">;
 async function gameThumb(ctx: QueryCtx, gameId: Id<"games">) {
   const g = await ctx.db.get("games", gameId);
   if (!g) return null;
-  const thumbUrl = g.thumbnailId
-    ? await ctx.storage.getUrl(g.thumbnailId)
-    : g.imageId
-      ? await ctx.storage.getUrl(g.imageId)
-      : null;
   return {
     _id: g._id,
     slug: g.slug,
     title: g.title,
     year: g.year ?? null,
-    thumbUrl,
+    thumbUrl: await gameThumbUrl(ctx, g),
   };
 }
 
@@ -131,16 +127,14 @@ async function collectionSection(
   const items = await Promise.all(
     matched.slice(0, limit).map(async (r) => {
       const g = r.gameId ? await ctx.db.get("games", r.gameId) : null;
-      const thumbUrl = g?.thumbnailId
-        ? await ctx.storage.getUrl(g.thumbnailId)
-        : g?.imageId
-          ? await ctx.storage.getUrl(g.imageId)
-          : null;
+      // The collection row carries the BGG thumbnail URL directly — prefer it
+      // (zero egress); fall back to the game's cover only if absent.
+      const thumb = r.thumbnailUrl ?? (g ? await gameThumbUrl(ctx, g) : null);
       return {
         gameId: r.gameId ?? null,
         title: g?.title ?? r.title,
         slug: g?.slug ?? null,
-        thumbUrl,
+        thumbUrl: thumb,
       };
     }),
   );
@@ -310,11 +304,7 @@ async function coverSample(
     if (covers.length >= n) break;
     const g = await ctx.db.get("games", list.entries[i].gameId);
     if (!g) continue;
-    const url = g.thumbnailId
-      ? await ctx.storage.getUrl(g.thumbnailId)
-      : g.imageId
-        ? await ctx.storage.getUrl(g.imageId)
-        : null;
+    const url = await gameThumbUrl(ctx, g);
     if (url) covers.push(url);
   }
   return covers;
@@ -715,17 +705,15 @@ export const publicCollectionPage = query({
       r: Doc<"bggCollection">,
       g: Doc<"games"> | null,
     ) => {
-      const thumbUrl = g?.thumbnailId
-        ? await ctx.storage.getUrl(g.thumbnailId)
-        : g?.imageId
-          ? await ctx.storage.getUrl(g.imageId)
-          : (r.thumbnailUrl ?? null);
+      // Prefer the collection row's BGG thumbnail URL (zero egress); fall back
+      // to the game's cover.
+      const thumb = r.thumbnailUrl ?? (g ? await gameThumbUrl(ctx, g) : null);
       return {
         _id: r._id,
         gameId: r.gameId ?? null,
         title: g?.title ?? r.title,
         slug: g?.slug ?? null,
-        thumbUrl,
+        thumbUrl: thumb,
       };
     };
 

@@ -19,6 +19,7 @@ import {
   playTeamValidator,
 } from "./lib/playTypes";
 import { syncPlayPost, deletePlayPost } from "./lib/feed";
+import { thumbUrl } from "./lib/gameCover";
 
 /**
  * Plays — one recorded game session. Entered by hand (the log-play wizard) or
@@ -53,12 +54,7 @@ async function gameCover(ctx: QueryCtx, gameId?: Id<"games">) {
   if (!gameId) return null;
   const g = await ctx.db.get("games", gameId);
   if (!g) return null;
-  const url = g.thumbnailId
-    ? await ctx.storage.getUrl(g.thumbnailId)
-    : g.imageId
-      ? await ctx.storage.getUrl(g.imageId)
-      : null;
-  return { slug: g.slug, title: g.title, coverUrl: url };
+  return { slug: g.slug, title: g.title, coverUrl: await thumbUrl(ctx, g) };
 }
 
 /**
@@ -892,7 +888,14 @@ export const myPlayStats = query({
     let decided = 0;
     const byGame = new Map<
       string,
-      { title: string; count: number; gameId: Id<"games"> | null }
+      {
+        title: string;
+        count: number;
+        gameId: Id<"games"> | null;
+        wins: number;
+        decided: number;
+        bestScore: number | null;
+      }
     >();
     const months = new Map<string, number>(); // "YYYY-MM" → count
     const recent: {
@@ -925,10 +928,32 @@ export const myPlayStats = query({
           youWon: me?.isWinner ?? null,
         });
       }
+      // Per-game aggregate (same scan): plays, wins, decided, best personal score.
       const key = play.gameId ?? play.title;
-      const cur = byGame.get(key);
-      if (cur) cur.count++;
-      else byGame.set(key, { title: play.title, count: 1, gameId: play.gameId ?? null });
+      let g = byGame.get(key);
+      if (!g) {
+        g = {
+          title: play.title,
+          count: 0,
+          gameId: play.gameId ?? null,
+          wins: 0,
+          decided: 0,
+          bestScore: null,
+        };
+        byGame.set(key, g);
+      }
+      g.count++;
+      if (me && me.isWinner !== undefined) {
+        g.decided++;
+        if (me.isWinner) g.wins++;
+      }
+      // Best personal score: the player's own score, or the table score for co-ops.
+      const score =
+        me?.score ??
+        (play.format === "cooperative" ? (play.coopScore ?? null) : null);
+      if (typeof score === "number") {
+        g.bestScore = g.bestScore === null ? score : Math.max(g.bestScore, score);
+      }
     }
 
     let top: { title: string; count: number; gameId: Id<"games"> | null } | null =
@@ -941,6 +966,26 @@ export const myPlayStats = query({
       const g = top.gameId ? await ctx.db.get("games", top.gameId) : null;
       mostPlayed = { title: top.title, count: top.count, slug: g?.slug ?? null };
     }
+
+    // Per-game record (most-played first), covers resolved once.
+    const games = await Promise.all(
+      [...byGame.values()]
+        .sort((a, b) => b.count - a.count || a.title.localeCompare(b.title))
+        .map(async (g) => {
+          const cover = g.gameId ? await gameCover(ctx, g.gameId) : null;
+          return {
+            gameId: g.gameId,
+            title: g.title,
+            slug: cover?.slug ?? null,
+            coverUrl: cover?.coverUrl ?? null,
+            plays: g.count,
+            wins: g.wins,
+            decided: g.decided,
+            winPct: g.decided > 0 ? Math.round((g.wins / g.decided) * 100) : null,
+            bestScore: g.bestScore,
+          };
+        }),
+    );
 
     // Last 6 months (ending at the client-supplied current month) for a bar chart.
     const [yy, mm] = monthStartDate.split("-").map(Number);
@@ -966,6 +1011,7 @@ export const myPlayStats = query({
       mostPlayed,
       recent,
       byMonth,
+      games,
       capped: links.length >= STATS_SCAN,
     };
   },

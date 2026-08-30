@@ -19,19 +19,61 @@ import {
   type GameSortKey,
 } from "./lib/gameSort";
 import { bggStatsValidator } from "./lib/bggStats";
+import { coverUrls, thumbUrl } from "./lib/gameCover";
 
-/** Resolve a game's storage ids into signed URLs for the client. */
+/** Resolve a game's cover URLs for the client (BGG CDN preferred, Convex blob
+ *  fallback). Drops the server-only `searchText` (a large blob no client reads). */
 async function withMedia(ctx: QueryCtx, game: Doc<"games">) {
-  const [imageUrl, thumbnailUrl] = await Promise.all([
-    game.imageId ? ctx.storage.getUrl(game.imageId) : Promise.resolve(null),
-    game.thumbnailId
-      ? ctx.storage.getUrl(game.thumbnailId)
-      : Promise.resolve(null),
-  ]);
-  return { ...game, imageUrl, thumbnailUrl };
+  const { imageUrl, thumbnailUrl } = await coverUrls(ctx, game);
+  const { searchText, ...rest } = game;
+  void searchText;
+  return { ...rest, imageUrl, thumbnailUrl };
 }
 
 export type GameWithMedia = Awaited<ReturnType<typeof withMedia>>;
+
+/**
+ * A trimmed projection for library/grid cards — only the fields GameCard /
+ * GameListItem read, plus resolved media. Skips the heavy detail-only fields
+ * (description, the full `bgg` blob, designer/category/mechanic arrays,
+ * `similarIds`, …) to keep list-query egress small. The rating comes from the
+ * denormalized `bggRating`, kept in sync with `bgg.rating`.
+ */
+export type GameCardData = {
+  _id: Id<"games">;
+  title: string;
+  slug: string;
+  year?: string;
+  minPlayers?: number;
+  maxPlayers?: number;
+  minPlayTime?: number;
+  maxPlayTime?: number;
+  bggId?: string;
+  bggRating?: number;
+  imageUrl: string | null;
+  thumbnailUrl: string | null;
+};
+
+async function withCardMedia(
+  ctx: QueryCtx,
+  game: Doc<"games">,
+): Promise<GameCardData> {
+  const { imageUrl, thumbnailUrl } = await coverUrls(ctx, game);
+  return {
+    _id: game._id,
+    title: game.title,
+    slug: game.slug,
+    year: game.year,
+    minPlayers: game.minPlayers,
+    maxPlayers: game.maxPlayers,
+    minPlayTime: game.minPlayTime,
+    maxPlayTime: game.maxPlayTime,
+    bggId: game.bggId,
+    bggRating: game.bggRating,
+    imageUrl,
+    thumbnailUrl,
+  };
+}
 
 /** A rulebook enriched with a normalized `kind` and a signed download URL. */
 async function rulebookWithMeta(ctx: QueryCtx, rb: Doc<"rulebooks">) {
@@ -510,7 +552,7 @@ export const libraryGames = query({
       }
       return {
         ...result,
-        page: await Promise.all(page.map((g) => withMedia(ctx, g))),
+        page: await Promise.all(page.map((g) => withCardMedia(ctx, g))),
       };
     }
 
@@ -520,7 +562,7 @@ export const libraryGames = query({
     const end = offset + paginationOpts.numItems;
     const slice = filtered.slice(offset, end);
     return {
-      page: await Promise.all(slice.map((g) => withMedia(ctx, g))),
+      page: await Promise.all(slice.map((g) => withCardMedia(ctx, g))),
       isDone: end >= filtered.length,
       continueCursor: String(end),
     };
@@ -1024,9 +1066,7 @@ export const adminList = query({
           slug: g.slug,
           isExpansion: g.isExpansion,
           isStub: !!g.isStub,
-          thumbnailUrl: g.thumbnailId
-            ? await ctx.storage.getUrl(g.thumbnailId)
-            : null,
+          thumbnailUrl: await thumbUrl(ctx, g),
           fileCount: files.length,
           ingestedCount: ingested,
         };
@@ -1276,13 +1316,25 @@ export const applyStubEnrichment = internalMutation({
     bgg: v.optional(bggStatsValidator),
     imageId: v.optional(v.id("_storage")),
     thumbnailId: v.optional(v.id("_storage")),
+    bggImageUrl: v.optional(v.string()),
+    bggThumbUrl: v.optional(v.string()),
     // Set from the authoritative /thing item type + its inbound base-game link.
     isExpansion: v.optional(v.boolean()),
     parentId: v.optional(v.id("games")),
   },
   handler: async (
     ctx,
-    { gameId, meta, bgg, imageId, thumbnailId, isExpansion, parentId },
+    {
+      gameId,
+      meta,
+      bgg,
+      imageId,
+      thumbnailId,
+      bggImageUrl,
+      bggThumbUrl,
+      isExpansion,
+      parentId,
+    },
   ) => {
     const game = await ctx.db.get("games", gameId);
     if (!game || !game.isStub) {
@@ -1326,6 +1378,8 @@ export const applyStubEnrichment = internalMutation({
       patch.imageId = imageId;
       patch.thumbnailId = thumbnailId ?? imageId;
     }
+    if (bggImageUrl) patch.bggImageUrl = bggImageUrl;
+    if (bggThumbUrl) patch.bggThumbUrl = bggThumbUrl;
     if (isExpansion !== undefined) patch.isExpansion = isExpansion;
     if (parentId) {
       patch.parentId = parentId;
