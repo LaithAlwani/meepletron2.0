@@ -258,10 +258,11 @@ function PerGameStats({
               </span>
             </div>
 
-            {/* Inner divider — dashed, distinct from the solid between-games line */}
-            <div className="my-3 border-t border-dashed border-border" />
+            {/* Inner divider — a soft gradient hairline, distinct from the solid
+                between-games separators */}
+            <div className="my-3 h-px bg-linear-to-r from-transparent via-border to-transparent" />
 
-            <div className="grid grid-cols-4 gap-2">
+            <div className="flex items-start justify-between">
               <GameStatCell label="Plays" value={g.plays} />
               <GameStatCell label="Won" value={g.wins} />
               <GameStatCell
@@ -273,6 +274,7 @@ function PerGameStats({
                 label="Best"
                 value={g.bestScore ?? "—"}
                 muted={g.bestScore === null}
+                align="right"
               />
             </div>
           </button>
@@ -300,13 +302,15 @@ function GameStatCell({
   label,
   value,
   muted,
+  align = "left",
 }: {
   label: string;
   value: number | string;
   muted?: boolean;
+  align?: "left" | "right";
 }) {
   return (
-    <div>
+    <div className={align === "right" ? "text-right" : ""}>
       <div className="text-[11px] uppercase tracking-wider text-subtle">
         {label}
       </div>
