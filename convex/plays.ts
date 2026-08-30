@@ -1059,10 +1059,7 @@ export const gameDetailStats = query({
     let scoreCount = 0;
     const scoreHistory: { date: string; score: number }[] = [];
     const months = new Map<string, number>();
-    const coPlayers = new Map<
-      string,
-      { name: string; userId?: Id<"users">; plays: number }
-    >();
+    const coPlayers = new Map<string, number>();
 
     const scoreOf = (play: PlayDoc) => {
       const me = play.players.find((p) => p.userId === viewer._id);
@@ -1088,33 +1085,9 @@ export const gameDetailStats = query({
       months.set(m, (months.get(m) ?? 0) + 1);
       for (const p of play.players) {
         if (p.userId === viewer._id) continue;
-        const key = p.userId ? `u:${p.userId}` : `n:${p.name.toLowerCase()}`;
-        const cur = coPlayers.get(key);
-        if (cur) cur.plays++;
-        else coPlayers.set(key, { name: p.name, userId: p.userId, plays: 1 });
+        coPlayers.set(p.name, (coPlayers.get(p.name) ?? 0) + 1);
       }
     }
-
-    // Resolve the top co-players' avatar + handle so the chart can link to them.
-    const topCoPlayers = await Promise.all(
-      [...coPlayers.values()]
-        .sort((a, b) => b.plays - a.plays)
-        .slice(0, 8)
-        .map(async (cp) => {
-          let username: string | null = null;
-          let avatarUrl: string | null = null;
-          if (cp.userId) {
-            const u = await ctx.db.get("users", cp.userId);
-            if (u) {
-              username = u.username ?? null;
-              avatarUrl = u.avatarStorageId
-                ? await ctx.storage.getUrl(u.avatarStorageId)
-                : (u.image ?? null);
-            }
-          }
-          return { name: cp.name, plays: cp.plays, username, avatarUrl };
-        }),
-    );
 
     const recent = [...plays]
       .reverse()
@@ -1153,7 +1126,10 @@ export const gameDetailStats = query({
       playsByMonth: [...months.entries()]
         .sort((a, b) => (a[0] < b[0] ? -1 : 1))
         .map(([month, count]) => ({ month, count })),
-      topCoPlayers,
+      topCoPlayers: [...coPlayers.entries()]
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 8)
+        .map(([name, count]) => ({ name, plays: count })),
       recent,
     };
   },

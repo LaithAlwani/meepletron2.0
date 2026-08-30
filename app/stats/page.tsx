@@ -178,7 +178,8 @@ function PerGameStats({
   const shown = showAll ? games : games.slice(0, GAMES_CAP);
   return (
     <div className="overflow-hidden rounded-2xl border border-border-muted bg-surface">
-      <div className="overflow-x-auto">
+      {/* Desktop: compact table */}
+      <div className="hidden overflow-x-auto sm:block">
         <table className="w-full min-w-110 text-sm">
           <thead>
             <tr className="border-b border-border-muted text-[11px] uppercase tracking-wider text-subtle">
@@ -233,6 +234,51 @@ function PerGameStats({
           </tbody>
         </table>
       </div>
+
+      {/* Mobile: stacked blocks — header, a dashed divider, then the stats */}
+      <div className="sm:hidden">
+        {shown.map((g) => (
+          <button
+            key={g.gameId ?? g.title}
+            onClick={() => onOpen({ gameId: g.gameId, title: g.title })}
+            className="block w-full border-b border-border-muted px-4 py-3.5 text-left transition-colors last:border-0 hover:bg-surface-2"
+          >
+            <div className="flex items-center gap-3">
+              <div className="h-11 w-11 shrink-0 overflow-hidden rounded-lg bg-surface-2">
+                {g.coverUrl ? (
+                  <Thumb url={g.coverUrl} className="h-11 w-11" />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center text-subtle">
+                    <Dices className="h-5 w-5" />
+                  </div>
+                )}
+              </div>
+              <span className="font-display min-w-0 flex-1 truncate font-bold">
+                {g.title}
+              </span>
+            </div>
+
+            {/* Inner divider — dashed, distinct from the solid between-games line */}
+            <div className="my-3 border-t border-dashed border-border" />
+
+            <div className="grid grid-cols-4 gap-2">
+              <GameStatCell label="Plays" value={g.plays} />
+              <GameStatCell label="Won" value={g.wins} />
+              <GameStatCell
+                label="Win %"
+                value={g.winPct === null ? "—" : `${g.winPct}%`}
+                muted={g.winPct === null}
+              />
+              <GameStatCell
+                label="Best"
+                value={g.bestScore ?? "—"}
+                muted={g.bestScore === null}
+              />
+            </div>
+          </button>
+        ))}
+      </div>
+
       {games.length > GAMES_CAP && (
         <button
           onClick={() => setShowAll((v) => !v)}
@@ -246,6 +292,29 @@ function PerGameStats({
           Based on your 1,000 most recent plays.
         </p>
       )}
+    </div>
+  );
+}
+
+function GameStatCell({
+  label,
+  value,
+  muted,
+}: {
+  label: string;
+  value: number | string;
+  muted?: boolean;
+}) {
+  return (
+    <div>
+      <div className="text-[11px] uppercase tracking-wider text-subtle">
+        {label}
+      </div>
+      <div
+        className={`mt-0.5 text-lg font-bold tabular-nums ${muted ? "text-subtle" : "text-foreground"}`}
+      >
+        {value}
+      </div>
     </div>
   );
 }
