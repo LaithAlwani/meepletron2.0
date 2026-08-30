@@ -504,11 +504,19 @@ async function resetJob(
       q.eq("userId", args.userId).eq("kind", args.kind),
     )
     .unique();
+  let jobId: Id<"bggSyncJobs">;
   if (existing) {
     await ctx.db.patch("bggSyncJobs", existing._id, fields);
-    return existing._id;
+    jobId = existing._id;
+  } else {
+    jobId = await ctx.db.insert("bggSyncJobs", fields);
   }
-  return await ctx.db.insert("bggSyncJobs", fields);
+  // Per-job stall watchdog (replaces the every-15-min sweep): re-checks this
+  // job once the stall window elapses and fails it if it never progressed.
+  await ctx.scheduler.runAfter(STALL_MS, internal.bggSync.watchStalledJob, {
+    jobId,
+  });
+  return jobId;
 }
 
 /** Statuses that mean "a run is under way" — the in-flight lock. */
@@ -1611,7 +1619,44 @@ export const relinkGameToBggRows = internalMutation({
   },
 });
 
-/** Watchdog: a job whose action died leaves the UI spinning forever. */
+/**
+ * Per-job stall watchdog — scheduled when a sync job is created (see
+ * `createOrResetJob`). Fires once the stall window elapses: if the job is still
+ * in flight and hasn't progressed for STALL_MS, it's failed so the UI stops
+ * spinning; if it's still making progress, the watchdog re-arms for the
+ * remaining window. Replaces the old every-15-min `failStalledJobs` sweep, so
+ * the check runs only while a sync is actually happening.
+ */
+export const watchStalledJob = internalMutation({
+  args: { jobId: v.id("bggSyncJobs") },
+  handler: async (ctx, { jobId }) => {
+    const job = await ctx.db.get("bggSyncJobs", jobId);
+    if (!job) return;
+    // Terminal (done / error / canceled) — nothing left to watch.
+    if (!(IN_FLIGHT as readonly string[]).includes(job.status)) return;
+    const now = Date.now();
+    if (job.updatedAt < now - STALL_MS) {
+      await ctx.db.patch("bggSyncJobs", jobId, {
+        status: "error",
+        error: "The sync stopped responding. Try again.",
+        finishedAt: now,
+        updatedAt: now,
+      });
+      return;
+    }
+    // Still progressing — re-check after the remaining stall window.
+    await ctx.scheduler.runAfter(
+      Math.max(job.updatedAt + STALL_MS - now, 1000),
+      internal.bggSync.watchStalledJob,
+      { jobId },
+    );
+  },
+});
+
+/**
+ * Manual backstop for the per-job watchdog (kept for `npx convex run`): fails
+ * any in-flight job that's been idle past STALL_MS. Not scheduled by a cron.
+ */
 export const failStalledJobs = internalMutation({
   args: {},
   handler: async (ctx) => {

@@ -47,15 +47,9 @@ crons.interval(
   {},
 );
 
-// Fail BGG sync jobs whose action died, so the UI stops showing a spinner that
-// will never resolve. (`crons.cron` rather than the `crons.daily` above — the
-// Convex guidelines allow only `interval`/`cron`; the existing four predate it.)
-crons.cron(
-  "fail stalled bgg sync jobs",
-  "*/15 * * * *",
-  internal.bggSync.failStalledJobs,
-  {},
-);
+// (The old every-15-min "fail stalled bgg sync jobs" sweep is gone — each sync
+// job now schedules its own stall watchdog on creation; see
+// bggSync.watchStalledJob.)
 
 // Backstop for stub enrichment: fill any BGG-synced stub games that a sync's
 // own self-draining sweep missed or that failed transiently (they back off via
