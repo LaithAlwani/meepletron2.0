@@ -9,7 +9,6 @@ import type { FunctionReturnType } from "convex/server";
 import {
   Trophy,
   Dices,
-  Image as ImageIcon,
   Package,
   Repeat2,
   Heart,
@@ -21,6 +20,7 @@ import {
   LogOut,
   Loader2,
   Settings2,
+  Plus,
   type LucideIcon,
 } from "lucide-react";
 import { api } from "@/convex/_generated/api";
@@ -28,12 +28,17 @@ import { Skeleton } from "@/components/ui/Surface";
 import { buttonClasses } from "@/components/ui/Button";
 import { ListCard } from "@/components/top-games/ListCard";
 import { CoverScroller } from "@/components/top-games/CoverScroller";
-import { PlayCard } from "@/components/plays/PlayCard";
+import { PlayPostCard } from "@/components/plays/PlayPostCard";
+import { MyPlaysFeed } from "@/components/plays/MyPlaysFeed";
+import { StatsPanel } from "@/components/plays/StatsPanel";
 import { FriendButton } from "@/components/friends/FriendButton";
+import { FriendsSheet } from "@/components/friends/FriendsSheet";
+import { CreateListDrawer } from "@/components/top-games/CreateListDrawer";
+import { Fab } from "@/components/ui/Fab";
 import { useToast } from "@/components/ui/Toast";
 import { cn } from "@/lib/cn";
 
-type Tab = "posts" | "plays" | "lists" | "collection";
+type Tab = "stats" | "plays" | "lists" | "collection";
 
 export default function ProfilePage({
   params,
@@ -43,9 +48,15 @@ export default function ProfilePage({
   const { username } = use(params);
   const data = useQuery(api.topGames.publicProfile, { username });
   const me = useQuery(api.users.me);
-  const photos = useQuery(api.posts.userImagePosts, { username });
-  const plays = useQuery(api.plays.userPublicPlays, { username });
-  const [tab, setTab] = useState<Tab>("posts");
+  // The owner's own Plays tab uses MyPlaysFeed (all plays); only fetch the
+  // public list for other viewers.
+  const plays = useQuery(
+    api.plays.userPublicPlays,
+    data?.isSelf ? "skip" : { username },
+  );
+  const [tab, setTab] = useState<Tab | null>(null);
+  const [friendsOpen, setFriendsOpen] = useState(false);
+  const [createListOpen, setCreateListOpen] = useState(false);
 
   if (data === undefined) {
     return (
@@ -65,8 +76,8 @@ export default function ProfilePage({
       <div className="mx-auto max-w-2xl px-4 py-8">
         <div className="rounded-2xl border border-dashed border-border p-10 text-center text-muted">
           <p className="font-medium">No such user.</p>
-          <Link href="/feed" className={`mt-4 ${buttonClasses("ghost", "sm")}`}>
-            Back to the feed
+          <Link href="/boardgames" className={`mt-4 ${buttonClasses("ghost", "sm")}`}>
+            Back to the Library
           </Link>
         </div>
       </div>
@@ -78,6 +89,10 @@ export default function ProfilePage({
   const isSelf = data.isSelf;
   const initial = (author?.username ?? "?").charAt(0).toUpperCase();
   const counts = data.counts;
+  const ownedCount = data.owned?.total ?? 0;
+  // Stats is a self-only tab (it includes your private activity); it defaults
+  // for you, Plays defaults for everyone else.
+  const activeTab: Tab = tab ?? (isSelf ? "stats" : "plays");
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-8">
@@ -109,10 +124,16 @@ export default function ProfilePage({
           {author?.realName && (
             <p className="mt-0.5 text-sm text-muted">{author.realName}</p>
           )}
-          <div className="mt-3 flex gap-6 text-sm">
-            <Stat n={counts.posts} label="posts" />
+          <div className="mt-3 flex flex-wrap gap-x-6 gap-y-1 text-sm">
             <Stat n={counts.plays} label="plays" />
             <Stat n={counts.lists} label="lists" />
+            <Stat n={ownedCount} label="owned" />
+            <button
+              onClick={() => setFriendsOpen(true)}
+              className="text-muted transition-colors hover:text-foreground"
+            >
+              <b className="text-foreground">{counts.friends}</b> friends
+            </button>
           </div>
         </div>
       </div>
@@ -122,33 +143,35 @@ export default function ProfilePage({
           <Lock className="mx-auto h-7 w-7 text-subtle" />
           <p className="mt-3 font-medium">This profile is private.</p>
           <p className="mt-1 text-sm">
-            Add {author?.username ?? "them"} as a friend to see their posts,
-            plays and lists.
+            Add {author?.username ?? "them"} as a friend to see their plays,
+            lists and collection.
           </p>
         </div>
       ) : (
         <>
           <div className="mt-6 flex border-b border-border">
+            {isSelf && (
+              <TabBtn
+                active={activeTab === "stats"}
+                onClick={() => setTab("stats")}
+                icon={BarChart3}
+                label="Stats"
+              />
+            )}
             <TabBtn
-              active={tab === "posts"}
-              onClick={() => setTab("posts")}
-              icon={ImageIcon}
-              label="Posts"
-            />
-            <TabBtn
-              active={tab === "plays"}
+              active={activeTab === "plays"}
               onClick={() => setTab("plays")}
               icon={Dices}
               label="Plays"
             />
             <TabBtn
-              active={tab === "lists"}
+              active={activeTab === "lists"}
               onClick={() => setTab("lists")}
               icon={Trophy}
               label="Lists"
             />
             <TabBtn
-              active={tab === "collection"}
+              active={activeTab === "collection"}
               onClick={() => setTab("collection")}
               icon={Package}
               label="Collection"
@@ -156,10 +179,12 @@ export default function ProfilePage({
           </div>
 
           <div className="mt-5">
-            {tab === "posts" && <PostsGrid photos={photos} />}
-            {tab === "plays" && <PlaysList plays={plays} />}
-            {tab === "lists" && <ListsGrid lists={lists} />}
-            {tab === "collection" && (
+            {activeTab === "stats" && isSelf && <StatsPanel />}
+            {activeTab === "plays" &&
+              (isSelf ? <MyPlaysFeed /> : <PlaysList plays={plays} />)}
+            {activeTab === "lists" &&
+              (isSelf ? <MyListsGrid /> : <ListsGrid lists={lists} />)}
+            {activeTab === "collection" && (
               <CollectionTab
                 username={username}
                 owned={data.owned}
@@ -169,6 +194,29 @@ export default function ProfilePage({
             )}
           </div>
         </>
+      )}
+
+      <FriendsSheet
+        open={friendsOpen}
+        onClose={() => setFriendsOpen(false)}
+        username={username}
+        isSelf={isSelf}
+      />
+
+      {/* The Lists tab's floating action (your own profile). Plays has its own
+          FAB inside MyPlaysFeed; Stats + Collection have none. */}
+      {isSelf && !isPrivate && activeTab === "lists" && (
+        <Fab
+          icon={Plus}
+          label="New list"
+          onClick={() => setCreateListOpen(true)}
+        />
+      )}
+      {isSelf && (
+        <CreateListDrawer
+          open={createListOpen}
+          onClose={() => setCreateListOpen(false)}
+        />
       )}
     </div>
   );
@@ -228,11 +276,9 @@ function OwnerControls({ isPublic }: { isPublic: boolean }) {
 const MENU_ITEMS: { href: string; label: string; icon: LucideIcon }[] = [
   { href: "/settings", label: "Settings", icon: Settings },
   { href: "/notifications", label: "Notifications", icon: Bell },
-  { href: "/stats", label: "Stats", icon: BarChart3 },
-  { href: "/plays", label: "My plays", icon: Dices },
 ];
 
-/** The owner's gear menu — settings, notifications, stats, plays, sign out. */
+/** The owner's gear menu — settings, notifications, sign out. */
 function ProfileMenu() {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -326,7 +372,6 @@ function TabBtn({
   );
 }
 
-type Photos = FunctionReturnType<typeof api.posts.userImagePosts>;
 type Plays = FunctionReturnType<typeof api.plays.userPublicPlays>;
 type Lists = NonNullable<
   FunctionReturnType<typeof api.topGames.publicProfile>
@@ -343,48 +388,15 @@ function EmptyTab({ text }: { text: string }) {
   );
 }
 
-function PostsGrid({ photos }: { photos: Photos | undefined }) {
-  if (photos === undefined)
-    return <Skeleton className="h-64 w-full rounded-xl" />;
-  if (photos.length === 0) return <EmptyTab text="No photos yet." />;
-  return (
-    <ul className="grid grid-cols-3 gap-1.5 sm:gap-2">
-      {photos.map((p) => (
-        <li key={p._id}>
-          <Link
-            href={`/posts/${p._id}`}
-            className="group relative block aspect-square overflow-hidden rounded-lg bg-surface-2 ring-1 ring-border"
-          >
-            {p.photoUrl && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={p.photoUrl}
-                alt={p.caption ?? ""}
-                loading="lazy"
-                className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
-              />
-            )}
-            {p.photoCount > 1 && (
-              <span className="absolute right-1.5 top-1.5 rounded-md bg-black/55 px-1.5 py-0.5 text-[10px] font-bold text-white">
-                {p.photoCount}
-              </span>
-            )}
-          </Link>
-        </li>
-      ))}
-    </ul>
-  );
-}
-
 function PlaysList({ plays }: { plays: Plays | undefined }) {
   if (plays === undefined)
     return <Skeleton className="h-40 w-full rounded-xl" />;
   if (plays.length === 0) return <EmptyTab text="No public plays yet." />;
   return (
-    <ul className="space-y-2">
+    <ul className="space-y-3">
       {plays.map((p) => (
         <li key={p._id}>
-          <PlayCard play={p} />
+          <PlayPostCard play={p} />
         </li>
       ))}
     </ul>
@@ -393,6 +405,27 @@ function PlaysList({ plays }: { plays: Plays | undefined }) {
 
 function ListsGrid({ lists }: { lists: Lists }) {
   if (lists.length === 0) return <EmptyTab text="No public Top Games lists yet." />;
+  return (
+    <ul className="grid gap-3 sm:grid-cols-2">
+      {lists.map((l) => (
+        <li key={l._id}>
+          <ListCard list={l} />
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** Your own Lists tab — every list you own, drafts included (public browsing of
+ *  another user's lists uses ListsGrid). Create via the tab's floating button. */
+function MyListsGrid() {
+  const lists = useQuery(api.topGames.listMine);
+  if (lists === undefined)
+    return <Skeleton className="h-40 w-full rounded-xl" />;
+  if (lists.length === 0)
+    return (
+      <EmptyTab text="No lists yet — tap + to build your first Top Games list." />
+    );
   return (
     <ul className="grid gap-3 sm:grid-cols-2">
       {lists.map((l) => (

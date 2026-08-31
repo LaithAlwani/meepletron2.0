@@ -7,19 +7,16 @@ import {
   type MutationCtx,
 } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
+import { internal } from "./_generated/api";
 import { getCurrentUser, requireUser } from "./lib/auth";
-import { canViewProfile } from "./friends";
-import { postVisibilityValidator } from "./lib/postTypes";
-import { clearPostSocial, syncPlayPost } from "./lib/feed";
-import { playCard, keepImages, writePlayVisibility } from "./plays";
-import { topListPreview } from "./topGames";
+
+const SITE_URL = process.env.SITE_URL || "https://www.meepletron.com";
 
 /**
- * The social feed. A `posts` row is one shared item — a play, an image post, or
- * a shared Top Games list — shown on the home feed with likes + comments.
- * `plays` stays the rich private-by-default record; posts reference it (and
- * `topGamesLists`) rather than duplicating, so the feed table holds only shared
- * content. See convex/lib/postTypes.ts + convex/lib/feed.ts (play↔post sync).
+ * A `posts` row backs a public play's social layer — its likes + comments — plus
+ * the notifications those actions generate. (Photo/toplist "posts" and the home
+ * feed were removed; a play's post is created/removed by its visibility via
+ * convex/lib/feed.ts's syncPlayPost.)
  *
  * Conventions mirror convex/plays.ts: reads use getCurrentUser, writes use
  * requireUser + an ownership check, two-arg ctx.db.get, bounded reads.
@@ -40,11 +37,6 @@ async function postOwner(ctx: QueryCtx, userId: Id<"users">) {
     username: u?.username ?? null,
     avatarUrl,
   };
-}
-
-async function urlsOf(ctx: QueryCtx, ids?: Id<"_storage">[]) {
-  const urls = await Promise.all((ids ?? []).map((id) => ctx.storage.getUrl(id)));
-  return urls.filter((u): u is string => !!u);
 }
 
 /** Create a notification for a recipient. No-op when you'd notify yourself; a
@@ -84,324 +76,6 @@ async function notify(
     createdAt: Date.now(),
   });
 }
-
-/** Build one feed item from a post, resolving its referenced play/list/photos.
- *  Returns null when the referenced content is gone (the caller drops it). */
-async function buildFeedItem(
-  ctx: QueryCtx,
-  viewer: Doc<"users"> | null,
-  post: Doc<"posts">,
-) {
-  const myReaction =
-    viewer != null &&
-    (await ctx.db
-      .query("postReactions")
-      .withIndex("by_user_and_post", (q) =>
-        q.eq("userId", viewer._id).eq("postId", post._id),
-      )
-      .unique()) != null;
-  const base = {
-    _id: post._id,
-    caption: post.caption ?? null,
-    createdAt: post.createdAt,
-    editedAt: post.editedAt ?? null,
-    owner: await postOwner(ctx, post.userId),
-    reactionCount: post.reactionCount ?? 0,
-    commentCount: post.commentCount ?? 0,
-    myReaction,
-    isMine: viewer != null && viewer._id === post.userId,
-  };
-
-  if (post.kind === "play") {
-    if (!post.playId) return null;
-    const play = await ctx.db.get("plays", post.playId);
-    if (!play || play.visibility !== "public") return null;
-    const card = await playCard(ctx, play);
-    return {
-      ...base,
-      kind: "play" as const,
-      playId: post.playId,
-      title: card.title,
-      gameSlug: card.gameSlug,
-      coverUrl: card.coverUrl,
-      date: card.date,
-      format: card.format,
-      playerCount: card.playerCount,
-      players: card.players,
-      winners: card.winners,
-      photoUrls: await urlsOf(ctx, play.photoIds),
-    };
-  }
-
-  if (post.kind === "image") {
-    const photoUrls = await urlsOf(ctx, post.photoIds);
-    if (photoUrls.length === 0) return null;
-    return { ...base, kind: "image" as const, photoUrls };
-  }
-
-  // toplist
-  if (!post.topListId) return null;
-  const preview = await topListPreview(ctx, post.topListId);
-  if (!preview) return null;
-  const { title, listId, ...rest } = preview;
-  return {
-    ...base,
-    kind: "toplist" as const,
-    topListId: listId,
-    listTitle: title,
-    ...rest,
-  };
-}
-
-/* -------------------------------------------------------------------------- */
-/* Feed                                                                       */
-/* -------------------------------------------------------------------------- */
-
-/** The public home feed — everyone's shared posts, newest first. */
-export const feed = query({
-  args: { paginationOpts: paginationOptsValidator },
-  handler: async (ctx, { paginationOpts }) => {
-    const viewer = await getCurrentUser(ctx);
-    const result = await ctx.db
-      .query("posts")
-      .withIndex("by_visibility_and_created", (q) => q.eq("visibility", "public"))
-      .order("desc")
-      .paginate(paginationOpts);
-    const page = (
-      await Promise.all(result.page.map((p) => buildFeedItem(ctx, viewer, p)))
-    ).filter((i): i is NonNullable<typeof i> => i !== null);
-    return { ...result, page };
-  },
-});
-
-/* -------------------------------------------------------------------------- */
-/* Composer                                                                   */
-/* -------------------------------------------------------------------------- */
-
-/** Create an image post from already-compressed, uploaded photos. */
-export const createImagePost = mutation({
-  args: {
-    photoIds: v.array(v.id("_storage")),
-    caption: v.optional(v.string()),
-  },
-  handler: async (ctx, { photoIds, caption }): Promise<Id<"posts">> => {
-    const user = await requireUser(ctx);
-    const kept = await keepImages(ctx, photoIds);
-    if (!kept || kept.length === 0) {
-      throw new Error("Add at least one photo.");
-    }
-    const now = Date.now();
-    return await ctx.db.insert("posts", {
-      userId: user._id,
-      kind: "image",
-      caption: caption?.trim() || undefined,
-      photoIds: kept,
-      visibility: "public",
-      reactionCount: 0,
-      commentCount: 0,
-      createdAt: now,
-      updatedAt: now,
-    });
-  },
-});
-
-/** Share one of the caller's finalized Top Games lists to the feed. */
-export const createTopListPost = mutation({
-  args: {
-    topListId: v.id("topGamesLists"),
-    caption: v.optional(v.string()),
-  },
-  handler: async (ctx, { topListId, caption }): Promise<Id<"posts">> => {
-    const user = await requireUser(ctx);
-    const list = await ctx.db.get("topGamesLists", topListId);
-    if (!list || list.userId !== user._id) throw new Error("List not found");
-    if (list.status !== "finalized") {
-      throw new Error("Finalize the list before sharing it.");
-    }
-    // Sharing makes a finalized list public so its page opens from the feed.
-    if (list.visibility !== "public") {
-      await ctx.db.patch("topGamesLists", topListId, {
-        visibility: "public",
-        updatedAt: Date.now(),
-      });
-    }
-    const now = Date.now();
-    return await ctx.db.insert("posts", {
-      userId: user._id,
-      kind: "toplist",
-      topListId,
-      caption: caption?.trim() || undefined,
-      visibility: "public",
-      reactionCount: 0,
-      commentCount: 0,
-      createdAt: now,
-      updatedAt: now,
-    });
-  },
-});
-
-/**
- * Share one of the caller's own plays to the feed with an optional caption.
- * Makes the play public if it isn't (which creates its feed post), sets the
- * caption, and bumps it to the top of the feed. Idempotent — one post per play.
- */
-export const sharePlayPost = mutation({
-  args: { playId: v.id("plays"), caption: v.optional(v.string()) },
-  handler: async (ctx, { playId, caption }): Promise<Id<"posts"> | null> => {
-    const user = await requireUser(ctx);
-    const play = await ctx.db.get("plays", playId);
-    if (!play || play.userId !== user._id) throw new Error("Play not found");
-
-    const now = Date.now();
-    // Make the play public so it appears in the feed (and on the profile).
-    if (play.visibility !== "public") {
-      await writePlayVisibility(ctx, playId, "public");
-    }
-    // Ensure the play's feed post exists.
-    await syncPlayPost(ctx, { _id: playId, userId: user._id, visibility: "public" });
-    const post = await ctx.db
-      .query("posts")
-      .withIndex("by_play", (q) => q.eq("playId", playId))
-      .unique();
-    if (!post) return null;
-    // Set the caption and resurface it to the top of the feed.
-    await ctx.db.patch("posts", post._id, {
-      caption: caption?.trim() || undefined,
-      createdAt: now,
-      updatedAt: now,
-    });
-    return post._id;
-  },
-});
-
-/** Delete the caller's own post (image / toplist / play-share) + its social. */
-export const deletePost = mutation({
-  args: { postId: v.id("posts") },
-  handler: async (ctx, { postId }) => {
-    const user = await requireUser(ctx);
-    const post = await ctx.db.get("posts", postId);
-    if (!post || post.userId !== user._id) return;
-    // An image post owns its photos; play/toplist posts only reference.
-    if (post.kind === "image") {
-      for (const id of post.photoIds ?? []) await ctx.storage.delete(id);
-    }
-    await clearPostSocial(ctx, postId);
-    await ctx.db.delete("posts", postId);
-  },
-});
-
-/** Hide/unhide an image or toplist post from the feed (its own visibility).
- *  Play posts are controlled via the play's visibility instead. */
-export const setPostVisibility = mutation({
-  args: { postId: v.id("posts"), visibility: postVisibilityValidator },
-  handler: async (ctx, { postId, visibility }) => {
-    const user = await requireUser(ctx);
-    const post = await ctx.db.get("posts", postId);
-    if (!post || post.userId !== user._id) return;
-    await ctx.db.patch("posts", postId, { visibility, updatedAt: Date.now() });
-  },
-});
-
-/** The raw, editable content of the caller's own post — used to seed the editor
- *  (which photos / play / list it currently points at, plus the caption). */
-export const getPostForEdit = query({
-  args: { postId: v.id("posts") },
-  handler: async (ctx, { postId }) => {
-    const viewer = await getCurrentUser(ctx);
-    const post = await ctx.db.get("posts", postId);
-    if (!post || !viewer || post.userId !== viewer._id) return null;
-    return {
-      kind: post.kind,
-      caption: post.caption ?? "",
-      playId: post.playId ?? null,
-      topListId: post.topListId ?? null,
-      photos:
-        post.kind === "image"
-          ? await Promise.all(
-              (post.photoIds ?? []).map(async (id) => ({
-                id,
-                url: await ctx.storage.getUrl(id),
-              })),
-            )
-          : [],
-    };
-  },
-});
-
-/**
- * Edit the caller's own post — the caption, and (for a mistake) which play,
- * image set, or Top Games list it shows. Stamps `editedAt` so the feed shows an
- * "Edited" marker with the new time. Only the fields for the post's kind apply.
- */
-export const editPost = mutation({
-  args: {
-    postId: v.id("posts"),
-    caption: v.optional(v.string()),
-    photoIds: v.optional(v.array(v.id("_storage"))), // kind "image"
-    topListId: v.optional(v.id("topGamesLists")), // kind "toplist"
-    playId: v.optional(v.id("plays")), // kind "play"
-  },
-  handler: async (ctx, { postId, caption, photoIds, topListId, playId }) => {
-    const user = await requireUser(ctx);
-    const post = await ctx.db.get("posts", postId);
-    if (!post || post.userId !== user._id) throw new Error("Post not found");
-    const now = Date.now();
-    const patch: Partial<Doc<"posts">> = {
-      caption: caption?.trim() || undefined,
-      updatedAt: now,
-      editedAt: now,
-    };
-
-    if (post.kind === "image" && photoIds) {
-      const kept = await keepImages(ctx, photoIds);
-      if (!kept || kept.length === 0) throw new Error("Add at least one photo.");
-      // Delete blobs that were dropped from this post (they're post-owned).
-      const keptSet = new Set<string>(kept);
-      for (const id of post.photoIds ?? []) {
-        if (!keptSet.has(id)) await ctx.storage.delete(id);
-      }
-      patch.photoIds = kept;
-    }
-
-    if (post.kind === "toplist" && topListId && topListId !== post.topListId) {
-      const list = await ctx.db.get("topGamesLists", topListId);
-      if (!list || list.userId !== user._id) throw new Error("List not found");
-      if (list.status !== "finalized") {
-        throw new Error("Finalize the list before sharing it.");
-      }
-      if (list.visibility !== "public") {
-        await ctx.db.patch("topGamesLists", topListId, {
-          visibility: "public",
-          updatedAt: now,
-        });
-      }
-      patch.topListId = topListId;
-    }
-
-    if (post.kind === "play" && playId && playId !== post.playId) {
-      const target = await ctx.db.get("plays", playId);
-      if (!target || target.userId !== user._id) throw new Error("Play not found");
-      // A play has exactly one feed post — don't create a second one.
-      const targetPost = await ctx.db
-        .query("posts")
-        .withIndex("by_play", (q) => q.eq("playId", playId))
-        .unique();
-      if (targetPost && targetPost._id !== post._id) {
-        throw new Error("That play is already shared to your feed.");
-      }
-      // Point this post at the new play (public); the old play loses its post.
-      if (target.visibility !== "public") {
-        await writePlayVisibility(ctx, playId, "public");
-      }
-      if (post.playId) {
-        await writePlayVisibility(ctx, post.playId, "private");
-      }
-      patch.playId = playId;
-    }
-
-    await ctx.db.patch("posts", postId, patch);
-  },
-});
 
 /* -------------------------------------------------------------------------- */
 /* Reactions + comments                                                       */
@@ -465,6 +139,18 @@ export const addComment = mutation({
     await ctx.db.patch("posts", postId, {
       commentCount: (post.commentCount ?? 0) + 1,
     });
+    // Shared context for the optional email nudges (posts are play-backed).
+    const actorName = user.username ?? user.name ?? "Someone";
+    const snippet = body.slice(0, 140);
+    const playUrl =
+      post.kind === "play" && post.playId
+        ? `${SITE_URL}/plays/${post.playId}`
+        : `${SITE_URL}/notifications`;
+    const playTitle =
+      post.kind === "play" && post.playId
+        ? ((await ctx.db.get("plays", post.playId))?.title ?? "your play")
+        : "your post";
+
     // Notify the post owner, plus anyone @mentioned in the comment.
     await notify(ctx, {
       userId: post.userId,
@@ -473,6 +159,23 @@ export const addComment = mutation({
       postId,
       commentId,
     });
+    if (post.userId !== user._id) {
+      const owner = await ctx.db.get("users", post.userId);
+      if (owner?.email && (owner.preferences?.emailComments ?? true)) {
+        await ctx.scheduler.runAfter(0, internal.email.sendNotificationEmail, {
+          to: owner.email,
+          recipientName: owner.username ?? owner.name ?? undefined,
+          subject: `${actorName} commented on your play`,
+          heading: `${actorName} commented on ${playTitle}`,
+          body: `“${snippet}”`,
+          ctaLabel: "See the play",
+          ctaUrl: playUrl,
+          footerNote:
+            "You're receiving this because someone commented on your play on Meepletron.",
+        });
+      }
+    }
+
     const mentioned = new Set<string>();
     for (const m of body.matchAll(/@(\w{2,30})/g)) {
       mentioned.add(m[1].toLowerCase());
@@ -482,7 +185,7 @@ export const addComment = mutation({
         .query("users")
         .withIndex("by_username_lower", (q) => q.eq("usernameLower", uname))
         .unique();
-      if (u && u._id !== post.userId) {
+      if (u && u._id !== post.userId && u._id !== user._id) {
         await notify(ctx, {
           userId: u._id,
           type: "comment_mention",
@@ -490,6 +193,19 @@ export const addComment = mutation({
           postId,
           commentId,
         });
+        if (u.email && (u.preferences?.emailMentions ?? true)) {
+          await ctx.scheduler.runAfter(0, internal.email.sendNotificationEmail, {
+            to: u.email,
+            recipientName: u.username ?? u.name ?? undefined,
+            subject: `${actorName} mentioned you in a comment`,
+            heading: `${actorName} mentioned you`,
+            body: `“${snippet}”`,
+            ctaLabel: "See the comment",
+            ctaUrl: playUrl,
+            footerNote:
+              "You're receiving this because someone mentioned you in a comment on Meepletron.",
+          });
+        }
       }
     }
   },
@@ -624,59 +340,6 @@ export const toggleCommentReaction = mutation({
 });
 
 /* -------------------------------------------------------------------------- */
-/* Permalink + profile                                                        */
-/* -------------------------------------------------------------------------- */
-
-/** A single post for its permalink page (/posts/[id]). Public, or the owner's. */
-export const getPost = query({
-  args: { postId: v.id("posts") },
-  handler: async (ctx, { postId }) => {
-    const viewer = await getCurrentUser(ctx);
-    const post = await ctx.db.get("posts", postId);
-    if (!post) return null;
-    if (post.visibility !== "public" && (!viewer || viewer._id !== post.userId)) {
-      return null;
-    }
-    return await buildFeedItem(ctx, viewer, post);
-  },
-});
-
-/** A user's public image posts — the photo grid on their profile. */
-export const userImagePosts = query({
-  args: { username: v.string() },
-  handler: async (ctx, { username }) => {
-    const lower = username.trim().toLowerCase();
-    if (!lower) return [];
-    const user = await ctx.db
-      .query("users")
-      .withIndex("by_username_lower", (q) => q.eq("usernameLower", lower))
-      .unique();
-    if (!user) return [];
-    const viewer = await getCurrentUser(ctx);
-    if (!(await canViewProfile(ctx, user, viewer?._id ?? null))) return [];
-    const rows = await ctx.db
-      .query("posts")
-      .withIndex("by_user_and_created", (q) => q.eq("userId", user._id))
-      .order("desc")
-      .take(60);
-    const images = rows
-      .filter((p) => p.kind === "image" && p.visibility === "public")
-      .slice(0, 18);
-    return await Promise.all(
-      images.map(async (p) => ({
-        _id: p._id,
-        caption: p.caption ?? null,
-        photoUrl:
-          p.photoIds && p.photoIds[0]
-            ? await ctx.storage.getUrl(p.photoIds[0])
-            : null,
-        photoCount: p.photoIds?.length ?? 0,
-      })),
-    );
-  },
-});
-
-/* -------------------------------------------------------------------------- */
 /* Notifications                                                              */
 /* -------------------------------------------------------------------------- */
 
@@ -687,11 +350,15 @@ async function notificationView(ctx: QueryCtx, nt: Doc<"notifications">) {
   let title: string | null = null;
   let thumbUrl: string | null = null;
   let snippet: string | null = null;
+  // Post likes/comments are all on play posts now — resolve the play so the
+  // notification links straight to it (there's no post permalink page anymore).
+  let playId: Id<"plays"> | null = nt.playId ?? null;
   if (nt.postId) {
     const post = await ctx.db.get("posts", nt.postId);
     if (post) {
       postKind = post.kind;
       if (post.kind === "play" && post.playId) {
+        playId = post.playId;
         title = (await ctx.db.get("plays", post.playId))?.title ?? null;
       } else if (post.kind === "toplist" && post.topListId) {
         title =
@@ -717,7 +384,7 @@ async function notificationView(ctx: QueryCtx, nt: Doc<"notifications">) {
     createdAt: nt.createdAt,
     actor,
     postId: nt.postId ?? null,
-    playId: nt.playId ?? null,
+    playId,
     postKind,
     title,
     thumbUrl,

@@ -4,7 +4,6 @@ import { use, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useQuery, useMutation, useConvexAuth } from "convex/react";
-import type { FunctionReturnType } from "convex/server";
 import {
   ArrowLeft,
   Lock,
@@ -25,10 +24,7 @@ import { buttonClasses } from "@/components/ui/Button";
 import { ShareButton } from "@/components/boardgames/ShareButton";
 import { useToast } from "@/components/ui/Toast";
 import { useConfirm } from "@/components/ui/Confirm";
-import {
-  LogPlayWizard,
-  type WizardInitialPlay,
-} from "@/components/plays/LogPlayWizard";
+import { LogPlayWizard, buildInitialPlay } from "@/components/plays/LogPlayWizard";
 import { CommentsDrawer } from "@/components/plays/CommentsDrawer";
 import { PhotoCarousel } from "@/components/plays/PhotoCarousel";
 import { PlayersPanel } from "@/components/plays/PlayersPanel";
@@ -85,8 +81,8 @@ export default function PlayPage({
   const gallery =
     play.photoUrls.length > 0
       ? play.photoUrls
-      : play.coverUrl
-        ? [play.coverUrl]
+      : (play.coverImageUrl ?? play.coverUrl)
+        ? [(play.coverImageUrl ?? play.coverUrl) as string]
         : [];
 
   const toggleVisibility = async () => {
@@ -190,12 +186,17 @@ export default function PlayPage({
         )}
       </div>
 
-      {/* Photos — the play's own shots, else the game cover */}
-      {gallery.length > 0 && (
-        <div className="mt-5 overflow-hidden rounded-2xl ring-1 ring-border">
-          <PhotoCarousel images={gallery} />
-        </div>
-      )}
+      {/* On desktop: media (constrained, ~mobile size) on the left, the play's
+          details on the right. On mobile it stacks in this source order. */}
+      <div className="mt-5 sm:grid sm:grid-cols-[minmax(0,22rem)_minmax(0,1fr)] sm:items-start sm:gap-8">
+        {/* Left — media + actions + social */}
+        <div>
+          {/* Photos — the play's own shots, else the game cover */}
+          {gallery.length > 0 && (
+            <div className="overflow-hidden rounded-2xl ring-1 ring-border">
+              <PhotoCarousel images={gallery} />
+            </div>
+          )}
 
       {/* Actions */}
       <div className="mt-4 flex flex-wrap gap-2">
@@ -279,7 +280,10 @@ export default function PlayPage({
           </button>
         </div>
       )}
+        </div>
 
+        {/* Right — the play's details */}
+        <div className="mt-6 sm:mt-0 sm:[&>*:first-child]:mt-0">
       {/* Imported-from-BGG review nudge (format was inferred). */}
       {play.isOwner && play.source === "bgg" && play.needsReview && (
         <div className="mt-4 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-accent-2/30 bg-accent-2/10 px-4 py-3">
@@ -326,6 +330,8 @@ export default function PlayPage({
           {play.comments}
         </p>
       )}
+        </div>
+      </div>
 
       {isPublic && play.postId && (
         <CommentsDrawer
@@ -349,49 +355,3 @@ export default function PlayPage({
   );
 }
 
-type PlayDetail = NonNullable<FunctionReturnType<typeof api.plays.getPlay>>;
-
-/** Build the wizard seed from a play — full values for edit, roster-only for rematch. */
-function buildInitialPlay(play: PlayDetail, edit: boolean): WizardInitialPlay {
-  const game = {
-    gameId: play.gameId ?? undefined,
-    bggId: play.bggId ?? undefined,
-    title: play.title,
-    coverUrl: play.coverUrl,
-  };
-  const teamNames = play.teams?.map((t) => t.name);
-  const teamWinner = play.teams
-    ? Math.max(0, play.teams.findIndex((t) => t.isWinner))
-    : 0;
-  const base = {
-    game,
-    format: play.format as WizardInitialPlay["format"],
-    scoreMode: play.scoreMode as WizardInitialPlay["scoreMode"],
-    teamNames,
-    players: play.players.map((p) => ({
-      name: p.name,
-      userId: p.userId,
-      personId: p.personId,
-      teamIndex: p.teamIndex,
-      isNew: p.isNew,
-      score: p.score ?? null,
-      placement: p.placement ?? null,
-      roundsWon: p.roundsWon ?? null,
-    })),
-  };
-  if (!edit) return base;
-  return {
-    ...base,
-    playId: play._id,
-    coopOutcome: play.coopOutcome as WizardInitialPlay["coopOutcome"],
-    coopScore: play.coopScore ?? null,
-    teamWinner,
-    date: play.date,
-    lengthMinutes: play.lengthMinutes ?? null,
-    location: play.location ?? null,
-    comments: play.comments ?? null,
-    visibility: play.visibility,
-    photoIds: play.photoIds,
-    photoUrls: play.photoUrls,
-  };
-}

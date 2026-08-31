@@ -148,8 +148,8 @@ export default function AboutPage() {
         </div>
 
         <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
-          <Link href="/feed" className={buttonClasses("primary", "lg")}>
-            Go to the feed
+          <Link href="/profile" className={buttonClasses("primary", "lg")}>
+            Go to your profile
           </Link>
           <Link href="/boardgames" className={buttonClasses("ghost", "lg")}>
             Browse the library

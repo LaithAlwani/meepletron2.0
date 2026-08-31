@@ -273,6 +273,9 @@ export const updateSettings = mutation({
       enterToSend: v.optional(v.boolean()),
       showSources: v.optional(v.boolean()),
       emailUpdates: v.optional(v.boolean()),
+      emailFriendRequests: v.optional(v.boolean()),
+      emailComments: v.optional(v.boolean()),
+      emailMentions: v.optional(v.boolean()),
     }),
   },
   handler: async (ctx, { preferences }) => {

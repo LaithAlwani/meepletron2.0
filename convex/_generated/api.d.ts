@@ -21,6 +21,7 @@ import type * as email from "../email.js";
 import type * as emails_ContactAdminEmail from "../emails/ContactAdminEmail.js";
 import type * as emails_ContactAutoReplyEmail from "../emails/ContactAutoReplyEmail.js";
 import type * as emails_EmailLayout from "../emails/EmailLayout.js";
+import type * as emails_NotificationEmail from "../emails/NotificationEmail.js";
 import type * as emails_PlayTagEmail from "../emails/PlayTagEmail.js";
 import type * as emails_VerificationCodeEmail from "../emails/VerificationCodeEmail.js";
 import type * as emails_styles from "../emails/styles.js";
@@ -96,6 +97,7 @@ declare const fullApi: ApiFromModules<{
   "emails/ContactAdminEmail": typeof emails_ContactAdminEmail;
   "emails/ContactAutoReplyEmail": typeof emails_ContactAutoReplyEmail;
   "emails/EmailLayout": typeof emails_EmailLayout;
+  "emails/NotificationEmail": typeof emails_NotificationEmail;
   "emails/PlayTagEmail": typeof emails_PlayTagEmail;
   "emails/VerificationCodeEmail": typeof emails_VerificationCodeEmail;
   "emails/styles": typeof emails_styles;

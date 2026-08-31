@@ -2,20 +2,15 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import {
-  useQuery,
-  Authenticated,
-  Unauthenticated,
-  AuthLoading,
-} from "convex/react";
+import { useQuery, Authenticated } from "convex/react";
 import { Plus, Minus } from "lucide-react";
 import { api } from "@/convex/_generated/api";
 import { buttonClasses } from "@/components/ui/Button";
 import { Skeleton } from "@/components/ui/Surface";
 import { Thumb } from "@/components/top-games/Thumb";
-import { ListCard } from "@/components/top-games/ListCard";
 import { CreateListDrawer } from "@/components/top-games/CreateListDrawer";
 import { SelectMenu } from "@/components/ui/SelectMenu";
+import { Fab } from "@/components/ui/Fab";
 import { cn } from "@/lib/cn";
 import { PageTitle } from "@/components/ui/PageTitle";
 import {
@@ -44,91 +39,37 @@ const NO_SPIN =
   "[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:m-0 [&::-webkit-inner-spin-button]:appearance-none";
 
 export default function TopGamesPage() {
-  const [tab, setTab] = useState<"mine" | "community">("mine");
   const [createOpen, setCreateOpen] = useState(false);
   return (
     <div className="mx-auto max-w-3xl px-4 py-8">
-      <PageTitle className="mb-5">Top Games</PageTitle>
-
       <div className="mb-6 flex items-center justify-between gap-4">
-        <div className="flex gap-5">
-          {(["mine", "community"] as const).map((t) => (
-            <button
-              key={t}
-              onClick={() => setTab(t)}
-              aria-current={tab === t ? "page" : undefined}
-              className={cn(
-                "px-0.5 text-sm font-semibold transition-colors",
-                tab === t ? "text-accent" : "text-muted hover:text-foreground",
-              )}
-            >
-              {t === "mine" ? "My lists" : "Community"}
-            </button>
-          ))}
-        </div>
-
-        <button
-          onClick={() => setCreateOpen(true)}
-          aria-label="Create list"
-          className={buttonClasses("primary", "md")}
-        >
-          <Plus className="h-4 w-4" />
-          <span className="hidden sm:inline">Create list</span>
-        </button>
+        <PageTitle>Top Games</PageTitle>
+        {/* Creating + managing your own lists lives on your profile; here we
+            browse the community. The create shortcut stays for convenience. */}
+        <Authenticated>
+          <button
+            onClick={() => setCreateOpen(true)}
+            aria-label="Create list"
+            className={cn(buttonClasses("primary", "md"), "max-sm:hidden")}
+          >
+            <Plus className="h-4 w-4" />
+            <span className="hidden sm:inline">Create list</span>
+          </button>
+        </Authenticated>
       </div>
 
-      <CreateListDrawer open={createOpen} onClose={() => setCreateOpen(false)} />
+      <Community />
 
-      {tab === "mine" ? (
-        <>
-          <AuthLoading>
-            <Skeleton className="h-40 w-full" />
-          </AuthLoading>
-          <Unauthenticated>
-            <div className="rounded-2xl border border-border bg-surface p-6 text-center">
-              <p className="text-sm text-muted">
-                Sign in to build your Top Games lists.
-              </p>
-              <Link href="/auth" className={`mt-4 ${buttonClasses("primary", "sm")}`}>
-                Sign in
-              </Link>
-            </div>
-          </Unauthenticated>
-          <Authenticated>
-            <MyLists />
-          </Authenticated>
-        </>
-      ) : (
-        <Community />
-      )}
-    </div>
-  );
-}
-
-/* -------------------------------------------------------------------------- */
-/* My lists                                                                   */
-/* -------------------------------------------------------------------------- */
-
-function MyLists() {
-  const lists = useQuery(api.topGames.listMine);
-
-  return (
-    <div className="space-y-6">
-      {lists === undefined ? (
-        <Skeleton className="h-24 w-full" />
-      ) : lists.length === 0 ? (
-        <p className="text-center text-sm text-muted">
-          No lists yet — tap “Create list” to start.
-        </p>
-      ) : (
-        <ul className="grid gap-3 sm:grid-cols-2">
-          {lists.map((l) => (
-            <li key={l._id}>
-              <ListCard list={l} />
-            </li>
-          ))}
-        </ul>
-      )}
+      <Authenticated>
+        <CreateListDrawer open={createOpen} onClose={() => setCreateOpen(false)} />
+        {/* Mobile-only floating "new list" (desktop uses the header button). */}
+        <Fab
+          className="sm:hidden"
+          icon={Plus}
+          label="Create list"
+          onClick={() => setCreateOpen(true)}
+        />
+      </Authenticated>
     </div>
   );
 }

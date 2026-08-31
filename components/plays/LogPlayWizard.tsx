@@ -14,6 +14,7 @@ import {
   ImagePlus,
   Loader2,
 } from "lucide-react";
+import type { FunctionReturnType } from "convex/server";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { Thumb } from "@/components/top-games/Thumb";
@@ -74,6 +75,59 @@ export type WizardInitialPlay = {
     roundsWon?: number | null;
   }[];
 };
+
+type PlayDetail = NonNullable<FunctionReturnType<typeof api.plays.getPlay>>;
+
+/**
+ * Build the wizard seed from a full play (`getPlay`) — all values for an **edit**
+ * (`edit: true`, saving updates that play), or roster-only for a **rematch**.
+ */
+export function buildInitialPlay(
+  play: PlayDetail,
+  edit: boolean,
+): WizardInitialPlay {
+  const game = {
+    gameId: play.gameId ?? undefined,
+    bggId: play.bggId ?? undefined,
+    title: play.title,
+    coverUrl: play.coverUrl,
+  };
+  const teamNames = play.teams?.map((t) => t.name);
+  const teamWinner = play.teams
+    ? Math.max(0, play.teams.findIndex((t) => t.isWinner))
+    : 0;
+  const base = {
+    game,
+    format: play.format as WizardInitialPlay["format"],
+    scoreMode: play.scoreMode as WizardInitialPlay["scoreMode"],
+    teamNames,
+    players: play.players.map((p) => ({
+      name: p.name,
+      userId: p.userId,
+      personId: p.personId,
+      teamIndex: p.teamIndex,
+      isNew: p.isNew,
+      score: p.score ?? null,
+      placement: p.placement ?? null,
+      roundsWon: p.roundsWon ?? null,
+    })),
+  };
+  if (!edit) return base;
+  return {
+    ...base,
+    playId: play._id,
+    coopOutcome: play.coopOutcome as WizardInitialPlay["coopOutcome"],
+    coopScore: play.coopScore ?? null,
+    teamWinner,
+    date: play.date,
+    lengthMinutes: play.lengthMinutes ?? null,
+    location: play.location ?? null,
+    comments: play.comments ?? null,
+    visibility: play.visibility,
+    photoIds: play.photoIds,
+    photoUrls: play.photoUrls,
+  };
+}
 
 type PlayerForm = {
   key: string;

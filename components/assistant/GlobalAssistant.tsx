@@ -151,8 +151,13 @@ function cleanAnswer(s: string): string {
 export function GlobalAssistant() {
   const pathname = usePathname() ?? "";
   const router = useRouter();
+  // The assistant is the library's floating button — its launcher shows only
+  // there (browsing games / collection). Elsewhere each surface has its own FAB.
+  const inLibrary =
+    (pathname.startsWith("/boardgames") && !/\/chat(\/|$)/.test(pathname)) ||
+    pathname === "/collection" ||
+    pathname === "/favorites";
   const hidden =
-    pathname === "/" ||
     pathname === "/auth" ||
     pathname === "/who-goes-first" ||
     /^\/boardgames\/[^/]+\/chat/.test(pathname);
@@ -441,8 +446,8 @@ export function GlobalAssistant() {
 
   return (
     <>
-      {/* Launcher */}
-      {!open && (
+      {/* Launcher — the library's floating button. */}
+      {!open && inLibrary && (
         <button
           onClick={() => setOpen(true)}
           aria-label="Open the assistant"

@@ -13,10 +13,11 @@ import { Home, LayoutGrid, MessageCircle, Trophy, LogIn } from "lucide-react";
 import { api } from "@/convex/_generated/api";
 import { UserMenu } from "@/components/UserMenu";
 import { NotificationsBell } from "@/components/notifications/NotificationsBell";
+import { AvatarImg } from "@/components/ui/Avatar";
 import { cn } from "@/lib/cn";
 
 const NAV = [
-  { href: "/feed", label: "Home", icon: Home },
+  { href: "/", label: "Home", icon: Home },
   { href: "/boardgames", label: "Library", icon: LayoutGrid },
   { href: "/top-games", label: "Top Games", icon: Trophy },
   { href: "/chats", label: "Chats", icon: MessageCircle },
@@ -25,7 +26,7 @@ const NAV = [
 function Brand() {
   return (
     <Link
-      href="/feed"
+      href="/"
       aria-label="Meepletron home"
       className="flex items-center gap-2"
     >
@@ -96,13 +97,52 @@ export function Header() {
           <AuthLoading>
             <div className="h-9 w-9 animate-pulse rounded-full bg-surface-2" />
           </AuthLoading>
-          <Unauthenticated>{signIn}</Unauthenticated>
+          <Unauthenticated>
+            <Link
+              href="/profile"
+              aria-label="Profile"
+              title="Profile"
+              className="flex items-center rounded-xl p-1 transition-colors hover:bg-surface-2"
+            >
+              <span className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full bg-surface-2 text-muted">
+                <AvatarImg />
+              </span>
+            </Link>
+            {signIn}
+          </Unauthenticated>
           <Authenticated>
             {isGuest ? (
               signIn
             ) : (
               <>
                 <NotificationsBell variant="header" />
+                <Link
+                  href="/profile"
+                  aria-current={
+                    pathname.startsWith("/user/") ? "page" : undefined
+                  }
+                  aria-label="Your profile"
+                  className="flex items-center gap-2 rounded-xl px-1.5 py-1 transition-colors hover:bg-surface-2"
+                >
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-accent/12 text-sm font-bold text-accent">
+                    <AvatarImg
+                      src={me?.avatarUrl}
+                      initial={(me?.name || me?.email || "?")
+                        .charAt(0)
+                        .toUpperCase()}
+                    />
+                  </span>
+                  <div className="min-w-0 max-w-40 leading-tight">
+                    <p className="truncate text-sm font-semibold">
+                      {me?.name || me?.email || "Account"}
+                    </p>
+                    {me?.username && (
+                      <p className="truncate text-xs font-semibold text-accent">
+                        @{me.username}
+                      </p>
+                    )}
+                  </div>
+                </Link>
                 <UserMenu
                   initial={(me?.name || me?.email || "?").charAt(0).toUpperCase()}
                   avatarUrl={me?.avatarUrl}

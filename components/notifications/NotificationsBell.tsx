@@ -56,15 +56,13 @@ function verb(n: NotifItem): string {
   }
 }
 
-/** Where a notification links: a play, a post, a profile, or the list. */
+/** Where a notification links: a play, a profile, or the list. Post likes and
+ *  comments are all on play posts, so they resolve to the play. */
 function notifHref(n: NotifItem): string {
-  if (n.type === "play_tagged") {
-    return n.playId ? `/plays/${n.playId}` : "/notifications";
-  }
   if (n.type === "friend_request" || n.type === "friend_accept") {
     return n.actor.username ? `/user/${n.actor.username}` : "/notifications";
   }
-  return n.postId ? `/posts/${n.postId}` : "/notifications";
+  return n.playId ? `/plays/${n.playId}` : "/notifications";
 }
 
 function RowIcon({ type }: { type: NotifItem["type"] }) {

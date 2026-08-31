@@ -8,7 +8,7 @@ import {
 } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
 import { getCurrentUser, requireUser } from "./lib/auth";
-import { canViewProfile } from "./friends";
+import { canViewProfile, friendCount } from "./friends";
 import { publicParticipantPlayIds } from "./plays";
 import { DEFAULT_CATEGORY, isTopCategory } from "./lib/topGamesCategories";
 import { isGameSort } from "./lib/gameSort";
@@ -86,10 +86,6 @@ async function authorInfo(ctx: QueryCtx, userId: Id<"users">) {
  * even for a private profile, whose counts are visible while its content isn't.
  */
 async function profileCounts(ctx: QueryCtx, user: Doc<"users">) {
-  const posts = await ctx.db
-    .query("posts")
-    .withIndex("by_user_and_created", (q) => q.eq("userId", user._id))
-    .collect();
   const lists = await ctx.db
     .query("topGamesLists")
     .withIndex("by_user", (q) => q.eq("userId", user._id))
@@ -98,11 +94,10 @@ async function profileCounts(ctx: QueryCtx, user: Doc<"users">) {
   // profile Plays tab.
   const playIds = await publicParticipantPlayIds(ctx, user);
   return {
-    posts: posts.filter((p) => p.kind === "image" && p.visibility === "public")
-      .length,
     plays: playIds.length,
     lists: lists.filter((r) => r.visibility === "public" && r.status === "finalized")
       .length,
+    friends: await friendCount(ctx, user._id),
   };
 }
 

@@ -74,7 +74,7 @@ export function GameStatsModal({
   );
 
   return (
-    <Sheet open={open} onClose={onClose} desktop="center" desktopWidth="sm:max-w-2xl">
+    <Sheet open={open} onClose={onClose} desktop="right" desktopWidth="sm:w-[40rem]">
       {header}
       <div className="themed-scroll flex-1 overflow-y-auto overflow-x-hidden p-4">
           {data === undefined ? (

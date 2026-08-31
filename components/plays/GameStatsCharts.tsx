@@ -162,6 +162,50 @@ export function GameStatsCharts({ data }: { data: Detail }) {
   const hasWinLoss = data.totals.decided > 0;
   const hasCoPlayers = data.topCoPlayers.length >= 1;
 
+  // Draw the score line left-to-right when it opens — the "pen" travels each
+  // segment at a constant speed (x + y share the same linear tween), with a
+  // gentle overlap between points so the stroke flows instead of stepping.
+  const trendDraw = useMemo(() => {
+    const points = data.scoreHistory.length;
+    const step = 1600 / Math.max(points, 1);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const prevY = (ctx: any) =>
+      ctx.index === 0
+        ? ctx.chart.scales.y.getPixelForValue(ctx.chart.scales.y.min)
+        : ctx.chart
+            .getDatasetMeta(ctx.datasetIndex)
+            .data[ctx.index - 1]?.getProps(["y"], true).y;
+    // A little overlap so segments blend rather than start/stop crisply.
+    const seg = step * 1.35;
+    return {
+      x: {
+        type: "number" as const,
+        easing: "easeInOutSine" as const,
+        duration: seg,
+        from: NaN,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        delay(ctx: any) {
+          if (ctx.type !== "data" || ctx.xStarted) return 0;
+          ctx.xStarted = true;
+          return ctx.index * step;
+        },
+      },
+      y: {
+        type: "number" as const,
+        easing: "easeInOutSine" as const,
+        duration: seg,
+        from: prevY,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        delay(ctx: any) {
+          if (ctx.type !== "data" || ctx.yStarted) return 0;
+          ctx.yStarted = true;
+          return ctx.index * step;
+        },
+      },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any;
+  }, [data.scoreHistory.length]);
+
   return (
     <div className="grid min-w-0 gap-4 sm:grid-cols-2">
       {hasTrend && (
@@ -186,6 +230,7 @@ export function GameStatsCharts({ data }: { data: Detail }) {
               }}
               options={{
                 ...baseOpts,
+                animation: trendDraw,
                 scales: {
                   x: {
                     ...axis,

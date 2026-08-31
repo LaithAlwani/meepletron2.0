@@ -2,12 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import {
-  useQuery,
-  Authenticated,
-  Unauthenticated,
-  AuthLoading,
-} from "convex/react";
+import { useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import {
   MessageSquare,
@@ -22,38 +17,15 @@ import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { PlayerStatsCard } from "@/components/plays/PlayerStatsCard";
 import { GameStatsModal } from "@/components/plays/GameStatsModal";
-import { PageTitle } from "@/components/ui/PageTitle";
 import { Skeleton } from "@/components/ui/Surface";
 import { Thumb } from "@/components/top-games/Thumb";
 
-export default function StatsPage() {
-  return (
-    <div className="min-h-screen px-4 pb-16 pt-10">
-      <div className="mx-auto max-w-3xl">
-        <PageTitle className="mb-6">Stats</PageTitle>
-        <AuthLoading>
-          <p className="text-center text-muted">Loading…</p>
-        </AuthLoading>
-        <Unauthenticated>
-          <div className="rounded-2xl border border-border-muted bg-surface p-8 text-center">
-            <p className="text-sm text-muted">You&apos;re not signed in.</p>
-            <Link
-              href="/auth"
-              className="mt-3 inline-block rounded-xl bg-accent px-4 py-2 text-sm font-semibold text-accent-foreground"
-            >
-              Sign in
-            </Link>
-          </div>
-        </Unauthenticated>
-        <Authenticated>
-          <StatsBody />
-        </Authenticated>
-      </div>
-    </div>
-  );
-}
-
-function StatsBody() {
+/**
+ * The signed-in user's stats — plays summary, per-game breakdown, and activity.
+ * Rendered on the owner's own profile (the Stats tab). Must be used only when
+ * signed in (all queries are caller-scoped).
+ */
+export function StatsPanel() {
   const stats = useQuery(api.users.myStats);
   const bgg = useQuery(api.bggSync.myAccount);
   const monthStart = useMemo(() => {

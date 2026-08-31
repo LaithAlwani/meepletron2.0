@@ -15,6 +15,9 @@ type SheetProps = {
   desktopWidth?: string;
   /** Max height of the mobile sheet (default `max-h-[92vh]`). */
   mobileMaxH?: string;
+  /** Fixed height of the mobile sheet, e.g. `h-[75vh]`. Overrides `mobileMaxH`
+   *  so the sheet stays that tall even when its content is short. */
+  mobileHeight?: string;
   /** The drawer's own header + scrollable body + footer, unchanged. */
   children: React.ReactNode;
 };
@@ -34,6 +37,7 @@ export function Sheet({
   desktop = "right",
   desktopWidth = "sm:w-104",
   mobileMaxH = "max-h-[92vh]",
+  mobileHeight,
   children,
 }: SheetProps) {
   const isDesktop = useMediaQuery("(min-width: 640px)");
@@ -92,7 +96,7 @@ export function Sheet({
         <Drawer.Content
           className={cn(
             "fixed inset-x-0 bottom-0 z-70 flex flex-col rounded-t-2xl border border-border bg-background shadow-2xl outline-none",
-            mobileMaxH,
+            mobileHeight ?? mobileMaxH,
           )}
         >
           <div

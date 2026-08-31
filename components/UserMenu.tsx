@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import {
-  User,
   Scissors,
   Shield,
   Hand,
@@ -58,7 +57,6 @@ export function UserMenu({
     headerNav?: boolean;
     touchOnly?: boolean;
   }[] = [
-    { href: username ? `/user/${username}` : "/profile", label: "Profile", icon: User },
     { href: "/tuckbox", label: "Tuckbox", icon: Scissors },
     { href: "/who-goes-first", label: "First Player", icon: Hand, touchOnly: true },
     { href: "/about", label: "About", icon: Info },

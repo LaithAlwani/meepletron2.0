@@ -6,7 +6,10 @@ import {
   type MutationCtx,
 } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
+import { internal } from "./_generated/api";
 import { getCurrentUser, requireUser } from "./lib/auth";
+
+const SITE_URL = process.env.SITE_URL || "https://www.meepletron.com";
 
 /**
  * Friendships between accounts. A friend can see a private profile; a stranger
@@ -116,6 +119,23 @@ export const sendFriendRequest = mutation({
         updatedAt: now,
       });
       await notifyFriend(ctx, target._id, user._id, "friend_request");
+      // Optional email nudge (opt-out; default on).
+      if (target.email && (target.preferences?.emailFriendRequests ?? true)) {
+        const actorName = user.username ?? user.name ?? "Someone";
+        await ctx.scheduler.runAfter(0, internal.email.sendNotificationEmail, {
+          to: target.email,
+          recipientName: target.username ?? target.name ?? undefined,
+          subject: `${actorName} sent you a friend request on Meepletron`,
+          heading: `${actorName} sent you a friend request 👋`,
+          body: `${actorName} wants to connect with you on Meepletron. Add them back to share your plays, lists and collection.`,
+          ctaLabel: `View ${actorName}'s profile`,
+          ctaUrl: user.username
+            ? `${SITE_URL}/user/${user.username}`
+            : `${SITE_URL}/notifications`,
+          footerNote:
+            "You're receiving this because someone sent you a friend request on Meepletron.",
+        });
+      }
       return { status: "outgoing" };
     }
     if (existing.status === "accepted") return { status: "friends" };
@@ -147,6 +167,70 @@ export const acceptFriendRequest = mutation({
     });
     await notifyFriend(ctx, f.requestedBy, user._id, "friend_accept");
     return { status: "friends" };
+  },
+});
+
+/** The ids of a user's accepted friends (the account holders on both sides). */
+export async function acceptedFriendIds(
+  ctx: QueryCtx,
+  userId: Id<"users">,
+): Promise<Id<"users">[]> {
+  const a = await ctx.db
+    .query("friendships")
+    .withIndex("by_userA", (q) => q.eq("userA", userId))
+    .collect();
+  const b = await ctx.db
+    .query("friendships")
+    .withIndex("by_userB", (q) => q.eq("userB", userId))
+    .collect();
+  return [
+    ...a.filter((f) => f.status === "accepted").map((f) => f.userB),
+    ...b.filter((f) => f.status === "accepted").map((f) => f.userA),
+  ];
+}
+
+/** How many accepted friends a user has. */
+export async function friendCount(
+  ctx: QueryCtx,
+  userId: Id<"users">,
+): Promise<number> {
+  return (await acceptedFriendIds(ctx, userId)).length;
+}
+
+/** A user's accepted friends (the account holders), for the profile list.
+ *  Visible to anyone who may see the profile. */
+export const listFriends = query({
+  args: { username: v.string() },
+  handler: async (ctx, { username }) => {
+    const target = await userByUsername(ctx, username);
+    if (!target) return [];
+    const viewer = await getCurrentUser(ctx);
+    if (!(await canViewProfile(ctx, target, viewer?._id ?? null))) return [];
+    const a = await ctx.db
+      .query("friendships")
+      .withIndex("by_userA", (q) => q.eq("userA", target._id))
+      .collect();
+    const b = await ctx.db
+      .query("friendships")
+      .withIndex("by_userB", (q) => q.eq("userB", target._id))
+      .collect();
+    const otherIds = [
+      ...a.filter((f) => f.status === "accepted").map((f) => f.userB),
+      ...b.filter((f) => f.status === "accepted").map((f) => f.userA),
+    ];
+    const users = await Promise.all(otherIds.map((id) => ctx.db.get("users", id)));
+    return await Promise.all(
+      users
+        .filter((u): u is Doc<"users"> => !!u)
+        .map(async (u) => ({
+          _id: u._id,
+          name: u.username ?? u.name ?? "Player",
+          username: u.username ?? null,
+          avatarUrl: u.avatarStorageId
+            ? await ctx.storage.getUrl(u.avatarStorageId)
+            : (u.image ?? null),
+        })),
+    );
   },
 });
 

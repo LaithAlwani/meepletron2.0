@@ -12,6 +12,9 @@ export type Preferences = {
   enterToSend: boolean;
   showSources: boolean;
   emailUpdates: boolean;
+  emailFriendRequests: boolean;
+  emailComments: boolean;
+  emailMentions: boolean;
 };
 
 export const DEFAULT_PREFERENCES: Preferences = {
@@ -21,6 +24,9 @@ export const DEFAULT_PREFERENCES: Preferences = {
   enterToSend: true,
   showSources: true,
   emailUpdates: false,
+  emailFriendRequests: true,
+  emailComments: true,
+  emailMentions: true,
 };
 
 /** Root font-size (px) applied for each option — scales all rem-based sizing. */

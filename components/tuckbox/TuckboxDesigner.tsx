@@ -24,7 +24,6 @@ import {
 import { FlatNetPreview } from "./FlatNetPreview";
 import { AssembledBoxPreview } from "./AssembledBoxPreview";
 import { ImagePositioner } from "./ImagePositioner";
-import { AssemblyInstructions } from "./AssemblyInstructions";
 import { MyBoxesModal } from "./MyBoxesModal";
 
 export type InitialBoardgame = {
@@ -984,10 +983,6 @@ export function TuckboxDesigner({
                 </div>
               </div>
             </details>
-
-            <div className="pt-1">
-              <AssemblyInstructions />
-            </div>
           </NumSection>
         </aside>
 

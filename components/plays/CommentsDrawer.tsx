@@ -299,7 +299,7 @@ export function CommentsDrawer({
   }
 
   return (
-    <Sheet open={open} onClose={onClose} desktopWidth="sm:w-96" mobileMaxH="max-h-[85vh]">
+    <Sheet open={open} onClose={onClose} desktopWidth="sm:w-96" mobileHeight="h-[75vh]">
         <div className="flex items-center justify-between border-b border-border px-4 py-3">
           <h2 className="font-display text-lg font-bold">Comments</h2>
           <button
@@ -312,11 +312,16 @@ export function CommentsDrawer({
         </div>
 
         {/* Comments list */}
-        <div ref={listRef} className="themed-scroll flex-1 overflow-y-auto px-4 py-3">
+        <div
+          ref={listRef}
+          className="themed-scroll flex flex-1 flex-col overflow-y-auto px-4 py-3"
+        >
           {results.length === 0 && status !== "LoadingFirstPage" ? (
-            <p className="py-8 text-center text-sm text-subtle">
-              No comments yet — be the first.
-            </p>
+            <div className="flex flex-1 items-center justify-center">
+              <p className="text-center text-sm text-subtle">
+                No comments yet — be the first.
+              </p>
+            </div>
           ) : (
             <ul className="space-y-4">
               {results.map((c) => (

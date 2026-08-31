@@ -98,6 +98,11 @@ export default defineSchema({
         enterToSend: v.optional(v.boolean()),
         showSources: v.optional(v.boolean()),
         emailUpdates: v.optional(v.boolean()),
+        // Email nudges (all default on). Gate the transactional notification
+        // emails; the in-app bell always shows regardless.
+        emailFriendRequests: v.optional(v.boolean()),
+        emailComments: v.optional(v.boolean()),
+        emailMentions: v.optional(v.boolean()),
       }),
     ),
   })

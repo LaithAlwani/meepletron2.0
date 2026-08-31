@@ -6,6 +6,7 @@ import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { TuckboxDesigner } from "@/components/tuckbox/TuckboxDesigner";
+import { TuckboxGuide } from "@/components/tuckbox/TuckboxGuide";
 
 function TuckboxInner() {
   const searchParams = useSearchParams();
@@ -19,12 +20,15 @@ function TuckboxInner() {
 
   // Remount when the game changes so a fresh prefill resets the box artwork.
   return (
-    <TuckboxDesigner
-      key={gameId ?? "blank"}
-      initialBoardgame={
-        gameId && game ? { title: game.title, imageUrl: cover } : undefined
-      }
-    />
+    <>
+      <TuckboxDesigner
+        key={gameId ?? "blank"}
+        initialBoardgame={
+          gameId && game ? { title: game.title, imageUrl: cover } : undefined
+        }
+      />
+      <TuckboxGuide />
+    </>
   );
 }
 

@@ -7,6 +7,7 @@ import { render } from "@react-email/render";
 import { internalAction } from "./_generated/server";
 import { VerificationCodeEmail } from "./emails/VerificationCodeEmail";
 import { PlayTagEmail } from "./emails/PlayTagEmail";
+import { NotificationEmail } from "./emails/NotificationEmail";
 import { ContactAdminEmail } from "./emails/ContactAdminEmail";
 import { ContactAutoReplyEmail } from "./emails/ContactAutoReplyEmail";
 
@@ -108,6 +109,42 @@ export const sendPlayTagEmail = internalAction({
       if (error) console.error("Failed to send play-tag email:", error);
     } catch (err) {
       console.error("Failed to send play-tag email:", err);
+    }
+  },
+});
+
+/**
+ * A generic in-app-notification nudge (friend request / comment / mention),
+ * gated by the recipient's email preferences at the call site. Best-effort.
+ */
+export const sendNotificationEmail = internalAction({
+  args: {
+    to: v.string(),
+    recipientName: v.optional(v.string()),
+    heading: v.string(),
+    body: v.optional(v.string()),
+    ctaLabel: v.string(),
+    ctaUrl: v.string(),
+    footerNote: v.string(),
+    subject: v.string(),
+  },
+  handler: async (_ctx, args) => {
+    try {
+      const { error } = await sendEmail({
+        to: args.to,
+        subject: args.subject,
+        element: React.createElement(NotificationEmail, {
+          recipientName: args.recipientName,
+          heading: args.heading,
+          body: args.body,
+          ctaLabel: args.ctaLabel,
+          ctaUrl: args.ctaUrl,
+          footerNote: args.footerNote,
+        }),
+      });
+      if (error) console.error("Failed to send notification email:", error);
+    } catch (err) {
+      console.error("Failed to send notification email:", err);
     }
   },
 });

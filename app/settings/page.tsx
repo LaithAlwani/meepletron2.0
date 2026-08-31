@@ -59,6 +59,9 @@ function SettingsBody() {
     void save({ preferences: { ...prefs, ...patch } });
   }
 
+  const allEmailOn =
+    prefs.emailFriendRequests && prefs.emailComments && prefs.emailMentions;
+
   return (
     <div className="space-y-6">
       {/* Account */}
@@ -129,6 +132,36 @@ function SettingsBody() {
 
       {/* Notifications */}
       <Section title="Notifications">
+        <Toggle
+          label="Email notifications"
+          hint="Master switch — turn every email nudge below on or off."
+          checked={allEmailOn}
+          onChange={(v) =>
+            set({
+              emailFriendRequests: v,
+              emailComments: v,
+              emailMentions: v,
+            })
+          }
+        />
+        <Toggle
+          label="Friend requests"
+          hint="Email me when someone sends me a friend request."
+          checked={prefs.emailFriendRequests}
+          onChange={(v) => set({ emailFriendRequests: v })}
+        />
+        <Toggle
+          label="Comments on your plays"
+          hint="Email me when someone comments on one of my plays."
+          checked={prefs.emailComments}
+          onChange={(v) => set({ emailComments: v })}
+        />
+        <Toggle
+          label="Mentions"
+          hint="Email me when someone @mentions me in a comment."
+          checked={prefs.emailMentions}
+          onChange={(v) => set({ emailMentions: v })}
+        />
         <Toggle
           label="Product update emails"
           hint="Occasional emails about new features."

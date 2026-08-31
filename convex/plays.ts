@@ -10,7 +10,7 @@ import {
 import type { Doc, Id } from "./_generated/dataModel";
 import { internal } from "./_generated/api";
 import { getCurrentUser, requireUser } from "./lib/auth";
-import { canViewProfile } from "./friends";
+import { canViewProfile, acceptedFriendIds } from "./friends";
 import {
   playFormatValidator,
   playScoreModeValidator,
@@ -19,7 +19,7 @@ import {
   playTeamValidator,
 } from "./lib/playTypes";
 import { syncPlayPost, deletePlayPost } from "./lib/feed";
-import { thumbUrl } from "./lib/gameCover";
+import { thumbUrl, coverUrls } from "./lib/gameCover";
 
 /**
  * Plays — one recorded game session. Entered by hand (the log-play wizard) or
@@ -89,17 +89,49 @@ function winnerNamesOf(players: { name: string; isWinner?: boolean }[]): string[
   return players.filter((p) => p.isWinner).map((p) => p.name);
 }
 
-/** A lightweight play card for lists/feeds. */
-export async function playCard(ctx: QueryCtx, play: PlayDoc) {
+/**
+ * A lightweight play card for lists/feeds. Pass `viewerId` (the current user, if
+ * any) so the card carries the viewer's like state and an `isOwner` flag; the
+ * social counts + `postId` come from the play's feed post (null when private).
+ */
+export async function playCard(
+  ctx: QueryCtx,
+  play: PlayDoc,
+  viewerId?: Id<"users"> | null,
+) {
   const cover = await gameCover(ctx, play.gameId);
   const firstPhoto =
     play.photoIds && play.photoIds.length > 0
       ? await ctx.storage.getUrl(play.photoIds[0])
       : null;
   const resolved = await withHandles(ctx, play.players);
+  const owner = await ctx.db.get("users", play.userId);
+  const ownerAvatarUrl = owner?.avatarStorageId
+    ? await ctx.storage.getUrl(owner.avatarStorageId)
+    : (owner?.image ?? null);
+  // A public play has exactly one feed post; likes/comments key on it.
+  const post = await ctx.db
+    .query("posts")
+    .withIndex("by_play", (q) => q.eq("playId", play._id))
+    .unique();
+  let myReaction = false;
+  if (viewerId && post) {
+    const r = await ctx.db
+      .query("postReactions")
+      .withIndex("by_user_and_post", (q) =>
+        q.eq("userId", viewerId).eq("postId", post._id),
+      )
+      .unique();
+    myReaction = r !== null;
+  }
   return {
     _id: play._id,
     userId: play.userId,
+    owner: {
+      name: owner?.username ?? owner?.name ?? "Someone",
+      username: owner?.username ?? null,
+      avatarUrl: ownerAvatarUrl,
+    },
     gameId: play.gameId ?? null,
     gameSlug: cover?.slug ?? null,
     title: play.title,
@@ -122,8 +154,11 @@ export async function playCard(ctx: QueryCtx, play: PlayDoc) {
       placement: p.placement ?? null,
     })),
     winners: winnerNamesOf(resolved),
-    reactionCount: play.reactionCount ?? 0,
-    commentCount: play.commentCount ?? 0,
+    postId: post?._id ?? null,
+    reactionCount: post?.reactionCount ?? 0,
+    commentCount: post?.commentCount ?? 0,
+    myReaction,
+    isOwner: viewerId != null && viewerId === play.userId,
     createdAt: play.createdAt,
   };
 }
@@ -677,7 +712,7 @@ export const myPlays = query({
     const end = offset + paginationOpts.numItems;
     const slice = plays.slice(offset, end);
     return {
-      page: await Promise.all(slice.map((p) => playCard(ctx, p))),
+      page: await Promise.all(slice.map((p) => playCard(ctx, p, user._id))),
       isDone: end >= plays.length,
       continueCursor: String(end),
     };
@@ -704,7 +739,9 @@ export const gamePlays = query({
       .paginate(paginationOpts);
     return {
       ...result,
-      page: await Promise.all(result.page.map((p) => playCard(ctx, p))),
+      page: await Promise.all(
+        result.page.map((p) => playCard(ctx, p, viewer?._id ?? null)),
+      ),
     };
   },
 });
@@ -737,6 +774,10 @@ export const getPlay = query({
     if (!canView) return null;
 
     const cover = await gameCover(ctx, play.gameId);
+    // The full BGG cover (not the thumbnail) stands in as the detail-page hero
+    // when the play has no photos of its own.
+    const game = play.gameId ? await ctx.db.get("games", play.gameId) : null;
+    const coverImageUrl = game ? (await coverUrls(ctx, game)).imageUrl : null;
     const photoUrls = await Promise.all(
       (play.photoIds ?? []).map((id) => ctx.storage.getUrl(id)),
     );
@@ -765,6 +806,7 @@ export const getPlay = query({
       isOwner,
       gameSlug: cover?.slug ?? null,
       coverUrl: cover?.coverUrl ?? null,
+      coverImageUrl,
       photoUrls: photoUrls.filter((u): u is string => !!u),
       winners: winnerNamesOf(players),
       ownerName: owner?.username ?? null,
@@ -859,7 +901,38 @@ export const userPublicPlays = query({
     const plays = (
       await Promise.all(ids.slice(0, 30).map((id) => ctx.db.get("plays", id)))
     ).filter((p): p is PlayDoc => p !== null && p.visibility === "public");
-    return await Promise.all(plays.map((p) => playCard(ctx, p)));
+    return await Promise.all(
+      plays.map((p) => playCard(ctx, p, viewer?._id ?? null)),
+    );
+  },
+});
+
+/** A light social strip for the dashboard: the caller's accepted friends' most
+ *  recent public plays, newest first (a peek, not a feed). */
+export const friendsRecentPlays = query({
+  args: {},
+  handler: async (ctx) => {
+    const user = await getCurrentUser(ctx);
+    if (!user) return [];
+    const friendIds = await acceptedFriendIds(ctx, user._id);
+    if (friendIds.length === 0) return [];
+    const perFriend = await Promise.all(
+      friendIds.slice(0, 30).map((fid) =>
+        ctx.db
+          .query("plays")
+          .withIndex("by_user_and_date", (q) => q.eq("userId", fid))
+          .order("desc")
+          .filter((q) => q.eq(q.field("visibility"), "public"))
+          .take(5),
+      ),
+    );
+    const merged = perFriend
+      .flat()
+      .sort((a, b) =>
+        a.date < b.date ? 1 : a.date > b.date ? -1 : b.createdAt - a.createdAt,
+      )
+      .slice(0, 8);
+    return await Promise.all(merged.map((p) => playCard(ctx, p, user._id)));
   },
 });
 
