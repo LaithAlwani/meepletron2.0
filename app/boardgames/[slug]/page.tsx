@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useQuery } from "convex/react";
 import {
   MessageCircle,
+  BookOpen,
   Scissors,
   Puzzle,
   Pencil,
@@ -21,15 +22,10 @@ import { CollectionButton } from "@/components/boardgames/CollectionButton";
 import { CollectionTags } from "@/components/boardgames/CollectionTags";
 import { BackgroundCover } from "@/components/boardgames/BackgroundCover";
 import { SimilarGames } from "@/components/boardgames/SimilarGames";
-import { InlineAsk } from "@/components/boardgames/InlineAsk";
-import { FaqAccordion } from "@/components/boardgames/FaqAccordion";
 import { HexRating } from "@/components/boardgames/HexRating";
 import { GameFacts } from "@/components/boardgames/GameFacts";
 import { ShareButton } from "@/components/boardgames/ShareButton";
-import {
-  ComponentsList,
-  RemindersList,
-} from "@/components/boardgames/GameReference";
+import { ComponentsList } from "@/components/boardgames/GameReference";
 import { ExpandableText } from "@/components/ui/ExpandableText";
 import { buttonClasses } from "@/components/ui/Button";
 import { Die } from "@/components/ui/icons";
@@ -396,10 +392,19 @@ export default function GameDetailPage({
 
               <div className="mt-5 flex flex-wrap gap-2.5">
                 {ingestedCount > 0 ? (
-                  <Link href={chatHref} className={buttonClasses("primary", "md")}>
-                    <MessageCircle className="h-4 w-4" />
-                    Chat about rules
-                  </Link>
+                  <>
+                    <Link
+                      href={`/boardgames/${game.slug}/how-to-play`}
+                      className={buttonClasses("primary", "md")}
+                    >
+                      <BookOpen className="h-4 w-4" />
+                      How to play
+                    </Link>
+                    <Link href={chatHref} className={buttonClasses("subtle", "md")}>
+                      <MessageCircle className="h-4 w-4" />
+                      Chat about rules
+                    </Link>
+                  </>
                 ) : (
                   <span className="inline-flex items-center rounded-xl border border-border bg-surface-2 px-4 py-2.5 text-sm text-muted">
                     No rulebook
@@ -420,16 +425,6 @@ export default function GameDetailPage({
 
       {/* Content */}
       <div className="mx-auto max-w-3xl px-4 py-8">
-        <InlineAsk
-          gameId={gameId}
-          baseSlug={game.parent ? game.parent.slug : game.slug}
-          moduleId={game.parent ? game._id : undefined}
-        />
-
-        <FaqAccordion gameId={gameId} />
-
-        <RemindersList gameId={gameId} />
-
         <GamePlaysSection gameId={gameId} onLog={() => setLogOpen(true)} />
 
         {(game.designers.length > 0 ||

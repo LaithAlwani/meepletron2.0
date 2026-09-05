@@ -50,12 +50,22 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   let gameRoutes: MetadataRoute.Sitemap = [];
   try {
     const games = await getGameSlugs();
-    gameRoutes = games.map((g) => ({
-      url: `${SITE_URL}/boardgames/${g.slug}`,
-      lastModified: new Date(g.updatedAt),
-      changeFrequency: "weekly",
-      priority: g.isExpansion ? 0.5 : 0.7,
-    }));
+    gameRoutes = games.flatMap((g) => [
+      {
+        url: `${SITE_URL}/boardgames/${g.slug}`,
+        lastModified: new Date(g.updatedAt),
+        changeFrequency: "weekly" as const,
+        priority: g.isExpansion ? 0.5 : 0.7,
+      },
+      // The "how to play" page — the rules/FAQ content, targeted at
+      // "how to play X" / "X rules" searches.
+      {
+        url: `${SITE_URL}/boardgames/${g.slug}/how-to-play`,
+        lastModified: new Date(g.updatedAt),
+        changeFrequency: "weekly" as const,
+        priority: g.isExpansion ? 0.5 : 0.8,
+      },
+    ]);
   } catch {
     // If Convex is unreachable at build/request time, still emit the static map.
   }
