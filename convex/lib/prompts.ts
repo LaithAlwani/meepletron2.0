@@ -111,6 +111,37 @@ ${convo ? `Conversation:\n${convo}\n\n` : ""}Player's latest question: ${query}
 Search query:`;
 }
 
+/**
+ * HyDE prompt: draft a short, hypothetical rulebook excerpt that would answer
+ * the question. Embedding this instead of the player's casual sentence matches
+ * the manual's vocabulary + phrasing far better when the two diverge — the whole
+ * point being to close the "player words ≠ game terms" gap in retrieval.
+ */
+export function buildHydePrompt(
+  history: { role: string; content: string }[],
+  query: string,
+  sourceTitles: string[],
+): string {
+  const game = sourceTitles.length > 0 ? sourceTitles.join(", ") : "the game";
+  const convo = history
+    .slice(-3)
+    .map((m) => {
+      const who = m.role === "user" ? "Player" : "Assistant";
+      const text = m.content.length > 200 ? `${m.content.slice(0, 200)}…` : m.content;
+      return `${who}: ${text}`;
+    })
+    .join("\n");
+  return `Write a short, made-up excerpt from the rulebook of ${game} that would answer the player's question — as if quoting the manual. 2–4 sentences.
+
+- Write the way a rulebook does: use the game's own terminology and phrasing, not the player's casual words.
+- This passage is only used to match against the real rulebook via search, so it's fine to invent plausible specifics. Do NOT hedge, cite, apologise, or say you're unsure — just state the rules confidently.
+- No preamble, no headings, no "here is" — output only the passage.
+
+${convo ? `Conversation:\n${convo}\n\n` : ""}Player's question: ${query}
+
+Rulebook excerpt:`;
+}
+
 /** The reranker prompt (structured index output). */
 export function buildRerankPrompt(
   query: string,

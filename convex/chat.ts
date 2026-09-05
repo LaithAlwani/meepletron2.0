@@ -13,7 +13,7 @@ import { finite } from "./lib/num";
 import { thumbUrl } from "./lib/gameCover";
 
 /** Daily token budgets: guests get a smaller allowance to nudge sign-up. */
-export const DAILY_TOKEN_LIMIT = 50_000;
+export const DAILY_TOKEN_LIMIT = 100_000;
 export const GUEST_TOKEN_LIMIT = 20_000;
 
 /** The daily token limit for a user, based on whether they're an anonymous guest. */
@@ -471,9 +471,12 @@ export const getActiveConfig = internalQuery({
     const defaults = {
       v2TopK: 20,
       v2ScoreThreshold: 0.05,
-      rerankTopN: 3,
+      // Rerank more of what we retrieve, and hand the answer a few more passages
+      // — so a borderline-but-correct chunk (e.g. an action described in one big
+      // block) isn't sliced out before the reranker/answer ever sees it.
+      rerankTopN: 5,
       historyMessageLimit: 6,
-      rerankCandidates: 12,
+      rerankCandidates: 18,
     };
     return { ...defaults, ...rows[0] };
   },
