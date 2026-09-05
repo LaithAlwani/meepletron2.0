@@ -10,7 +10,7 @@ import {
   Trophy,
   Dices,
   Package,
-  Repeat2,
+  Tag,
   Heart,
   Lock,
   Globe,
@@ -508,7 +508,7 @@ function CollectionTab({
     (wishlist?.total ?? 0) === 0;
   if (empty) {
     return (
-      <EmptyTab text="No collection shared. Turn on Owned / For trade / Wishlist in Settings to show them here." />
+      <EmptyTab text="No collection shared. Turn on Owned / For Sale / Wishlist in Settings to show them here." />
     );
   }
   return (
@@ -520,10 +520,10 @@ function CollectionTab({
         href={`/user/${username}/owned`}
       />
       <CollectionBlock
-        icon={Repeat2}
-        title="For trade"
+        icon={Tag}
+        title="For Sale"
         section={forTrade}
-        href={`/user/${username}/for-trade`}
+        href={`/user/${username}/for-sale`}
       />
       <CollectionBlock
         icon={Heart}

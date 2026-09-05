@@ -102,7 +102,7 @@ async function profileCounts(ctx: QueryCtx, user: Doc<"users">) {
 }
 
 /**
- * A shared "list of games" section for the public profile (owned / for-trade /
+ * A shared "list of games" section for the public profile (owned / for-sale /
  * wishlist), drawn from the user's BGG collection. Returns the total count and a
  * bounded, cover-resolved sample.
  */
@@ -642,14 +642,19 @@ export const publicProfile = query({
 
 const collectionListValidator = v.union(
   v.literal("owned"),
+  v.literal("for-sale"),
+  // The For Sale list used to be called "For trade" — profile links shared
+  // under the old slug still resolve to the same games.
   v.literal("for-trade"),
   v.literal("wishlist"),
 );
-type CollectionList = "owned" | "for-trade" | "wishlist";
+type CollectionList = "owned" | "for-sale" | "for-trade" | "wishlist";
 
-/** The bggCollection flag field + this user's share toggle for a list. */
+/** The bggCollection flag field backing a list. */
 function collectionField(list: CollectionList): "own" | "forTrade" | "wishlist" {
-  return list === "owned" ? "own" : list === "for-trade" ? "forTrade" : "wishlist";
+  if (list === "owned") return "own";
+  if (list === "wishlist") return "wishlist";
+  return "forTrade"; // "for-sale", and its legacy "for-trade" alias
 }
 async function userByUsername(ctx: QueryCtx, username: string) {
   const lower = username.trim().toLowerCase();
@@ -676,7 +681,7 @@ export const publicCollectionMeta = query({
 });
 
 /**
- * Paginated full collection list for a public profile (owned / for-trade /
+ * Paginated full collection list for a public profile (owned / for-sale /
  * wishlist). Returns an empty, done page when the user doesn't exist or hasn't
  * shared that list. Handles hundreds/thousands of games without loading them
  * all at once.

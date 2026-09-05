@@ -12,11 +12,13 @@ import { DEFAULT_SORT, type GameSortKey } from "@/convex/lib/gameSort";
 
 const TITLES: Record<string, string> = {
   owned: "Owned games",
-  "for-trade": "For trade",
+  "for-sale": "For Sale",
+  // Older shared links still use the list's former slug.
+  "for-trade": "For Sale",
   wishlist: "Wishlist",
 };
 
-type CollectionList = "owned" | "for-trade" | "wishlist";
+type CollectionList = "owned" | "for-sale" | "for-trade" | "wishlist";
 
 export default function CollectionListPage({
   params,
@@ -24,7 +26,7 @@ export default function CollectionListPage({
   params: Promise<{ username: string; list: string }>;
 }) {
   const { username, list } = use(params);
-  const valid = list === "owned" || list === "for-trade" || list === "wishlist";
+  const valid = list in TITLES;
   const [sort, setSort] = useState<GameSortKey>(DEFAULT_SORT);
   const args = valid
     ? { username, list: list as CollectionList }

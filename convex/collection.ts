@@ -8,7 +8,8 @@ import { getCurrentUser, requireUser } from "./lib/auth";
  * Collection status. A game the user has any relationship with is one
  * `bggCollection` row with four editable boolean flags — **Owned** (`own`),
  * **Wishlist** (`wishlist`, which folds BGG want / want-to-buy / preordered in at
- * import), **For trade** (`forTrade`) and **Previously owned** (`prevOwned`). The
+ * import), **For Sale** (`forTrade` — BGG's own name for the flag that feeds it) and
+ * **Previously owned** (`prevOwned`). The
  * BGG sync seeds them; the "Add to collection" menu edits them. A row with none
  * of the four left is deleted.
  */

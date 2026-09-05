@@ -54,7 +54,7 @@ const FEATURES: Feature[] = [
     icon: RefreshCw,
     title: "Sync your BGG collection",
     tagline: "Your BGG shelf, mirrored into Meepletron.",
-    how: "Link your account under Settings → BoardGameGeek (we keep a session token, never your password) and hit Sync now. Your Owned, Wishlist, For trade and Previously owned lists fill in on the Collection tab.",
+    how: "Link your account under Settings → BoardGameGeek (we keep a session token, never your password) and hit Sync now. Your Owned, Wishlist, For Sale and Previously owned lists fill in on the Collection tab (BGG's “for trade” games land in For Sale).",
     cta: { label: "Link BoardGameGeek", href: "/settings" },
   },
   {

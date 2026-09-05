@@ -75,7 +75,7 @@ const FEATURES: { icon: LucideIcon; title: string; body: string }[] = [
   {
     icon: Package,
     title: "Collection",
-    body: "Show the games you own, your wishlist, and what's up for trade.",
+    body: "Show the games you own, your wishlist, and what's up for sale.",
   },
 ];
 

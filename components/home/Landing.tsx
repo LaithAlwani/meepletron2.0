@@ -44,7 +44,7 @@ const FEATURES: { icon: LucideIcon; title: string; body: string }[] = [
   {
     icon: Package,
     title: "Your collection",
-    body: "Keep what you own, your wishlist, and what's up for trade in one place.",
+    body: "Keep what you own, your wishlist, and what's up for sale in one place.",
   },
   {
     icon: Dices,

@@ -1,4 +1,4 @@
-import { Package, Heart, Repeat2, History, type LucideIcon } from "lucide-react";
+import { Package, Heart, Tag, History, type LucideIcon } from "lucide-react";
 
 /** The four collection lists, shared by the collection overview + per-list pages. */
 export type CollFilter = "owned" | "wishlist" | "forTrade" | "prevOwned";
@@ -20,18 +20,11 @@ export const COLLECTION_STATUSES: CollStatus[] = [
     empty: "Mark games “Owned” from any card, or link BoardGameGeek.",
   },
   {
-    filter: "wishlist",
-    slug: "wishlist",
-    title: "Wishlist",
-    icon: Heart,
-    empty: "Add games to your Wishlist from any card, or link BoardGameGeek.",
-  },
-  {
     filter: "forTrade",
-    slug: "for-trade",
-    title: "For trade",
-    icon: Repeat2,
-    empty: "Mark games “For trade” from any card, or on BoardGameGeek.",
+    slug: "for-sale",
+    title: "For Sale",
+    icon: Tag,
+    empty: "Mark games “For Sale” from any card, or mark them for trade on BoardGameGeek.",
   },
   {
     filter: "prevOwned",
@@ -40,8 +33,19 @@ export const COLLECTION_STATUSES: CollStatus[] = [
     icon: History,
     empty: "Mark games “Previously owned” from any card, or on BoardGameGeek.",
   },
+  {
+    filter: "wishlist",
+    slug: "wishlist",
+    title: "Wishlist",
+    icon: Heart,
+    empty: "Add games to your Wishlist from any card, or link BoardGameGeek.",
+  },
 ];
 
+/** Slugs that used to name a list, so older links keep resolving. */
+const LEGACY_SLUGS: Record<string, string> = { "for-trade": "for-sale" };
+
 export function statusBySlug(slug: string): CollStatus | undefined {
-  return COLLECTION_STATUSES.find((s) => s.slug === slug);
+  const canonical = LEGACY_SLUGS[slug] ?? slug;
+  return COLLECTION_STATUSES.find((s) => s.slug === canonical);
 }

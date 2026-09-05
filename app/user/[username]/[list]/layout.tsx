@@ -4,13 +4,15 @@ import { api } from "@/convex/_generated/api";
 
 const LABELS: Record<string, string> = {
   owned: "Owned games",
-  "for-trade": "Games for trade",
+  "for-sale": "Games for sale",
+  // Older shared links still use the list's former slug.
+  "for-trade": "Games for sale",
   wishlist: "Wishlist",
 };
 
 /**
  * Per-collection-list metadata so a shared /user/<name>/<list> link unfurls with
- * that player + which list (owned / for trade / wishlist), not the generic card.
+ * that player + which list (owned / for sale / wishlist), not the generic card.
  */
 export async function generateMetadata({
   params,
@@ -20,12 +22,12 @@ export async function generateMetadata({
   const { username, list } = await params;
   const label = LABELS[list];
   if (!label) return {};
-  const valid = list === "owned" || list === "for-trade" || list === "wishlist";
+  const valid = list in LABELS;
   try {
     const meta = valid
       ? await fetchQuery(api.topGames.publicCollectionMeta, {
           username,
-          list: list as "owned" | "for-trade" | "wishlist",
+          list: list as "owned" | "for-sale" | "for-trade" | "wishlist",
         })
       : null;
     const who =

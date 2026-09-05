@@ -14,7 +14,7 @@ type StateKey = "owned" | "wishlist" | "forTrade" | "prevOwned";
 const OPTS: { set: SetKey; state: StateKey; label: string }[] = [
   { set: "own", state: "owned", label: "Owned" },
   { set: "wishlist", state: "wishlist", label: "Wishlist" },
-  { set: "forTrade", state: "forTrade", label: "For trade" },
+  { set: "forTrade", state: "forTrade", label: "For Sale" },
   { set: "prevOwned", state: "prevOwned", label: "Previously owned" },
 ];
 

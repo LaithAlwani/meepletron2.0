@@ -9,7 +9,7 @@ type StateKey = "owned" | "wishlist" | "forTrade" | "prevOwned";
 const TAGS: { key: StateKey; label: string; cls: string }[] = [
   { key: "owned", label: "Owned", cls: "bg-accent text-accent-foreground" },
   { key: "wishlist", label: "Wishlist", cls: "bg-accent-2 text-white" },
-  { key: "forTrade", label: "Trade", cls: "bg-amber-500 text-white" },
+  { key: "forTrade", label: "For Sale", cls: "bg-amber-500 text-white" },
   { key: "prevOwned", label: "Prev-owned", cls: "bg-slate-500 text-white" },
 ];
 
