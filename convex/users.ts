@@ -41,6 +41,7 @@ export const myBudget = query({
     const user = await getCurrentUser(ctx);
     if (!user) return null;
     const isGuest = user.isAnonymous === true;
+    const unlimited = user.role === "admin";
     const limit = tokenLimitFor(user.isAnonymous);
     const used = Math.min(finite(user.tokensUsedToday), limit);
     return {
@@ -48,6 +49,7 @@ export const myBudget = query({
       limit,
       remaining: Math.max(0, limit - used),
       isGuest,
+      unlimited,
     };
   },
 });

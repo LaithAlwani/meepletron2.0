@@ -819,7 +819,9 @@ export function GlobalAssistant() {
               <ChatInput onSend={send} disabled={busy} onFocus={ensureGuest} />
               {remaining != null && (
                 <p className="mt-1 px-1 text-[11px] text-subtle">
-                  {remaining.toLocaleString()} tokens left today
+                  {budget?.unlimited
+                    ? "No limit"
+                    : `${remaining.toLocaleString()} tokens left today`}
                   {budget?.isGuest && (
                     <>
                       {" · "}

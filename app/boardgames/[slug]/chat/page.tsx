@@ -513,10 +513,14 @@ function ChatView({ gameId, slug }: { gameId: Id<"games">; slug: string }) {
             {budget && (
               <p
                 className={`mb-1 pr-1 text-right text-[11px] font-medium ${
-                  budget.remaining <= 5000 ? "text-red-500" : "text-subtle"
+                  !budget.unlimited && budget.remaining <= 5000
+                    ? "text-red-500"
+                    : "text-subtle"
                 }`}
               >
-                {budget.remaining.toLocaleString()} tokens left today
+                {budget.unlimited
+                  ? "No limit"
+                  : `${budget.remaining.toLocaleString()} tokens left today`}
                 {budget.isGuest && (
                   <>
                     {" · "}

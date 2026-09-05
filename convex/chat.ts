@@ -496,7 +496,8 @@ export const reserveBudget = internalMutation({
         tokensResetAt: todayStartMs,
       });
     }
-    if (used >= tokenLimitFor(user.isAnonymous)) {
+    // Admins have no daily cap.
+    if (user.role !== "admin" && used >= tokenLimitFor(user.isAnonymous)) {
       throw new Error("Daily token limit reached");
     }
   },
