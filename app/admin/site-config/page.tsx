@@ -32,8 +32,14 @@ const knobs = [
   {
     key: "historyMessageLimit" as const,
     label: "History message limit",
-    help: "How many past messages are included as chat context.",
+    help: "How many recent messages are included as chat context (minimum 1 — the current question).",
     step: 1,
+  },
+  {
+    key: "answerTemperature" as const,
+    label: "Answer temperature",
+    help: "Randomness of the final answer (0–2). Lower = the same question gives more consistent replies; higher = more varied wording.",
+    step: 0.1,
   },
 ];
 
@@ -54,6 +60,7 @@ export default function SiteConfigPage() {
         rerankCandidates: config.rerankCandidates,
         rerankTopN: config.rerankTopN,
         historyMessageLimit: config.historyMessageLimit,
+        answerTemperature: config.answerTemperature,
       });
     }
   }, [config, form]);

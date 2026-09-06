@@ -133,6 +133,7 @@ function ChatView({ gameId, slug }: { gameId: Id<"games">; slug: string }) {
 
   const me = useQuery(api.users.me);
   const isGuest = me?.isAnonymous === true;
+  const isAdmin = me?.role === "admin";
   const budget = useQuery(api.users.myBudget);
 
   const [chatId, setChatId] = useState<Id<"chats"> | null>(null);
@@ -371,13 +372,18 @@ function ChatView({ gameId, slug }: { gameId: Id<"games">; slug: string }) {
         {/* Game-specific navbar */}
         <header className="shrink-0 border-b border-border bg-background/80 backdrop-blur">
           <div className="mx-auto flex max-w-3xl items-center gap-2 px-4 py-2.5">
-            <Link
-              href={`/boardgames/${slug}`}
-              aria-label="Back to game"
+            <button
+              type="button"
+              onClick={() =>
+                window.history.length > 1
+                  ? router.back()
+                  : router.push(`/boardgames/${slug}`)
+              }
+              aria-label="Go back"
               className="rounded-lg p-2 text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
             >
               {BackIcon}
-            </Link>
+            </button>
             <Link
               href={`/boardgames/${slug}`}
               className="group flex min-w-0 flex-1 items-center gap-2.5"
@@ -485,6 +491,21 @@ function ChatView({ gameId, slug }: { gameId: Id<"games">; slug: string }) {
                   </div>
                 )}
                 <MessageBubble message={m} />
+                {isAdmin &&
+                  m.role === "assistant" &&
+                  ((m.inputTokens ?? 0) > 0 || (m.outputTokens ?? 0) > 0) && (
+                    <p className="mt-0.5 pl-1 text-[10px] text-subtle">
+                      {(m.inputTokens ?? 0).toLocaleString()} in ·{" "}
+                      {(m.outputTokens ?? 0).toLocaleString()} out ·{" "}
+                      {((m.inputTokens ?? 0) + (m.outputTokens ?? 0)).toLocaleString()}{" "}
+                      total · ~$
+                      {(
+                        ((m.inputTokens ?? 0) * 0.3 +
+                          (m.outputTokens ?? 0) * 2.5) /
+                        1e6
+                      ).toFixed(4)}
+                    </p>
+                  )}
               </Fragment>
             );
           })}

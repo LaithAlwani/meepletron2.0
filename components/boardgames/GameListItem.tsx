@@ -3,7 +3,6 @@ import { Star } from "lucide-react";
 import type { GameCardData } from "@/convex/games";
 import { formatPlayTime } from "@/lib/format";
 import { CollectionButton } from "./CollectionButton";
-import { CollectionTags } from "./CollectionTags";
 import { Die } from "@/components/ui/icons";
 
 export function GameListItem({ game }: { game: GameCardData }) {
@@ -65,8 +64,6 @@ export function GameListItem({ game }: { game: GameCardData }) {
             )}
           </div>
         )}
-        {/* status tags, under the info */}
-        <CollectionTags gameId={game._id} className="mt-1" />
       </div>
 
       <CollectionButton gameId={game._id} size="sm" className={iconBtn} />

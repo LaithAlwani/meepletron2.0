@@ -16,9 +16,15 @@ const TITLES: Record<string, string> = {
   // Older shared links still use the list's former slug.
   "for-trade": "For Sale",
   wishlist: "Wishlist",
+  "prev-owned": "Previously owned",
 };
 
-type CollectionList = "owned" | "for-sale" | "for-trade" | "wishlist";
+type CollectionList =
+  | "owned"
+  | "for-sale"
+  | "for-trade"
+  | "wishlist"
+  | "prev-owned";
 
 export default function CollectionListPage({
   params,

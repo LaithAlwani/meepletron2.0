@@ -392,19 +392,13 @@ export default function GameDetailPage({
 
               <div className="mt-5 flex flex-wrap gap-2.5">
                 {ingestedCount > 0 ? (
-                  <>
-                    <Link
-                      href={`/boardgames/${game.slug}/how-to-play`}
-                      className={buttonClasses("primary", "md")}
-                    >
-                      <BookOpen className="h-4 w-4" />
-                      How to play
-                    </Link>
-                    <Link href={chatHref} className={buttonClasses("subtle", "md")}>
-                      <MessageCircle className="h-4 w-4" />
-                      Chat about rules
-                    </Link>
-                  </>
+                  <Link
+                    href={`/boardgames/${game.slug}/how-to-play`}
+                    className={buttonClasses("primary", "md")}
+                  >
+                    <BookOpen className="h-4 w-4" />
+                    How to play
+                  </Link>
                 ) : (
                   <span className="inline-flex items-center rounded-xl border border-border bg-surface-2 px-4 py-2.5 text-sm text-muted">
                     No rulebook
@@ -500,6 +494,19 @@ export default function GameDetailPage({
           </Link>
         </div>
       </section>
+
+      {/* Floating chat button — a persistent accent shortcut into the rulebook
+          chat, anchored bottom-right so it's reachable while scrolling. */}
+      {ingestedCount > 0 && (
+        <Link
+          href={chatHref}
+          aria-label="Chat about the rules"
+          title="Chat about the rules"
+          className="fixed bottom-6 right-6 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-accent text-accent-foreground shadow-lg transition-transform hover:-translate-y-0.5 hover:shadow-xl"
+        >
+          <MessageCircle className="h-6 w-6" />
+        </Link>
+      )}
 
       {/* Full-artwork lightbox */}
       {zoomed && cover && (

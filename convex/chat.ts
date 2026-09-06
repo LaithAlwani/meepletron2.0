@@ -164,11 +164,23 @@ export const messagesPaginated = query({
     if (!user) return empty;
     const chat = await ctx.db.get("chats", chatId);
     if (!chat || chat.userId !== user._id) return empty;
-    return await ctx.db
+    const result = await ctx.db
       .query("messages")
       .withIndex("by_chat", (q) => q.eq("chatId", chatId))
       .order("desc")
       .paginate(paginationOpts);
+    // The per-question token totals are an admin-only readout.
+    if (user.role !== "admin") {
+      return {
+        ...result,
+        page: result.page.map((m) => ({
+          ...m,
+          inputTokens: undefined,
+          outputTokens: undefined,
+        })),
+      };
+    }
+    return result;
   },
 });
 
@@ -355,7 +367,9 @@ export const getStreamContext = internalQuery({
     const hasIngested = allowed.size > 0;
 
     const config = await ctx.db.query("siteConfig").order("desc").take(1);
-    const historyLimit = config[0]?.historyMessageLimit ?? 6;
+    // Floor at 1 so the current question is always fetched — a stored limit of
+    // 0 would otherwise return no messages and leave the query empty.
+    const historyLimit = Math.max(config[0]?.historyMessageLimit ?? 6, 1);
 
     const recent = await ctx.db
       .query("messages")
@@ -477,6 +491,7 @@ export const getActiveConfig = internalQuery({
       rerankTopN: 5,
       historyMessageLimit: 6,
       rerankCandidates: 18,
+      answerTemperature: 0.2,
     };
     return { ...defaults, ...rows[0] };
   },
@@ -539,17 +554,8 @@ export const saveAssistantMessage = internalMutation({
     ),
   },
   handler: async (ctx, { chatId, userId, content, annotations, usage }) => {
-    await ctx.db.insert("messages", {
-      chatId,
-      role: "assistant",
-      content,
-      annotations: annotations.length > 0 ? annotations : undefined,
-    });
-    await ctx.db.patch("chats", chatId, {
-      lastMessage: content.slice(0, 200),
-      lastMessageAt: Date.now(),
-    });
-
+    let inputTokens = 0;
+    let outputTokens = 0;
     let total = 0;
     for (const u of usage) {
       const promptTokens = finite(u.promptTokens);
@@ -562,8 +568,23 @@ export const saveAssistantMessage = internalMutation({
         completionTokens,
         totalTokens,
       });
+      inputTokens += promptTokens;
+      outputTokens += completionTokens;
       total += totalTokens;
     }
+
+    await ctx.db.insert("messages", {
+      chatId,
+      role: "assistant",
+      content,
+      annotations: annotations.length > 0 ? annotations : undefined,
+      inputTokens: inputTokens || undefined,
+      outputTokens: outputTokens || undefined,
+    });
+    await ctx.db.patch("chats", chatId, {
+      lastMessage: content.slice(0, 200),
+      lastMessageAt: Date.now(),
+    });
 
     const user = await ctx.db.get("users", userId);
     if (user) {

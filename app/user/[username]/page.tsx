@@ -12,6 +12,7 @@ import {
   Package,
   Tag,
   Heart,
+  Archive,
   Lock,
   Globe,
   Settings,
@@ -190,6 +191,7 @@ export default function ProfilePage({
                 owned={data.owned}
                 forTrade={data.forTrade}
                 wishlist={data.wishlist}
+                prevOwned={data.prevOwned}
               />
             )}
           </div>
@@ -496,16 +498,19 @@ function CollectionTab({
   owned,
   forTrade,
   wishlist,
+  prevOwned,
 }: {
   username: string;
   owned: Section;
   forTrade: Section;
   wishlist: Section;
+  prevOwned: Section;
 }) {
   const empty =
     (owned?.total ?? 0) === 0 &&
     (forTrade?.total ?? 0) === 0 &&
-    (wishlist?.total ?? 0) === 0;
+    (wishlist?.total ?? 0) === 0 &&
+    (prevOwned?.total ?? 0) === 0;
   if (empty) {
     return (
       <EmptyTab text="No collection shared. Turn on Owned / For Sale / Wishlist in Settings to show them here." />
@@ -530,6 +535,12 @@ function CollectionTab({
         title="Wishlist"
         section={wishlist}
         href={`/user/${username}/wishlist`}
+      />
+      <CollectionBlock
+        icon={Archive}
+        title="Previously owned"
+        section={prevOwned}
+        href={`/user/${username}/prev-owned`}
       />
     </div>
   );

@@ -266,6 +266,10 @@ export default defineSchema({
     chatId: v.id("chats"),
     role: v.union(v.literal("user"), v.literal("assistant")),
     content: v.string(),
+    // Per-question token totals across every step (rewrite/rerank/embed/answer),
+    // stored on the assistant message for the admin-only usage readout.
+    inputTokens: v.optional(v.number()),
+    outputTokens: v.optional(v.number()),
     // persisted citation snapshots (bounded to rerankTopN). Our own field —
     // unrelated to the deprecated AI SDK message-annotations API.
     annotations: v.optional(
@@ -453,6 +457,12 @@ export default defineSchema({
     // How many top-scoring candidates are sent to the reranker (optional so
     // existing rows stay valid; defaults applied on read).
     rerankCandidates: v.optional(v.number()),
+    // Sampling temperature for the final grounded answer (optional; default on
+    // read). Lower = more consistent replies for the same question.
+    answerTemperature: v.optional(v.number()),
+    // DEPRECATED, unused. HyDE retrieval was removed; this bare optional lingers
+    // so a schema push doesn't fail on config rows that still carry it.
+    hydeEnabled: v.optional(v.boolean()),
   }),
 
   usageLog: defineTable({

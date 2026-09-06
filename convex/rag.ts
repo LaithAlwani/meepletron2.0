@@ -15,7 +15,6 @@ import { finite } from "./lib/num";
 import {
   buildRerankPrompt,
   buildRewritePrompt,
-  buildHydePrompt,
   buildSystemPrompt,
   formatContext,
   needsIconLegend,
@@ -78,45 +77,6 @@ async function rewriteQuery(
   }
 }
 
-/**
- * HyDE: generate a short hypothetical rulebook passage for the question. Its
- * embedding matches the real manual's vocabulary/phrasing far better than the
- * player's casual wording, so it closes the term-mismatch gap in retrieval.
- * Reasoning is on (small budget) because inferring how a rulebook would phrase
- * it is the judgment that helps. Null on failure → retrieval falls back to the
- * keyword query alone.
- */
-async function hydePassage(
-  query: string,
-  history: { role: string; content: string }[],
-  sourceTitles: string[],
-  usage: UsageRow[],
-): Promise<string | null> {
-  try {
-    const { text, usage: u } = await generateText({
-      model: CHAT_MODEL,
-      prompt: buildHydePrompt(history, query, sourceTitles),
-      temperature: 0.2,
-      providerOptions: {
-        google: { thinkingConfig: { thinkingBudget: 512 } },
-      },
-    });
-    const passage = text.trim();
-    const it = finite(u.inputTokens);
-    const ot = finite(u.outputTokens);
-    usage.push({
-      purpose: "chat-rewrite",
-      model: "gemini-2.5-flash",
-      promptTokens: it,
-      completionTokens: ot,
-      totalTokens: finite(u.totalTokens) || it + ot,
-    });
-    return passage || null;
-  } catch {
-    return null;
-  }
-}
-
 async function rerankChunks(
   query: string,
   chunks: (RetrievedChunk & { chunkId: Id<"chunks"> })[],
@@ -166,6 +126,7 @@ export type BuildAnswerResult = {
   annotations: Annotation[];
   usage: UsageRow[];
   empty: boolean;
+  answerTemperature: number;
 };
 
 /**
@@ -189,58 +150,37 @@ export async function buildAnswer(
   const usage: UsageRow[] = [];
   const config = await ctx.runQuery(internal.chat.getActiveConfig, {});
 
-  // 1. Two complementary queries, run in parallel: a keyword expansion (fast,
-  //    exact-term recall) and a HyDE passage (a hypothetical rulebook excerpt
-  //    that matches the manual's vocabulary even when the player's words don't).
-  const [searchQuery, hyde] = await Promise.all([
-    rewriteQuery(query, history, usage),
-    hydePassage(query, history, sourceTitles, usage),
-  ]);
+  const answerTemperature = config.answerTemperature;
 
-  const embedTexts = [searchQuery, ...(hyde ? [hyde] : [])];
-  const embeds = await Promise.all(embedTexts.map((t) => embedQuery(t)));
-  for (const e of embeds) {
-    usage.push({
-      purpose: "chat-embed",
-      model: EMBEDDING_MODEL_ID,
-      promptTokens: finite(e.tokens),
-      completionTokens: 0,
-      totalTokens: finite(e.tokens),
-    });
-  }
+  // 1. Expand + embed the question.
+  const searchQuery = await rewriteQuery(query, history, usage);
+  const { embedding, tokens: embedTokens } = await embedQuery(searchQuery);
+  usage.push({
+    purpose: "chat-embed",
+    model: EMBEDDING_MODEL_ID,
+    promptTokens: finite(embedTokens),
+    completionTokens: 0,
+    totalTokens: finite(embedTokens),
+  });
 
-  // 2. Vector search each embedding (scoped to the selected rulebooks), then
-  //    union the hits by chunk id, keeping the best score seen for each.
-  const hitLists = await Promise.all(
-    embeds.map((e) =>
-      ctx.vectorSearch("chunks", "by_embedding", {
-        vector: e.embedding,
-        limit: config.v2TopK,
-        filter: (q) => {
-          const exprs = rulebookIds.map((id) => q.eq("rulebookId", id));
-          return exprs.length === 1 ? exprs[0] : q.or(...exprs);
-        },
-      }),
-    ),
-  );
-  const scoreById = new Map<Id<"chunks">, number>();
-  for (const list of hitLists) {
-    for (const h of list) {
-      const prev = scoreById.get(h._id) ?? -Infinity;
-      if (h._score > prev) scoreById.set(h._id, h._score);
-    }
-  }
+  // 2. Vector search scoped to the selected rulebooks.
+  const hits = await ctx.vectorSearch("chunks", "by_embedding", {
+    vector: embedding,
+    limit: config.v2TopK,
+    filter: (q) => {
+      const exprs = rulebookIds.map((id) => q.eq("rulebookId", id));
+      return exprs.length === 1 ? exprs[0] : q.or(...exprs);
+    },
+  });
+  const scoreById = new Map(hits.map((h) => [h._id, h._score]));
 
-  // 3. Hydrate, drop legend hits, apply score threshold, order by best score.
+  // 3. Hydrate, drop legend hits, apply score threshold.
   const hydrated = await ctx.runQuery(internal.chat.hydrateChunks, {
-    chunkIds: [...scoreById.keys()],
+    chunkIds: hits.map((h) => h._id),
   });
   const candidates = hydrated
     .filter((c) => c.chunkType !== "legend")
-    .filter((c) => (scoreById.get(c.chunkId) ?? 0) >= config.v2ScoreThreshold)
-    .sort(
-      (a, b) => (scoreById.get(b.chunkId) ?? 0) - (scoreById.get(a.chunkId) ?? 0),
-    );
+    .filter((c) => (scoreById.get(c.chunkId) ?? 0) >= config.v2ScoreThreshold);
 
   // 4. Rerank down to N (or fall back to top-by-score).
   const ranked = await rerankChunks(
@@ -251,7 +191,13 @@ export async function buildAnswer(
   );
 
   if (ranked.length === 0) {
-    return { system: null, annotations: [], usage, empty: true };
+    return {
+      system: null,
+      annotations: [],
+      usage,
+      empty: true,
+      answerTemperature,
+    };
   }
 
   // 5. Include the iconography legend when tokens are in play.
@@ -273,5 +219,5 @@ export async function buildAnswer(
   }));
 
   const system = buildSystemPrompt(sourceTitles, formatContext(ranked, legend));
-  return { system, annotations, usage, empty: false };
+  return { system, annotations, usage, empty: false, answerTemperature };
 }

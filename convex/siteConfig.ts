@@ -7,10 +7,13 @@ const DEFAULTS = {
   // the best few, so more candidates improves recall for casual phrasing.
   v2TopK: 20,
   v2ScoreThreshold: 0.05,
-  rerankTopN: 3,
+  rerankTopN: 5,
   historyMessageLimit: 6,
   // How many of the top-scoring candidates actually reach the reranker.
-  rerankCandidates: 12,
+  rerankCandidates: 18,
+  // Sampling temperature for the final answer. Low by default so the same
+  // question gives consistent replies; raise for more varied phrasing.
+  answerTemperature: 0.2,
 };
 
 /** The current RAG-tuning knobs (admin). Defaults fill any missing fields. */
@@ -31,14 +34,17 @@ export const update = mutation({
     rerankTopN: v.number(),
     historyMessageLimit: v.number(),
     rerankCandidates: v.number(),
+    answerTemperature: v.number(),
   },
   handler: async (ctx, args) => {
     await requireAdmin(ctx);
     if (
       args.v2TopK < 1 ||
       args.rerankTopN < 1 ||
-      args.historyMessageLimit < 0 ||
-      args.rerankCandidates < 1
+      args.historyMessageLimit < 1 ||
+      args.rerankCandidates < 1 ||
+      args.answerTemperature < 0 ||
+      args.answerTemperature > 2
     ) {
       throw new Error("Invalid config values");
     }
@@ -59,6 +65,7 @@ export const internalUpdate = internalMutation({
     rerankTopN: v.optional(v.number()),
     historyMessageLimit: v.optional(v.number()),
     rerankCandidates: v.optional(v.number()),
+    answerTemperature: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     const existing = await ctx.db.query("siteConfig").order("desc").take(1);

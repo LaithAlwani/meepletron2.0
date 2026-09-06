@@ -599,6 +599,7 @@ export const publicProfile = query({
         owned: null,
         forTrade: null,
         wishlist: null,
+        prevOwned: null,
       };
     }
 
@@ -632,6 +633,12 @@ export const publicProfile = query({
         (r) => r.wishlist === true,
         30,
       ),
+      prevOwned: await collectionSection(
+        ctx,
+        user._id,
+        (r) => r.prevOwned === true,
+        30,
+      ),
     };
   },
 });
@@ -647,13 +654,22 @@ const collectionListValidator = v.union(
   // under the old slug still resolve to the same games.
   v.literal("for-trade"),
   v.literal("wishlist"),
+  v.literal("prev-owned"),
 );
-type CollectionList = "owned" | "for-sale" | "for-trade" | "wishlist";
+type CollectionList =
+  | "owned"
+  | "for-sale"
+  | "for-trade"
+  | "wishlist"
+  | "prev-owned";
 
 /** The bggCollection flag field backing a list. */
-function collectionField(list: CollectionList): "own" | "forTrade" | "wishlist" {
+function collectionField(
+  list: CollectionList,
+): "own" | "forTrade" | "wishlist" | "prevOwned" {
   if (list === "owned") return "own";
   if (list === "wishlist") return "wishlist";
+  if (list === "prev-owned") return "prevOwned";
   return "forTrade"; // "for-sale", and its legacy "for-trade" alias
 }
 async function userByUsername(ctx: QueryCtx, username: string) {

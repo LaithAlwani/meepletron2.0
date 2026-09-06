@@ -112,7 +112,13 @@ function loadImageDimensions(
 }
 
 async function fetchImageAsDataUrl(url: string): Promise<string> {
-  const response = await fetch(url, { mode: "cors" });
+  // Remote images (BGG CDN, Convex storage) are read through our same-origin
+  // proxy so grabbing their bytes isn't blocked by cross-origin CORS. Local
+  // data:/blob: URLs are fetched directly.
+  const src = /^https?:\/\//i.test(url)
+    ? `/api/image?url=${encodeURIComponent(url)}`
+    : url;
+  const response = await fetch(src, { mode: "cors" });
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
   const blob = await response.blob();
   return new Promise((resolve, reject) => {

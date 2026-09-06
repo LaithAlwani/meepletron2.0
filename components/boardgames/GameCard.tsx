@@ -3,7 +3,6 @@ import { Users, Clock, Star } from "lucide-react";
 import type { GameCardData } from "@/convex/games";
 import { formatPlayTime } from "@/lib/format";
 import { CollectionButton } from "./CollectionButton";
-import { CollectionTags } from "./CollectionTags";
 import { Die } from "@/components/ui/icons";
 
 export function GameCard({
@@ -60,13 +59,6 @@ export function GameCard({
           </div>
         )}
       </Link>
-
-      {/* Read-only tags: which of your collection lists this game is in.
-          group-hover:translate-y-1 cancels the card's hover lift so the tags
-          stay put (they don't ride up or zoom with the cover). */}
-      <div className="pointer-events-none absolute left-2 top-2 z-20 transition-transform duration-200 group-hover:translate-y-1">
-        <CollectionTags gameId={game._id} />
-      </div>
 
       {/* Add-to-collection bookmark — a compact save button inset in the
           top-right corner, over a subtle scrim so it reads on any cover. Anchored

@@ -15,10 +15,16 @@ export function InlineAsk({
   gameId,
   baseSlug,
   moduleId,
+  variant = "card",
+  heading,
 }: {
   gameId: Id<"games">;
   baseSlug: string;
   moduleId?: string;
+  /** "card" — the boxed detail-page widget. "banner" — a full accent banner. */
+  variant?: "card" | "banner";
+  /** Banner heading (ignored for the card variant). */
+  heading?: string;
 }) {
   const sources = useQuery(api.games.chatSources, { gameId });
   const router = useRouter();
@@ -36,6 +42,45 @@ export function InlineAsk({
     const params = new URLSearchParams({ q: text });
     if (moduleId) params.set("module", moduleId);
     router.push(`/boardgames/${baseSlug}/chat?${params.toString()}`);
+  }
+
+  // Full-bleed accent banner — same input → chat behavior, styled as the page's
+  // closing call-to-action. Straight edges, spans the viewport; render it OUTSIDE
+  // any max-width container.
+  if (variant === "banner") {
+    return (
+      <section className="bg-accent text-accent-foreground">
+        <div className="mx-auto max-w-3xl px-4 py-10">
+          <h2 className="font-display text-2xl font-extrabold leading-tight sm:text-3xl">
+            {heading ?? "Still have a rules question?"}
+          </h2>
+          <p className="mt-1 text-sm text-accent-foreground/80">
+            Get a straight answer with the exact rulebook passage to back it up.
+          </p>
+          <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+            <input
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  submit();
+                }
+              }}
+              placeholder="e.g. Can I claim two routes on my turn?"
+              className="min-w-0 flex-1 rounded-xl bg-surface px-3.5 py-3 text-sm text-foreground outline-none placeholder:text-subtle focus:ring-2 focus:ring-black/10"
+            />
+            <button
+              onClick={submit}
+              disabled={!q.trim()}
+              className="shrink-0 rounded-xl bg-surface px-5 py-3 text-sm font-bold text-foreground shadow-sm transition-transform hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0"
+            >
+              Ask about the rules →
+            </button>
+          </div>
+        </div>
+      </section>
+    );
   }
 
   return (

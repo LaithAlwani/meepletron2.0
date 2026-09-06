@@ -62,7 +62,6 @@ export default async function HowToPlayPage({
   if (!data) notFound();
   const { game, faqs, reminders } = data;
 
-  const gameId = game._id as Id<"games">;
   const manual =
     game.rulebooks.find((r) => r.kind !== "download" && r.downloadUrl) ??
     game.rulebooks.find((r) => r.downloadUrl);
@@ -136,11 +135,12 @@ export default async function HowToPlayPage({
   ];
 
   return (
-    <div className="mx-auto max-w-3xl px-4 py-8">
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
-      />
+    <>
+      <div className="mx-auto max-w-3xl px-4 py-8">
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        />
 
       {/* Breadcrumb back to the game */}
       <nav
@@ -161,76 +161,60 @@ export default async function HowToPlayPage({
         <span className="shrink-0 text-foreground">How to play</span>
       </nav>
 
-      {/* Header — thumbnail + section eyebrow + game title */}
-      <div className="mt-4 flex items-center gap-4">
-        {(game.thumbnailUrl || game.imageUrl) && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={game.thumbnailUrl ?? game.imageUrl ?? undefined}
-            alt=""
-            className="h-16 w-16 shrink-0 rounded-lg object-cover ring-1 ring-border sm:h-20 sm:w-20"
-          />
-        )}
-        <div className="min-w-0">
-          <p className="text-xs font-bold uppercase tracking-[0.15em] text-accent">
-            How to play
-          </p>
-          <h1 className="font-display mt-0.5 truncate text-xl font-extrabold tracking-tight sm:text-2xl">
-            {game.title}
-          </h1>
-          <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted">
-            {players && (
-              <span className="inline-flex items-center gap-1.5">
-                <Users className="h-4 w-4" />
-                {players}
-              </span>
-            )}
-            {time && (
-              <span className="inline-flex items-center gap-1.5">
-                <Clock className="h-4 w-4" />
-                {time}
-              </span>
-            )}
-            {game.minAge && (
-              <span className="inline-flex items-center gap-1.5">
-                <Baby className="h-4 w-4" />
-                Ages {game.minAge}+
-              </span>
-            )}
+      {/* Header — thumbnail + title on the left, rulebook download on the right
+          (across from them on desktop; full-width beneath on mobile). */}
+      <div className="mt-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-4">
+          {(game.thumbnailUrl || game.imageUrl) && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={game.thumbnailUrl ?? game.imageUrl ?? undefined}
+              alt=""
+              className="h-16 w-16 shrink-0 rounded-lg object-cover ring-1 ring-border sm:h-20 sm:w-20"
+            />
+          )}
+          <div className="min-w-0">
+            <p className="text-xs font-bold uppercase tracking-[0.15em] text-accent">
+              How to play
+            </p>
+            <h1 className="font-display mt-0.5 truncate text-xl font-extrabold tracking-tight sm:text-2xl">
+              {game.title}
+            </h1>
+            <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted">
+              {players && (
+                <span className="inline-flex items-center gap-1.5">
+                  <Users className="h-4 w-4" />
+                  {players}
+                </span>
+              )}
+              {time && (
+                <span className="inline-flex items-center gap-1.5">
+                  <Clock className="h-4 w-4" />
+                  {time}
+                </span>
+              )}
+              {game.minAge && (
+                <span className="inline-flex items-center gap-1.5">
+                  <Baby className="h-4 w-4" />
+                  Ages {game.minAge}+
+                </span>
+              )}
+            </div>
           </div>
         </div>
+
+        {manual?.downloadUrl && (
+          <a
+            href={manual.downloadUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={buttonClasses("primary", "md", "w-full shrink-0 sm:w-auto")}
+          >
+            <Download className="h-4 w-4" />
+            Download the rulebook
+          </a>
+        )}
       </div>
-
-      {/* The one rulebook download, up top */}
-      {manual?.downloadUrl && (
-        <a
-          href={manual.downloadUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className={`mt-5 ${buttonClasses("subtle", "md")}`}
-        >
-          <Download className="h-4 w-4" />
-          Download the rulebook
-        </a>
-      )}
-
-      {/* Ask about the rules — the first thing on the page */}
-      <section className="mt-6">
-        <h2 className="font-display text-xl font-extrabold">
-          Ask about the rules
-        </h2>
-        <p className="mt-1 text-sm text-muted">
-          Grounded in {game.title}&apos;s rulebook — cite-checked answers, not
-          guesses.
-        </p>
-        <div className="mt-4">
-          <InlineAsk
-            gameId={gameId}
-            baseSlug={game.parent ? game.parent.slug : game.slug}
-            moduleId={game.parent ? gameId : undefined}
-          />
-        </div>
-      </section>
 
       {/* Rules refresher */}
       {reminders.length > 0 && (
@@ -280,6 +264,18 @@ export default async function HowToPlayPage({
           contain mistakes — check the manual for anything critical.
         </p>
       )}
-    </div>
+
+      </div>
+
+      {/* Ask about the rules — the closing CTA: a full-bleed accent banner whose
+          input deep-links into the live rulebook chat with the question. */}
+      <InlineAsk
+        gameId={game._id}
+        baseSlug={game.parent?.slug ?? game.slug}
+        moduleId={game.parent ? game._id : undefined}
+        variant="banner"
+        heading={`Still have a ${game.title} rules question?`}
+      />
+    </>
   );
 }

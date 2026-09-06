@@ -7,7 +7,6 @@ import { streamText } from "ai";
 import { auth } from "./auth";
 import { finite } from "./lib/num";
 import { CHAT_MODEL, buildAnswer } from "./rag";
-import { GENERAL_SYSTEM_PROMPT } from "./lib/assistantPrompt";
 
 const http = httpRouter();
 
@@ -118,12 +117,13 @@ const chat = httpAction(async (ctx, request) => {
   const messages = history as { role: "user" | "assistant"; content: string }[];
 
   // Retrieve + rerank + assemble the grounded prompt (shared with the FAQ generator).
-  const { system, annotations, usage, empty } = await buildAnswer(ctx, {
-    rulebookIds: selectedRulebookIds,
-    query,
-    history: messages,
-    sourceTitles,
-  });
+  const { system, annotations, usage, empty, answerTemperature } =
+    await buildAnswer(ctx, {
+      rulebookIds: selectedRulebookIds,
+      query,
+      history: messages,
+      sourceTitles,
+    });
 
   // No relevant rulebook content → tell the user, and NEVER let the model
   // answer from its own knowledge.
@@ -142,7 +142,12 @@ const chat = httpAction(async (ctx, request) => {
   }
 
   // Stream the grounded answer; persist on completion.
-  const result = streamText({ model: CHAT_MODEL, system, messages });
+  const result = streamText({
+    model: CHAT_MODEL,
+    system,
+    messages,
+    temperature: answerTemperature,
+  });
 
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
@@ -191,107 +196,6 @@ const chat = httpAction(async (ctx, request) => {
 http.route({ path: "/chat", method: "POST", handler: chat });
 http.route({
   path: "/chat",
-  method: "OPTIONS",
-  handler: httpAction(async (_ctx, request) => {
-    return new Response(null, {
-      status: 204,
-      headers: corsHeaders(request.headers.get("Origin")),
-    });
-  }),
-});
-
-/**
- * General-mode assistant: answers questions about the Meepletron app itself (no
- * RAG). Body is the running general conversation `{ messages: [{role, content}] }`
- * (ephemeral — not persisted). Budgeted like /chat.
- */
-const assistant = httpAction(async (ctx, request) => {
-  const origin = request.headers.get("Origin");
-
-  const userId = await getAuthUserId(ctx);
-  if (!userId) {
-    return new Response("Unauthorized", { status: 401, headers: corsHeaders(origin) });
-  }
-
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
-    return new Response("Bad request", { status: 400, headers: corsHeaders(origin) });
-  }
-  const raw = (body as { messages?: unknown })?.messages;
-  const messages = (Array.isArray(raw) ? raw : [])
-    .filter(
-      (m): m is { role: "user" | "assistant"; content: string } =>
-        !!m &&
-        (m.role === "user" || m.role === "assistant") &&
-        typeof m.content === "string",
-    )
-    .slice(-12);
-  if (messages.length === 0 || messages[messages.length - 1].role !== "user") {
-    return new Response("No question", { status: 400, headers: corsHeaders(origin) });
-  }
-
-  try {
-    await ctx.runMutation(internal.chat.reserveBudget, {
-      userId,
-      todayStartMs: startOfUtcDay(Date.now()),
-    });
-  } catch {
-    return new Response(
-      "You've reached today's message limit. Please try again tomorrow.",
-      { status: 429, headers: corsHeaders(origin) },
-    );
-  }
-
-  const result = streamText({
-    model: CHAT_MODEL,
-    system: GENERAL_SYSTEM_PROMPT,
-    messages,
-  });
-
-  const encoder = new TextEncoder();
-  const stream = new ReadableStream({
-    async start(controller) {
-      let full = "";
-      try {
-        for await (const delta of result.textStream) {
-          full += delta;
-          controller.enqueue(encoder.encode(delta));
-        }
-        const u = await result.usage;
-        const inTok = finite(u.inputTokens);
-        const outTok = finite(u.outputTokens);
-        await ctx.runMutation(internal.assistant.accountGeneralUsage, {
-          userId,
-          usage: [
-            {
-              purpose: "chat-answer",
-              model: "gemini-2.5-flash",
-              promptTokens: inTok,
-              completionTokens: outTok,
-              totalTokens: finite(u.totalTokens) || inTok + outTok,
-            },
-          ],
-        });
-      } catch {
-        if (!full) {
-          const msg = "Sorry — something went wrong.";
-          controller.enqueue(encoder.encode(msg));
-        }
-      }
-      controller.close();
-    },
-  });
-
-  return new Response(stream, {
-    headers: { "Content-Type": "text/plain; charset=utf-8", ...corsHeaders(origin) },
-  });
-});
-
-http.route({ path: "/assistant", method: "POST", handler: assistant });
-http.route({
-  path: "/assistant",
   method: "OPTIONS",
   handler: httpAction(async (_ctx, request) => {
     return new Response(null, {

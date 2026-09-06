@@ -5,7 +5,6 @@ import Link from "next/link";
 import { useQuery, usePaginatedQuery } from "convex/react";
 import {
   Dices,
-  Sparkles,
   Trophy,
   MessageCircle,
   ChevronRight,
@@ -18,7 +17,6 @@ import { PlayCard } from "@/components/plays/PlayCard";
 import { PlayPostCard } from "@/components/plays/PlayPostCard";
 import { LogPlayWizard } from "@/components/plays/LogPlayWizard";
 import { CreateListDrawer } from "@/components/top-games/CreateListDrawer";
-import { openAssistant } from "@/lib/assistant";
 
 export function Dashboard() {
   const me = useQuery(api.users.me);
@@ -52,13 +50,12 @@ export function Dashboard() {
       </div>
 
       {/* Quick actions */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 gap-3">
         <ActionCard
           icon={Dices}
           label="Log a play"
           onClick={() => setWizardOpen(true)}
         />
-        <ActionCard icon={Sparkles} label="Ask the AI" onClick={openAssistant} />
         <ActionCard
           icon={Trophy}
           label="New list"
