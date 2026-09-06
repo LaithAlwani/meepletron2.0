@@ -24,8 +24,8 @@ const ROUTES: {
   { path: "/who-goes-first", changeFrequency: "monthly", priority: 0.7 },
   { path: "/tuckbox", changeFrequency: "monthly", priority: 0.6 },
   { path: "/about", changeFrequency: "monthly", priority: 0.5 },
-  { path: "/privacy-policy", changeFrequency: "yearly", priority: 0.2 },
-  { path: "/terms-of-service", changeFrequency: "yearly", priority: 0.2 },
+  { path: "/privacy", changeFrequency: "yearly", priority: 0.2 },
+  { path: "/terms", changeFrequency: "yearly", priority: 0.2 },
 ];
 
 // Cache the game-slug read in Next's data cache so the underlying Convex query

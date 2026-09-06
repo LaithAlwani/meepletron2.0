@@ -47,7 +47,7 @@ export function Footer() {
           <ul className="flex justify-center gap-4 text-sm">
             <li>
               <Link
-                href="/privacy-policy"
+                href="/privacy"
                 className="text-muted underline transition-colors hover:text-foreground"
               >
                 Privacy Policy
@@ -55,7 +55,7 @@ export function Footer() {
             </li>
             <li>
               <Link
-                href="/terms-of-service"
+                href="/terms"
                 className="text-muted underline transition-colors hover:text-foreground"
               >
                 Terms of Service
