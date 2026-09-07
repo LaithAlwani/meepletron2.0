@@ -18,6 +18,7 @@ import { useBggSearch } from "@/components/boardgames/useBggSearch";
 import { FilterDrawer } from "@/components/boardgames/FilterDrawer";
 import { useLibraryFilters } from "@/components/boardgames/useLibraryFilters";
 import { SortControl } from "@/components/boardgames/SortControl";
+import { useScrollRestore } from "@/components/lib/useScrollRestore";
 
 type View = "grid" | "list";
 const gridClass = "grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4";
@@ -44,11 +45,19 @@ export default function AllBoardgamesPage() {
     });
   }
 
+  // Restore scroll + how-many-loaded when returning from a game's detail page.
+  const { initialNumItems, restoreIfReady, save } = useScrollRestore(
+    "library-all",
+    24,
+  );
   const { results, status, loadMore } = usePaginatedQuery(
     api.games.libraryGames,
     { ...args, sort },
-    { initialNumItems: 24 },
+    { initialNumItems },
   );
+  useEffect(() => {
+    restoreIfReady(results.length);
+  }, [results.length, restoreIfReady]);
   // Skip the exact count while searching — it's a full-catalogue scan; show the
   // running result count instead.
   const total = useQuery(api.games.libraryCount, searching ? "skip" : args);
@@ -196,8 +205,15 @@ export default function AllBoardgamesPage() {
         )
       ) : (
         <>
+          {/* Save scroll + loaded count when a card link is clicked, so Back from
+              the game's detail lands where they were. */}
           {view === "list" ? (
-            <div className="divide-y divide-border">
+            <div
+              className="divide-y divide-border"
+              onClickCapture={(e) => {
+                if ((e.target as HTMLElement).closest("a")) save(results.length);
+              }}
+            >
               {results.map((g) => (
                 <GameListItem key={g._id} game={g} />
               ))}
@@ -206,7 +222,12 @@ export default function AllBoardgamesPage() {
               ))}
             </div>
           ) : (
-            <div className={gridClass}>
+            <div
+              className={gridClass}
+              onClickCapture={(e) => {
+                if ((e.target as HTMLElement).closest("a")) save(results.length);
+              }}
+            >
               {results.map((g, i) => (
                 <GameCard key={g._id} game={g} index={i} />
               ))}

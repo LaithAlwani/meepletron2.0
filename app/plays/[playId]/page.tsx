@@ -5,7 +5,6 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useQuery, useMutation, useConvexAuth } from "convex/react";
 import {
-  ArrowLeft,
   Lock,
   Globe,
   Trash2,
@@ -18,6 +17,7 @@ import {
   MessageCircle,
 } from "lucide-react";
 import { api } from "@/convex/_generated/api";
+import { BackButton } from "@/components/ui/BackButton";
 import type { Id } from "@/convex/_generated/dataModel";
 import { Skeleton } from "@/components/ui/Surface";
 import { buttonClasses } from "@/components/ui/Button";
@@ -118,13 +118,11 @@ export default function PlayPage({
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-8">
-      <Link
-        href="/plays"
+      <BackButton
+        fallbackHref="/plays"
+        label="Back"
         className="mb-4 inline-flex items-center gap-1 text-sm font-medium text-muted transition-colors hover:text-foreground"
-      >
-        <ArrowLeft className="h-4 w-4" />
-        Plays
-      </Link>
+      />
 
       {/* Header */}
       <div className="min-w-0">

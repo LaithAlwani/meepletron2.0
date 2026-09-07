@@ -29,8 +29,7 @@ import { Skeleton } from "@/components/ui/Surface";
 import { buttonClasses } from "@/components/ui/Button";
 import { ListCard } from "@/components/top-games/ListCard";
 import { CoverScroller } from "@/components/top-games/CoverScroller";
-import { PlayPostCard } from "@/components/plays/PlayPostCard";
-import { MyPlaysFeed } from "@/components/plays/MyPlaysFeed";
+import { PlaysGrid } from "@/components/plays/PlaysGrid";
 import { StatsPanel } from "@/components/plays/StatsPanel";
 import { FriendButton } from "@/components/friends/FriendButton";
 import { FriendsSheet } from "@/components/friends/FriendsSheet";
@@ -49,15 +48,25 @@ export default function ProfilePage({
   const { username } = use(params);
   const data = useQuery(api.topGames.publicProfile, { username });
   const me = useQuery(api.users.me);
-  // The owner's own Plays tab uses MyPlaysFeed (all plays); only fetch the
-  // public list for other viewers.
-  const plays = useQuery(
-    api.plays.userPublicPlays,
-    data?.isSelf ? "skip" : { username },
-  );
-  const [tab, setTab] = useState<Tab | null>(null);
+  // The active tab lives in the URL (?tab=…) so returning via Back lands on the
+  // same tab (e.g. Plays), not the default. Seeded from the URL on first render
+  // (only the loading skeleton is shown during SSR, so there's no mismatch).
+  const [tab, setTab] = useState<Tab | null>(() => {
+    if (typeof window === "undefined") return null;
+    const t = new URLSearchParams(window.location.search).get("tab");
+    return t === "stats" || t === "plays" || t === "lists" || t === "collection"
+      ? t
+      : null;
+  });
   const [friendsOpen, setFriendsOpen] = useState(false);
   const [createListOpen, setCreateListOpen] = useState(false);
+
+  function selectTab(next: Tab) {
+    setTab(next);
+    const url = new URL(window.location.href);
+    url.searchParams.set("tab", next);
+    window.history.replaceState(window.history.state, "", url);
+  }
 
   if (data === undefined) {
     return (
@@ -154,26 +163,26 @@ export default function ProfilePage({
             {isSelf && (
               <TabBtn
                 active={activeTab === "stats"}
-                onClick={() => setTab("stats")}
+                onClick={() => selectTab("stats")}
                 icon={BarChart3}
                 label="Stats"
               />
             )}
             <TabBtn
               active={activeTab === "plays"}
-              onClick={() => setTab("plays")}
+              onClick={() => selectTab("plays")}
               icon={Dices}
               label="Plays"
             />
             <TabBtn
               active={activeTab === "lists"}
-              onClick={() => setTab("lists")}
+              onClick={() => selectTab("lists")}
               icon={Trophy}
               label="Lists"
             />
             <TabBtn
               active={activeTab === "collection"}
-              onClick={() => setTab("collection")}
+              onClick={() => selectTab("collection")}
               icon={Package}
               label="Collection"
             />
@@ -181,8 +190,9 @@ export default function ProfilePage({
 
           <div className="mt-5">
             {activeTab === "stats" && isSelf && <StatsPanel />}
-            {activeTab === "plays" &&
-              (isSelf ? <MyPlaysFeed /> : <PlaysList plays={plays} />)}
+            {activeTab === "plays" && (
+              <PlaysGrid isSelf={isSelf} username={username} />
+            )}
             {activeTab === "lists" &&
               (isSelf ? <MyListsGrid /> : <ListsGrid lists={lists} />)}
             {activeTab === "collection" && (
@@ -206,7 +216,7 @@ export default function ProfilePage({
       />
 
       {/* The Lists tab's floating action (your own profile). Plays has its own
-          FAB inside MyPlaysFeed; Stats + Collection have none. */}
+          FAB inside PlaysGrid; Stats + Collection have none. */}
       {isSelf && !isPrivate && activeTab === "lists" && (
         <Fab
           icon={Plus}
@@ -374,7 +384,6 @@ function TabBtn({
   );
 }
 
-type Plays = FunctionReturnType<typeof api.plays.userPublicPlays>;
 type Lists = NonNullable<
   FunctionReturnType<typeof api.topGames.publicProfile>
 >["lists"];
@@ -390,20 +399,6 @@ function EmptyTab({ text }: { text: string }) {
   );
 }
 
-function PlaysList({ plays }: { plays: Plays | undefined }) {
-  if (plays === undefined)
-    return <Skeleton className="h-40 w-full rounded-xl" />;
-  if (plays.length === 0) return <EmptyTab text="No public plays yet." />;
-  return (
-    <ul className="space-y-3">
-      {plays.map((p) => (
-        <li key={p._id}>
-          <PlayPostCard play={p} />
-        </li>
-      ))}
-    </ul>
-  );
-}
 
 function ListsGrid({ lists }: { lists: Lists }) {
   if (lists.length === 0) return <EmptyTab text="No public Top Games lists yet." />;

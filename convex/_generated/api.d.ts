@@ -10,7 +10,6 @@
 
 import type * as admin from "../admin.js";
 import type * as auth from "../auth.js";
-import type * as backfillR2 from "../backfillR2.js";
 import type * as bgg from "../bgg.js";
 import type * as bggSync from "../bggSync.js";
 import type * as chat from "../chat.js";
@@ -63,7 +62,6 @@ import type * as lib_r2keys from "../lib/r2keys.js";
 import type * as lib_slug from "../lib/slug.js";
 import type * as lib_topGamesCategories from "../lib/topGamesCategories.js";
 import type * as maintenance from "../maintenance.js";
-import type * as migrations from "../migrations.js";
 import type * as otp_EmailOtp from "../otp/EmailOtp.js";
 import type * as plays from "../plays.js";
 import type * as posts from "../posts.js";
@@ -89,7 +87,6 @@ import type {
 declare const fullApi: ApiFromModules<{
   admin: typeof admin;
   auth: typeof auth;
-  backfillR2: typeof backfillR2;
   bgg: typeof bgg;
   bggSync: typeof bggSync;
   chat: typeof chat;
@@ -142,7 +139,6 @@ declare const fullApi: ApiFromModules<{
   "lib/slug": typeof lib_slug;
   "lib/topGamesCategories": typeof lib_topGamesCategories;
   maintenance: typeof maintenance;
-  migrations: typeof migrations;
   "otp/EmailOtp": typeof otp_EmailOtp;
   plays: typeof plays;
   posts: typeof posts;

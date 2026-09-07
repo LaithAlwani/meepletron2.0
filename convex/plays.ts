@@ -919,6 +919,39 @@ export const userPublicPlays = query({
   },
 });
 
+/** Paginated public plays for a user's profile grid (infinite scroll). Same
+ *  card shape as `myPlays`; ids come newest-first from `publicParticipantPlayIds`. */
+export const userPublicPlaysPaged = query({
+  args: { username: v.string(), paginationOpts: paginationOptsValidator },
+  handler: async (ctx, { username, paginationOpts }) => {
+    const empty = { page: [], isDone: true, continueCursor: "" };
+    const lower = username.trim().toLowerCase();
+    if (!lower) return empty;
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_username_lower", (q) => q.eq("usernameLower", lower))
+      .unique();
+    if (!user) return empty;
+    const viewer = await getCurrentUser(ctx);
+    if (!(await canViewProfile(ctx, user, viewer?._id ?? null))) return empty;
+
+    const ids = await publicParticipantPlayIds(ctx, user); // newest-first
+    const offset = Number(paginationOpts.cursor ?? "0") || 0;
+    const end = offset + paginationOpts.numItems;
+    const pageIds = ids.slice(offset, end);
+    const plays = (
+      await Promise.all(pageIds.map((id) => ctx.db.get("plays", id)))
+    ).filter((p): p is PlayDoc => p !== null && p.visibility === "public");
+    return {
+      page: await Promise.all(
+        plays.map((p) => playCard(ctx, p, viewer?._id ?? null)),
+      ),
+      isDone: end >= ids.length,
+      continueCursor: String(end),
+    };
+  },
+});
+
 /** A light social strip for the dashboard: the caller's accepted friends' most
  *  recent public plays, newest first (a peek, not a feed). */
 export const friendsRecentPlays = query({

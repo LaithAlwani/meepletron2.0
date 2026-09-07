@@ -1280,29 +1280,6 @@ export const slugOf = internalQuery({
   },
 });
 
-/** A page of games for the R2 cover backfill (see `images.backfillGameCovers`). */
-export const gamesPage = internalQuery({
-  args: { paginationOpts: paginationOptsValidator },
-  handler: async (ctx, { paginationOpts }) => {
-    return await ctx.db.query("games").paginate(paginationOpts);
-  },
-});
-
-/** Record backfilled R2 cover keys on a game (used by the cover backfill). */
-export const setGameCoverKeys = internalMutation({
-  args: {
-    gameId: v.id("games"),
-    imageKey: v.string(),
-    thumbnailKey: v.optional(v.string()),
-  },
-  handler: async (ctx, { gameId, imageKey, thumbnailKey }) => {
-    await ctx.db.patch("games", gameId, {
-      imageKey,
-      thumbnailKey: thumbnailKey ?? imageKey,
-    });
-  },
-});
-
 /* -------------------------------------------------------------------------- */
 /* Stub enrichment (BGG collection sync fills stubs into full entries)         */
 /* -------------------------------------------------------------------------- */
