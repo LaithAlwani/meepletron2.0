@@ -26,6 +26,7 @@ import { useToast } from "@/components/ui/Toast";
 import { useGameSearch } from "@/components/boardgames/useGameSearch";
 import { useUsernameGate } from "@/components/feed/UsernameGate";
 import { compressImage } from "@/lib/imageCompress";
+import { putToSignedUrl } from "@/components/lib/r2Upload";
 import { cn } from "@/lib/cn";
 
 type PlayFormat =
@@ -62,7 +63,7 @@ export type WizardInitialPlay = {
   location?: string | null;
   comments?: string | null;
   visibility?: "private" | "public";
-  photoIds?: Id<"_storage">[];
+  photoKeys?: string[];
   photoUrls?: string[];
   players: {
     name: string;
@@ -124,7 +125,7 @@ export function buildInitialPlay(
     location: play.location ?? null,
     comments: play.comments ?? null,
     visibility: play.visibility,
-    photoIds: play.photoIds,
+    photoKeys: play.photoKeys,
     photoUrls: play.photoUrls,
   };
 }
@@ -191,6 +192,7 @@ export function LogPlayWizard({
   const logPlay = useMutation(api.plays.logPlay);
   const updatePlay = useMutation(api.plays.updatePlay);
   const genUpload = useMutation(api.plays.generatePlayPhotoUploadUrl);
+  const syncMetadata = useMutation(api.r2.syncMetadata);
 
   const isEdit = !!initialPlay?.playId;
   const ip = initialPlay;
@@ -246,8 +248,8 @@ export function LogPlayWizard({
   const [teamNames, setTeamNames] = useState<string[]>(initTeamNames);
   const [teamWinner, setTeamWinner] = useState<number>(ip?.teamWinner ?? 0);
   const [players, setPlayers] = useState<PlayerForm[]>(makePlayers);
-  const [photoIds, setPhotoIds] = useState<Id<"_storage">[]>(
-    isEdit ? (ip?.photoIds ?? []) : [],
+  const [photoKeys, setPhotoKeys] = useState<string[]>(
+    isEdit ? (ip?.photoKeys ?? []) : [],
   );
   const [photoPreviews, setPhotoPreviews] = useState<string[]>(
     isEdit ? (ip?.photoUrls ?? []) : [],
@@ -293,7 +295,7 @@ export function LogPlayWizard({
     setTeamNames(initTeamNames);
     setTeamWinner(ip?.teamWinner ?? 0);
     setPlayers(makePlayers());
-    setPhotoIds(isEdit ? (ip?.photoIds ?? []) : []);
+    setPhotoKeys(isEdit ? (ip?.photoKeys ?? []) : []);
     setPhotoPreviews(isEdit ? (ip?.photoUrls ?? []) : []);
     setVisibility(ip?.visibility ?? "private");
   }
@@ -304,7 +306,7 @@ export function LogPlayWizard({
   }
 
   function removePhoto(index: number) {
-    setPhotoIds((ids) => ids.filter((_, i) => i !== index));
+    setPhotoKeys((ids) => ids.filter((_, i) => i !== index));
     setPhotoPreviews((p) => p.filter((_, i) => i !== index));
   }
 
@@ -317,15 +319,13 @@ export function LogPlayWizard({
       for (const file of files.slice(0, 8)) {
         if (!file.type.startsWith("image/")) continue;
         const blob = await compressImage(file, 1600, 0.8);
-        const url = await genUpload({});
-        const res = await fetch(url, {
-          method: "POST",
-          headers: { "Content-Type": "image/jpeg" },
-          body: blob,
+        const { key, url } = await genUpload({
+          gameId: game?.gameId,
+          gameName: game?.title,
         });
-        if (!res.ok) throw new Error("upload failed");
-        const { storageId } = await res.json();
-        setPhotoIds((p) => [...p, storageId]);
+        await putToSignedUrl(url, blob);
+        await syncMetadata({ key });
+        setPhotoKeys((p) => [...p, key]);
         setPhotoPreviews((p) => [...p, URL.createObjectURL(blob)]);
       }
     } catch {
@@ -372,7 +372,7 @@ export function LogPlayWizard({
           teamIndex: isTeams ? (p.teamIndex ?? 0) : undefined,
           isNew: p.isNew,
         })),
-        photoIds,
+        photoKeys,
         visibility,
       };
       let id: Id<"plays">;

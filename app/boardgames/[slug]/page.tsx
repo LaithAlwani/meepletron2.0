@@ -25,8 +25,10 @@ import { SimilarGames } from "@/components/boardgames/SimilarGames";
 import { HexRating } from "@/components/boardgames/HexRating";
 import { GameFacts } from "@/components/boardgames/GameFacts";
 import { ShareButton } from "@/components/boardgames/ShareButton";
+import { RequestRulebookButton } from "@/components/boardgames/RequestRulebookButton";
 import { ComponentsList } from "@/components/boardgames/GameReference";
 import { ExpandableText } from "@/components/ui/ExpandableText";
+import { Fab } from "@/components/ui/Fab";
 import { buttonClasses } from "@/components/ui/Button";
 import { Die } from "@/components/ui/icons";
 import { LogPlayWizard } from "@/components/plays/LogPlayWizard";
@@ -485,27 +487,31 @@ export default function GameDetailPage({
           <h2 className="font-display text-2xl font-extrabold leading-tight sm:text-3xl">
             Stop flipping through the rulebook mid-game.
           </h2>
-          <Link
-            href={ingestedCount > 0 ? chatHref : "/boardgames"}
-            className="inline-flex shrink-0 items-center gap-2 rounded-xl bg-surface px-5 py-3 text-sm font-bold text-foreground shadow-sm transition-transform hover:-translate-y-0.5"
-          >
-            <MessageCircle className="h-4 w-4" />
-            Get an answer
-          </Link>
+          {ingestedCount > 0 ? (
+            <Link
+              href={chatHref}
+              className="inline-flex shrink-0 items-center gap-2 rounded-xl bg-surface px-5 py-3 text-sm font-bold text-foreground shadow-sm transition-transform hover:-translate-y-0.5"
+            >
+              <MessageCircle className="h-4 w-4" />
+              Get an answer
+            </Link>
+          ) : (
+            <RequestRulebookButton
+              gameId={gameId}
+              className="inline-flex shrink-0 items-center gap-2 rounded-xl bg-surface px-5 py-3 text-sm font-bold text-foreground shadow-sm transition-transform hover:-translate-y-0.5 disabled:opacity-70"
+            />
+          )}
         </div>
       </section>
 
-      {/* Floating chat button — a persistent accent shortcut into the rulebook
-          chat, anchored bottom-right so it's reachable while scrolling. */}
+      {/* Floating chat shortcut into the rulebook chat — the shared FAB, so it
+          sits above the mobile tab bar (not hidden behind it). */}
       {ingestedCount > 0 && (
-        <Link
+        <Fab
           href={chatHref}
-          aria-label="Chat about the rules"
-          title="Chat about the rules"
-          className="fixed bottom-6 right-6 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-accent text-accent-foreground shadow-lg transition-transform hover:-translate-y-0.5 hover:shadow-xl"
-        >
-          <MessageCircle className="h-6 w-6" />
-        </Link>
+          icon={MessageCircle}
+          label="Chat about the rules"
+        />
       )}
 
       {/* Full-artwork lightbox */}

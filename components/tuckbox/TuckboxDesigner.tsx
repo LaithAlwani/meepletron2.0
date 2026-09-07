@@ -6,6 +6,7 @@ import { useQuery, useMutation } from "convex/react";
 import { Download, Upload, Check, FolderOpen } from "lucide-react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
+import { putToSignedUrl } from "@/components/lib/r2Upload";
 import { computeLayout, getPanel } from "@/lib/tuckbox/geometry";
 import { renderTuckboxPdf, triggerDownload } from "@/lib/tuckbox/pdf";
 import {
@@ -153,6 +154,7 @@ export function TuckboxDesigner({
   const signedIn = me != null;
   const saveMut = useMutation(api.tuckboxes.save);
   const genUploadUrl = useMutation(api.tuckboxes.generateUploadUrl);
+  const syncMetadata = useMutation(api.r2.syncMetadata);
   const [boxId, setBoxId] = useState<Id<"tuckboxes"> | null>(null);
   const [boxName, setBoxName] = useState(
     initialBoardgame?.title?.trim() || "Untitled box",
@@ -168,7 +170,9 @@ export function TuckboxDesigner({
     touchedRef.current = true;
   };
   // dataURL → uploaded storageId, so identical images upload only once.
-  const storageCacheRef = useRef<Map<string, Id<"_storage">>>(new Map());
+  // Maps an image data-URL to the R2 object key it was uploaded as, so re-saves
+  // of unchanged artwork skip re-uploading.
+  const storageCacheRef = useRef<Map<string, string>>(new Map());
 
   const effectiveConfig: TuckboxConfig = useMemo(
     () => ({
@@ -471,23 +475,16 @@ export function TuckboxDesigner({
     }
   }
 
-  // Upload a data URL to storage once; cache by content.
-  async function ensureUploaded(dataUrl: string): Promise<Id<"_storage">> {
+  // Upload a data URL to R2 once; cache by content. Returns the R2 object key.
+  async function ensureUploaded(dataUrl: string): Promise<string> {
     const cached = storageCacheRef.current.get(dataUrl);
     if (cached) return cached;
     const blob = await (await fetch(dataUrl)).blob();
-    const url = await genUploadUrl();
-    const res = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": blob.type || "image/png" },
-      body: blob,
-    });
-    if (!res.ok) throw new Error("Upload failed");
-    const { storageId } = (await res.json()) as {
-      storageId: Id<"_storage">;
-    };
-    storageCacheRef.current.set(dataUrl, storageId);
-    return storageId;
+    const { key, url } = await genUploadUrl({ name: boxName });
+    await putToSignedUrl(url, blob);
+    await syncMetadata({ key });
+    storageCacheRef.current.set(dataUrl, key);
+    return key;
   }
 
   // Latest-state save closure, refreshed each render so the debounce always
@@ -503,10 +500,10 @@ export function TuckboxDesigner({
       for (const face of FACE_KEYS) {
         const a = assets[face];
         if (!a) continue;
-        const storageId = await ensureUploaded(a.url);
+        const key = await ensureUploaded(a.url);
         faces.push({
           face,
-          storageId,
+          key,
           naturalWidth: a.naturalWidth,
           naturalHeight: a.naturalHeight,
           transform: {
@@ -519,7 +516,7 @@ export function TuckboxDesigner({
       }
       let wrap:
         | {
-            storageId: Id<"_storage">;
+            key: string;
             naturalWidth: number;
             naturalHeight: number;
             transform: {
@@ -531,9 +528,9 @@ export function TuckboxDesigner({
           }
         | undefined;
       if (wrapAsset) {
-        const storageId = await ensureUploaded(wrapAsset.url);
+        const key = await ensureUploaded(wrapAsset.url);
         wrap = {
-          storageId,
+          key,
           naturalWidth: wrapAsset.naturalWidth,
           naturalHeight: wrapAsset.naturalHeight,
           transform: {
@@ -580,13 +577,15 @@ export function TuckboxDesigner({
     if (!loadId || !loaded || loaded._id !== loadId) return;
     let cancelled = false;
     (async () => {
-      const cache = new Map<string, Id<"_storage">>();
+      // Only R2-keyed artwork is cached; legacy Convex-blob faces are re-uploaded
+      // to R2 on the next save (which migrates them).
+      const cache = new Map<string, string>();
       const nextAssets: FaceAssets = {};
       for (const f of loaded.faces) {
         if (!f.url) continue;
         const dataUrl = await fetchImageAsDataUrl(f.url).catch(() => null);
         if (!dataUrl) continue;
-        cache.set(dataUrl, f.storageId);
+        if (f.key) cache.set(dataUrl, f.key);
         nextAssets[f.face] = {
           url: dataUrl,
           naturalWidth: f.naturalWidth,
@@ -605,7 +604,7 @@ export function TuckboxDesigner({
           () => null,
         );
         if (dataUrl) {
-          cache.set(dataUrl, loaded.wrap.storageId);
+          if (loaded.wrap.key) cache.set(dataUrl, loaded.wrap.key);
           nextWrap = {
             url: dataUrl,
             naturalWidth: loaded.wrap.naturalWidth,

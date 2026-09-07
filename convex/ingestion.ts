@@ -16,6 +16,7 @@ import {
 } from "./lib/extraction";
 import { chunkMarkdown } from "./lib/chunker";
 import { embedDocuments } from "./lib/embedding";
+import { readMediaBytes } from "./r2";
 
 const CHUNK_INSERT_BATCH = 100;
 const EMBED_COMMIT_BATCH = 50;
@@ -80,9 +81,8 @@ export const startIngestion = action({
       throw new Error("Download-only files can't be ingested");
     }
 
-    const blob = await ctx.storage.get(info.storageId);
-    if (!blob) throw new Error("Rulebook file is missing");
-    const bytes = new Uint8Array(await blob.arrayBuffer());
+    const bytes = await readMediaBytes(ctx, info.storageKey, info.storageId);
+    if (!bytes) throw new Error("Rulebook file is missing");
 
     const totalPages = await getPdfPageCount(bytes);
     const batchPlan = planBatches(totalPages);
@@ -133,9 +133,8 @@ export const processBatch = internalAction({
       { draftId, expectedIndex: state.nextBatchIndex },
     );
     try {
-      const blob = await ctx.storage.get(state.storageId);
-      if (!blob) throw new Error("Rulebook file is missing");
-      const bytes = new Uint8Array(await blob.arrayBuffer());
+      const bytes = await readMediaBytes(ctx, state.storageKey, state.storageId);
+      if (!bytes) throw new Error("Rulebook file is missing");
       const slice = await extractPageRange(
         bytes,
         batch.startPage,

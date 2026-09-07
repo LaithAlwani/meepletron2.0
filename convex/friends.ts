@@ -8,6 +8,7 @@ import {
 import type { Doc, Id } from "./_generated/dataModel";
 import { internal } from "./_generated/api";
 import { getCurrentUser, requireUser } from "./lib/auth";
+import { imageUrl } from "./lib/media";
 
 const SITE_URL = process.env.SITE_URL || "https://www.meepletron.com";
 
@@ -226,9 +227,10 @@ export const listFriends = query({
           _id: u._id,
           name: u.username ?? u.name ?? "Player",
           username: u.username ?? null,
-          avatarUrl: u.avatarStorageId
-            ? await ctx.storage.getUrl(u.avatarStorageId)
-            : (u.image ?? null),
+          avatarUrl:
+            (await imageUrl(ctx, u.avatarKey, u.avatarStorageId)) ??
+            u.image ??
+            null,
         })),
     );
   },

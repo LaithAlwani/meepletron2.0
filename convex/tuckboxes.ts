@@ -2,6 +2,9 @@ import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
 import { getCurrentUser, requireUser } from "./lib/auth";
+import { r2, deleteMedia } from "./r2";
+import { tuckboxKey } from "./lib/r2keys";
+import { imageUrl } from "./lib/media";
 
 const transformV = v.object({
   zoom: v.number(),
@@ -19,25 +22,32 @@ const faceV = v.object({
     v.literal("top"),
     v.literal("bottom"),
   ),
-  storageId: v.id("_storage"),
+  // R2 object key (new) or legacy Convex blob id (editing an un-migrated box).
+  key: v.optional(v.string()),
+  storageId: v.optional(v.id("_storage")),
   naturalWidth: v.number(),
   naturalHeight: v.number(),
   transform: transformV,
 });
 
 const wrapV = v.object({
-  storageId: v.id("_storage"),
+  key: v.optional(v.string()),
+  storageId: v.optional(v.id("_storage")),
   naturalWidth: v.number(),
   naturalHeight: v.number(),
   transform: transformV,
 });
 
-/** Mint a short-lived upload URL for a signed-in user's face artwork. */
+/**
+ * Mint a short-lived R2 upload URL for a signed-in user's face artwork. Keys are
+ * foldered by the box name (never an id). The client PUTs the blob to `url`, then
+ * records `key` on the face when it saves.
+ */
 export const generateUploadUrl = mutation({
-  args: {},
-  handler: async (ctx) => {
+  args: { name: v.string() },
+  handler: async (ctx, { name }) => {
     await requireUser(ctx);
-    return await ctx.storage.generateUploadUrl();
+    return await r2.generateUploadUrl(tuckboxKey(name || "box", crypto.randomUUID()));
   },
 });
 
@@ -61,14 +71,15 @@ export const save = mutation({
   },
   handler: async (ctx, { id, ...rest }) => {
     const user = await requireUser(ctx);
-    const cover =
-      rest.wrap?.storageId ??
-      rest.faces.find((f) => f.face === "front")?.storageId ??
-      rest.faces[0]?.storageId;
+    const coverSrc =
+      rest.wrap ??
+      rest.faces.find((f) => f.face === "front") ??
+      rest.faces[0];
     const doc = {
       ...rest,
       userId: user._id,
-      coverStorageId: cover,
+      coverKey: coverSrc?.key,
+      coverStorageId: coverSrc?.storageId,
       updatedAt: Date.now(),
     };
     if (id) {
@@ -76,17 +87,22 @@ export const save = mutation({
       if (!existing || existing.userId !== user._id) {
         throw new Error("Not found");
       }
-      // Free any blob no longer referenced after this save (replaced images).
-      const stillUsed = new Set<Id<"_storage">>(
-        rest.faces.map((f) => f.storageId),
-      );
-      if (rest.wrap) stillUsed.add(rest.wrap.storageId);
-      const previous = new Set<Id<"_storage">>(
-        existing.faces.map((f) => f.storageId),
-      );
-      if (existing.wrap) previous.add(existing.wrap.storageId);
-      for (const sid of previous) {
-        if (!stillUsed.has(sid)) await ctx.storage.delete(sid);
+      // Free any image no longer referenced after this save (replaced artwork),
+      // across both stores.
+      const usedKeys = new Set<string>();
+      const usedIds = new Set<Id<"_storage">>();
+      for (const f of [...rest.faces, ...(rest.wrap ? [rest.wrap] : [])]) {
+        if (f.key) usedKeys.add(f.key);
+        if (f.storageId) usedIds.add(f.storageId);
+      }
+      for (const f of [
+        ...existing.faces,
+        ...(existing.wrap ? [existing.wrap] : []),
+      ]) {
+        if (f.key && !usedKeys.has(f.key)) await deleteMedia(ctx, f.key, null);
+        else if (f.storageId && !usedIds.has(f.storageId)) {
+          await deleteMedia(ctx, null, f.storageId);
+        }
       }
       await ctx.db.patch("tuckboxes", id, doc);
       return id;
@@ -112,15 +128,13 @@ export const listMine = query({
         name: r.name,
         updatedAt: r.updatedAt,
         faceCount: r.faces.length,
-        coverUrl: r.coverStorageId
-          ? await ctx.storage.getUrl(r.coverStorageId)
-          : null,
+        coverUrl: await imageUrl(ctx, r.coverKey, r.coverStorageId),
       })),
     );
   },
 });
 
-/** A single saved box (owned), with signed URLs for each face/wrap image. */
+/** A single saved box (owned), with URLs for each face/wrap image. */
 export const get = query({
   args: { id: v.id("tuckboxes") },
   handler: async (ctx, { id }) => {
@@ -131,26 +145,26 @@ export const get = query({
     const faces = await Promise.all(
       box.faces.map(async (f) => ({
         ...f,
-        url: await ctx.storage.getUrl(f.storageId),
+        url: await imageUrl(ctx, f.key, f.storageId),
       })),
     );
     const wrap = box.wrap
-      ? { ...box.wrap, url: await ctx.storage.getUrl(box.wrap.storageId) }
+      ? { ...box.wrap, url: await imageUrl(ctx, box.wrap.key, box.wrap.storageId) }
       : null;
     return { ...box, faces, wrap };
   },
 });
 
-/** Delete a saved box and its (unshared) image blobs. */
+/** Delete a saved box and its (unshared) images. */
 export const remove = mutation({
   args: { id: v.id("tuckboxes") },
   handler: async (ctx, { id }) => {
     const user = await requireUser(ctx);
     const box = await ctx.db.get("tuckboxes", id);
     if (!box || box.userId !== user._id) return;
-    const ids = new Set(box.faces.map((f) => f.storageId));
-    if (box.wrap) ids.add(box.wrap.storageId);
-    for (const sid of ids) await ctx.storage.delete(sid);
+    for (const f of [...box.faces, ...(box.wrap ? [box.wrap] : [])]) {
+      await deleteMedia(ctx, f.key, f.storageId);
+    }
     await ctx.db.delete("tuckboxes", id);
   },
 });

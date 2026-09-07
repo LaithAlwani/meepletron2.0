@@ -2,6 +2,9 @@ import { v, ConvexError } from "convex/values";
 import { query, mutation, internalQuery, internalMutation } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { getCurrentUser, requireUser, requireAdmin } from "./lib/auth";
+import { r2, deleteMedia } from "./r2";
+import { avatarKey, publicUrl } from "./lib/r2keys";
+import { imageUrl } from "./lib/media";
 import { tokenLimitFor } from "./chat";
 import { finite } from "./lib/num";
 import { deleteUserAppData, deleteUserAndAuth } from "./lib/purge";
@@ -13,19 +16,14 @@ export const me = query({
   handler: async (ctx) => {
     const user = await getCurrentUser(ctx);
     if (!user) return null;
-    const avatarUrl = user.avatarStorageId
-      ? await ctx.storage.getUrl(user.avatarStorageId)
-      : (user.image ?? null);
-    const recentAvatars = (
-      await Promise.all(
-        (user.avatarHistory ?? []).map(async (storageId) => ({
-          storageId,
-          url: await ctx.storage.getUrl(storageId),
-        })),
-      )
-    ).filter((r): r is { storageId: typeof r.storageId; url: string } =>
-      r.url !== null,
-    );
+    const avatarUrl =
+      (await imageUrl(ctx, user.avatarKey, user.avatarStorageId)) ??
+      user.image ??
+      null;
+    // Recents come from the R2 keys (populated on upload + by the backfill).
+    const recentAvatars = (user.avatarKeys ?? [])
+      .map((key) => ({ key, url: publicUrl(key) }))
+      .filter((r): r is { key: string; url: string } => r.url !== null);
     return { ...user, avatarUrl, recentAvatars };
   },
 });
@@ -133,9 +131,10 @@ export const searchUsers = query({
           _id: u._id,
           name: (findable ? u.name : null) ?? u.username ?? "Player",
           username: u.username ?? null,
-          avatarUrl: u.avatarStorageId
-            ? await ctx.storage.getUrl(u.avatarStorageId)
-            : (u.image ?? null),
+          avatarUrl:
+            (await imageUrl(ctx, u.avatarKey, u.avatarStorageId)) ??
+            u.image ??
+            null,
         };
       }),
     );
@@ -166,52 +165,53 @@ export const setPublicProfile = mutation({
   },
 });
 
-/** A short-lived URL the client POSTs the avatar file to. */
+/** A short-lived R2 URL the client PUTs the avatar file to. Keys are foldered by
+ *  the user's username (or id, if none yet). */
 export const generateAvatarUploadUrl = mutation({
   args: {},
   handler: async (ctx) => {
-    await requireUser(ctx);
-    return await ctx.storage.generateUploadUrl();
+    const user = await requireUser(ctx);
+    return await r2.generateUploadUrl(
+      avatarKey(user.username ?? user._id, crypto.randomUUID()),
+    );
   },
 });
 
 /**
  * Set the avatar from a freshly-uploaded (already client-compressed) image.
- * Pushes it onto the recents history, keeping the last 5 and deleting whatever
- * a 6th upload evicts.
+ * Pushes its R2 key onto the recents history, keeping the last 5 and deleting
+ * whatever a 6th upload evicts.
  */
 export const setAvatar = mutation({
-  args: { storageId: v.id("_storage") },
-  handler: async (ctx, { storageId }) => {
+  args: { key: v.string() },
+  handler: async (ctx, { key }) => {
     const user = await requireUser(ctx);
-    const meta = await ctx.db.system.get("_storage", storageId);
-    if (!meta || !(meta.contentType ?? "").startsWith("image/")) {
-      await ctx.storage.delete(storageId);
-      throw new ConvexError("That file isn't an image.");
-    }
-    const prev = user.avatarHistory ?? [];
-    const merged = [storageId, ...prev.filter((id) => id !== storageId)];
+    const prev = user.avatarKeys ?? [];
+    const merged = [key, ...prev.filter((k) => k !== key)];
     const history = merged.slice(0, 5);
-    for (const evicted of merged.slice(5)) await ctx.storage.delete(evicted);
+    for (const evicted of merged.slice(5)) await deleteMedia(ctx, evicted, null);
     await ctx.db.patch("users", user._id, {
-      avatarStorageId: storageId,
-      avatarHistory: history,
+      avatarKey: key,
+      avatarKeys: history,
+      // Drop any legacy Convex avatar now that an R2 one is set.
+      avatarStorageId: undefined,
     });
   },
 });
 
 /** Reuse one of the recent avatars (must be in the history). */
 export const useRecentAvatar = mutation({
-  args: { storageId: v.id("_storage") },
-  handler: async (ctx, { storageId }) => {
+  args: { key: v.string() },
+  handler: async (ctx, { key }) => {
     const user = await requireUser(ctx);
-    const history = user.avatarHistory ?? [];
-    if (!history.includes(storageId)) {
+    const history = user.avatarKeys ?? [];
+    if (!history.includes(key)) {
       throw new ConvexError("That photo isn't in your recents.");
     }
     await ctx.db.patch("users", user._id, {
-      avatarStorageId: storageId,
-      avatarHistory: [storageId, ...history.filter((id) => id !== storageId)],
+      avatarKey: key,
+      avatarKeys: [key, ...history.filter((k) => k !== key)],
+      avatarStorageId: undefined,
     });
   },
 });
@@ -221,7 +221,10 @@ export const removeAvatar = mutation({
   args: {},
   handler: async (ctx) => {
     const user = await requireUser(ctx);
-    await ctx.db.patch("users", user._id, { avatarStorageId: undefined });
+    await ctx.db.patch("users", user._id, {
+      avatarKey: undefined,
+      avatarStorageId: undefined,
+    });
   },
 });
 

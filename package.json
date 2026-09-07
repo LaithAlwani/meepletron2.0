@@ -18,6 +18,8 @@
     "@auth/core": "^0.41.3",
     "@cf-wasm/photon": "^0.3.7",
     "@convex-dev/auth": "^0.0.94",
+    "@convex-dev/migrations": "^0.3.6",
+    "@convex-dev/r2": "^0.10.2",
     "@next/third-parties": "^16.2.10",
     "@react-email/components": "^1.0.12",
     "@react-email/render": "^2.1.0",

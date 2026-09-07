@@ -7,11 +7,24 @@ import type { NextRequest } from "next/server";
  * through this route (same origin) sidesteps that. Locked to known image hosts
  * so it can't be used as an open proxy.
  */
+/** Host of our R2 public CDN (where game covers now live), from env. Requires
+ *  `R2_PUBLIC_URL` to be set in the Next server env too, not just Convex. */
+function r2Host(): string | null {
+  try {
+    return process.env.R2_PUBLIC_URL
+      ? new URL(process.env.R2_PUBLIC_URL).hostname
+      : null;
+  } catch {
+    return null;
+  }
+}
+
 function allowed(host: string): boolean {
   return (
     host === "geekdo-images.com" ||
     host.endsWith(".geekdo-images.com") ||
-    host.endsWith(".convex.cloud")
+    host.endsWith(".convex.cloud") || // legacy Convex blobs (pre-migration)
+    host === r2Host()
   );
 }
 

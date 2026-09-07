@@ -47,6 +47,7 @@ export const getRulebookForIngest = internalQuery({
     return {
       gameId: rb.gameId,
       gameTitle: game?.title ?? "Unknown game",
+      storageKey: rb.storageKey,
       storageId: rb.storageId,
       kind: rb.kind ?? ("rulebook" as const),
     };
@@ -106,6 +107,7 @@ export const getDraftForBatch = internalQuery({
     if (!rb) return null;
     return {
       rulebookId: draft.rulebookId,
+      storageKey: rb.storageKey,
       storageId: rb.storageId,
       batchPlan: draft.batchPlan,
       nextBatchIndex: draft.nextBatchIndex,

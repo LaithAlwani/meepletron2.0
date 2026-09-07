@@ -31,7 +31,10 @@ export const postRowValidator = v.object({
   caption: v.optional(v.string()), // image / toplist body (and future play notes)
   playId: v.optional(v.id("plays")), // kind "play"
   topListId: v.optional(v.id("topGamesLists")), // kind "toplist"
+  // kind "image": `photoKeys` = R2 keys (new); `photoIds` = legacy Convex blobs.
+  photoKeys: v.optional(v.array(v.string())),
   photoIds: v.optional(v.array(v.id("_storage"))), // kind "image"
+
   visibility: postVisibilityValidator, // the feed reads "public"
   reactionCount: v.optional(v.number()), // denormalized
   commentCount: v.optional(v.number()), // denormalized

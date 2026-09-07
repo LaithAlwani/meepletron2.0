@@ -13,6 +13,7 @@ import { publicParticipantPlayIds } from "./plays";
 import { DEFAULT_CATEGORY, isTopCategory } from "./lib/topGamesCategories";
 import { isGameSort } from "./lib/gameSort";
 import { thumbUrl as gameThumbUrl } from "./lib/gameCover";
+import { imageUrl } from "./lib/media";
 
 /**
  * Top Games — a user's ranked "Top N" list for a given year, with year-over-year
@@ -70,9 +71,8 @@ async function gameThumb(ctx: QueryCtx, gameId: Id<"games">) {
 async function authorInfo(ctx: QueryCtx, userId: Id<"users">) {
   const u = await ctx.db.get("users", userId);
   if (!u) return null;
-  const avatarUrl = u.avatarStorageId
-    ? await ctx.storage.getUrl(u.avatarStorageId)
-    : (u.image ?? null);
+  const avatarUrl =
+    (await imageUrl(ctx, u.avatarKey, u.avatarStorageId)) ?? u.image ?? null;
   return {
     username: u.username ?? null,
     name: u.username ?? null,

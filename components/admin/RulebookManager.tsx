@@ -222,12 +222,12 @@ export function RulebookManager({
     setBusy(true);
     setError(null);
     try {
-      const storageId = await upload(file);
+      const storageKey = await upload(gameId, file);
       await addRulebook({
         gameId,
         label: label.trim() || file.name.replace(/\.[^.]+$/, ""),
         filename: file.name,
-        storageId,
+        storageKey,
         kind,
       });
       setLabel("");

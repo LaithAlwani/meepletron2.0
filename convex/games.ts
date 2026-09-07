@@ -6,9 +6,12 @@ import {
   internalQuery,
   internalMutation,
   type QueryCtx,
+  type MutationCtx,
 } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
 import { internal } from "./_generated/api";
+import { deleteMedia } from "./r2";
+import { publicUrl } from "./lib/r2keys";
 import { requireAdmin, getCurrentUser } from "./lib/auth";
 import { slugify, slugifyUnique } from "./lib/slug";
 import { buildSearchText, gameNameMatchScore } from "./lib/gameSearch";
@@ -77,10 +80,17 @@ async function withCardMedia(
 
 /** A rulebook enriched with a normalized `kind` and a signed download URL. */
 async function rulebookWithMeta(ctx: QueryCtx, rb: Doc<"rulebooks">) {
+  // Rulebook files are served from our public CDN (clean, cacheable URLs),
+  // falling back to the legacy Convex blob until backfilled.
+  const downloadUrl = rb.storageKey
+    ? publicUrl(rb.storageKey)
+    : rb.storageId
+      ? await ctx.storage.getUrl(rb.storageId)
+      : null;
   return {
     ...rb,
     kind: rb.kind ?? ("rulebook" as const),
-    downloadUrl: await ctx.storage.getUrl(rb.storageId),
+    downloadUrl,
   };
 }
 
@@ -1213,36 +1223,82 @@ export const updateGame = mutation({
   },
 });
 
-/** Attach an uploaded image as the game's cover (validates content type). */
+/**
+ * Attach a stored R2 cover to a game. Called by the `images.ts` actions, which
+ * compress + `r2.store` the blob (content already validated) before handing us
+ * the keys. Frees the previous cover/thumbnail (R2 key or legacy Convex blob).
+ */
 export const setGameImage = mutation({
   args: {
     gameId: v.id("games"),
-    storageId: v.id("_storage"),
+    storageKey: v.string(),
     // Optional smaller crop for grids/lists; falls back to the cover.
-    thumbnailId: v.optional(v.id("_storage")),
+    thumbnailKey: v.optional(v.string()),
   },
-  handler: async (ctx, { gameId, storageId, thumbnailId }) => {
+  handler: async (ctx, { gameId, storageKey, thumbnailKey }) => {
     await requireAdmin(ctx);
-    const meta = await ctx.db.system.get("_storage", storageId);
-    if (!meta || !(meta.contentType ?? "").startsWith("image/")) {
-      throw new Error("Cover must be an image file");
-    }
     const game = await ctx.db.get("games", gameId);
     if (!game) throw new Error("Game not found");
 
-    const newThumb = thumbnailId ?? storageId;
-    // Free the previous cover + thumbnail blobs, but never the ones we're about
-    // to reference (cover and thumb can legitimately be the same storageId).
-    const stale = new Set<Id<"_storage">>();
-    if (game.imageId) stale.add(game.imageId);
-    if (game.thumbnailId) stale.add(game.thumbnailId);
-    stale.delete(storageId);
-    stale.delete(newThumb);
-    for (const id of stale) await ctx.storage.delete(id);
+    const newThumbKey = thumbnailKey ?? storageKey;
+    // Free the previous cover + thumbnail, but never the keys we're about to
+    // reference (cover/thumb can be the same key). Handles legacy blobs too.
+    if (game.imageKey && game.imageKey !== storageKey && game.imageKey !== newThumbKey) {
+      await deleteMedia(ctx, game.imageKey, null);
+    }
+    if (
+      game.thumbnailKey &&
+      game.thumbnailKey !== storageKey &&
+      game.thumbnailKey !== newThumbKey &&
+      game.thumbnailKey !== game.imageKey
+    ) {
+      await deleteMedia(ctx, game.thumbnailKey, null);
+    }
+    // Legacy blobs (pre-migration) — free them on first re-cover.
+    const staleBlobs = new Set<Id<"_storage">>();
+    if (game.imageId) staleBlobs.add(game.imageId);
+    if (game.thumbnailId) staleBlobs.add(game.thumbnailId);
+    for (const id of staleBlobs) await ctx.storage.delete(id);
 
     await ctx.db.patch("games", gameId, {
-      imageId: storageId,
-      thumbnailId: newThumb,
+      imageKey: storageKey,
+      thumbnailKey: newThumbKey,
+      // Clear legacy blob pointers now that the R2 copy is canonical.
+      imageId: undefined,
+      thumbnailId: undefined,
+    });
+  },
+});
+
+/** A game's current slug — used by the image actions to build R2 object keys
+ *  (folders are organised by game slug, never id). */
+export const slugOf = internalQuery({
+  args: { gameId: v.id("games") },
+  handler: async (ctx, { gameId }): Promise<string | null> => {
+    const g = await ctx.db.get("games", gameId);
+    return g?.slug ?? null;
+  },
+});
+
+/** A page of games for the R2 cover backfill (see `images.backfillGameCovers`). */
+export const gamesPage = internalQuery({
+  args: { paginationOpts: paginationOptsValidator },
+  handler: async (ctx, { paginationOpts }) => {
+    return await ctx.db.query("games").paginate(paginationOpts);
+  },
+});
+
+/** Record backfilled R2 cover keys on a game (used by the cover backfill). */
+export const setGameCoverKeys = internalMutation({
+  args: {
+    gameId: v.id("games"),
+    imageKey: v.string(),
+    thumbnailKey: v.optional(v.string()),
+  },
+  handler: async (ctx, { gameId, imageKey, thumbnailKey }) => {
+    await ctx.db.patch("games", gameId, {
+      imageKey,
+      thumbnailKey: thumbnailKey ?? imageKey,
     });
   },
 });
@@ -1327,8 +1383,8 @@ export const applyStubEnrichment = internalMutation({
     gameId: v.id("games"),
     meta: enrichMetaValidator,
     bgg: v.optional(bggStatsValidator),
-    imageId: v.optional(v.id("_storage")),
-    thumbnailId: v.optional(v.id("_storage")),
+    imageKey: v.optional(v.string()),
+    thumbnailKey: v.optional(v.string()),
     bggImageUrl: v.optional(v.string()),
     bggThumbUrl: v.optional(v.string()),
     // Set from the authoritative /thing item type + its inbound base-game link.
@@ -1341,8 +1397,8 @@ export const applyStubEnrichment = internalMutation({
       gameId,
       meta,
       bgg,
-      imageId,
-      thumbnailId,
+      imageKey,
+      thumbnailKey,
       bggImageUrl,
       bggThumbUrl,
       isExpansion,
@@ -1351,10 +1407,10 @@ export const applyStubEnrichment = internalMutation({
   ) => {
     const game = await ctx.db.get("games", gameId);
     if (!game || !game.isStub) {
-      // Drop blobs stored speculatively before we knew we'd skip.
-      if (imageId) await ctx.storage.delete(imageId);
-      if (thumbnailId && thumbnailId !== imageId) {
-        await ctx.storage.delete(thumbnailId);
+      // Drop objects stored speculatively before we knew we'd skip.
+      if (imageKey) await deleteMedia(ctx, imageKey, null);
+      if (thumbnailKey && thumbnailKey !== imageKey) {
+        await deleteMedia(ctx, thumbnailKey, null);
       }
       return;
     }
@@ -1387,9 +1443,9 @@ export const applyStubEnrichment = internalMutation({
       ...sortKeys({ title, year: meta.year ?? game.year, bgg: bgg ?? game.bgg }),
     };
     if (bgg) patch.bgg = bgg;
-    if (imageId) {
-      patch.imageId = imageId;
-      patch.thumbnailId = thumbnailId ?? imageId;
+    if (imageKey) {
+      patch.imageKey = imageKey;
+      patch.thumbnailKey = thumbnailKey ?? imageKey;
     }
     if (bggImageUrl) patch.bggImageUrl = bggImageUrl;
     if (bggThumbUrl) patch.bggThumbUrl = bggThumbUrl;
@@ -1455,52 +1511,57 @@ export const gameByBggId = internalQuery({
   },
 });
 
-/** Delete a game and everything under it (rulebooks, chunks, chats, messages). */
-export const deleteGame = mutation({
-  args: { gameId: v.id("games") },
-  handler: async (ctx, { gameId }) => {
-    await requireAdmin(ctx);
-    const game = await ctx.db.get("games", gameId);
-    if (!game) return;
+/**
+ * Delete a game and everything under it (rulebooks + chunks + drafts, chats +
+ * messages, cover/thumbnail objects). Shared by the admin delete + the dev prune.
+ */
+export async function purgeGame(ctx: MutationCtx, game: Doc<"games">) {
+  const gameId = game._id;
+  // Rulebooks + their chunks + their storage.
+  const rulebooks = await ctx.db
+    .query("rulebooks")
+    .withIndex("by_game", (q) => q.eq("gameId", gameId))
+    .take(100);
+  for (const rb of rulebooks) {
+    const chunks = await ctx.db
+      .query("chunks")
+      .withIndex("by_rulebook", (q) => q.eq("rulebookId", rb._id))
+      .take(1000);
+    for (const c of chunks) await ctx.db.delete("chunks", c._id);
+    await deleteMedia(ctx, rb.storageKey, rb.storageId);
+    await ctx.db.delete("rulebooks", rb._id);
+  }
 
-    // Rulebooks + their chunks + their storage + drafts.
-    const rulebooks = await ctx.db
-      .query("rulebooks")
-      .withIndex("by_game", (q) => q.eq("gameId", gameId))
-      .take(100);
-    for (const rb of rulebooks) {
-      const chunks = await ctx.db
-        .query("chunks")
-        .withIndex("by_rulebook", (q) => q.eq("rulebookId", rb._id))
-        .take(1000);
-      for (const c of chunks) await ctx.db.delete("chunks", c._id);
-      await ctx.storage.delete(rb.storageId);
-      await ctx.db.delete("rulebooks", rb._id);
-    }
+  // Chats + messages for this game (admin op — a filtered scan is acceptable).
+  const chats = await ctx.db
+    .query("chats")
+    .filter((q) => q.eq(q.field("gameId"), gameId))
+    .take(500);
+  for (const chat of chats) {
+    const msgs = await ctx.db
+      .query("messages")
+      .withIndex("by_chat", (q) => q.eq("chatId", chat._id))
+      .take(1000);
+    for (const m of msgs) await ctx.db.delete("messages", m._id);
+    await ctx.db.delete("chats", chat._id);
+  }
 
-    // Chats + messages for this game (admin op — a filtered scan is acceptable).
-    const chats = await ctx.db
-      .query("chats")
-      .filter((q) => q.eq(q.field("gameId"), gameId))
-      .take(500);
-    for (const chat of chats) {
-      const msgs = await ctx.db
-        .query("messages")
-        .withIndex("by_chat", (q) => q.eq("chatId", chat._id))
-        .take(1000);
-      for (const m of msgs) await ctx.db.delete("messages", m._id);
-      await ctx.db.delete("chats", chat._id);
-    }
+  // Free cover + thumbnail objects (R2 keys or legacy blobs; dedupe).
+  const covers = new Set<string>();
+  if (game.imageKey) covers.add(game.imageKey);
+  if (game.thumbnailKey) covers.add(game.thumbnailKey);
+  for (const key of covers) await deleteMedia(ctx, key, null);
+  const blobs = new Set<Id<"_storage">>();
+  if (game.imageId) blobs.add(game.imageId);
+  if (game.thumbnailId) blobs.add(game.thumbnailId);
+  for (const id of blobs) await ctx.storage.delete(id);
+  await ctx.db.delete("games", gameId);
 
-    // Free cover + thumbnail blobs (dedupe — they may be the same storageId).
-    const blobs = new Set<Id<"_storage">>();
-    if (game.imageId) blobs.add(game.imageId);
-    if (game.thumbnailId) blobs.add(game.thumbnailId);
-    for (const id of blobs) await ctx.storage.delete(id);
-    await ctx.db.delete("games", gameId);
-
-    // If this was an expansion, recompute its parent's hasExpansions flag.
-    if (game.isExpansion && game.parentId) {
+  // If this was an expansion, recompute its parent's hasExpansions flag — but
+  // only if the parent still exists (a bulk prune may have already deleted it).
+  if (game.isExpansion && game.parentId) {
+    const parent = await ctx.db.get("games", game.parentId);
+    if (parent) {
       const sibling = await ctx.db
         .query("games")
         .withIndex("by_parent", (q) => q.eq("parentId", game.parentId))
@@ -1509,5 +1570,52 @@ export const deleteGame = mutation({
         hasExpansions: sibling !== null,
       });
     }
+  }
+}
+
+/** Delete a game and everything under it (rulebooks, chunks, chats, messages). */
+export const deleteGame = mutation({
+  args: { gameId: v.id("games") },
+  handler: async (ctx, { gameId }) => {
+    await requireAdmin(ctx);
+    const game = await ctx.db.get("games", gameId);
+    if (!game) return;
+    await purgeGame(ctx, game);
+  },
+});
+
+/**
+ * DEV ONLY: prune ~75% of games (and their whole cascade) to shrink the dataset
+ * before the R2 backfill, so we don't waste writes migrating soon-to-be-deleted
+ * data. Deterministic (keeps ~1 in 4 by an id hash), batched + resumable. Refuses
+ * to run against a prod-tagged deployment. Run:
+ *   npx convex run games:pruneDevGames '{"confirm":"PRUNE"}'
+ */
+export const pruneDevGames = internalMutation({
+  args: { confirm: v.string(), cursor: v.optional(v.union(v.string(), v.null())) },
+  handler: async (ctx, { confirm, cursor }): Promise<{ deleted: number; done: boolean }> => {
+    if (confirm !== "PRUNE") throw new Error('Pass {"confirm":"PRUNE"} to run.');
+    // Safety: never prune the prod deployment (its bucket is `…-prod`).
+    if ((process.env.R2_BUCKET ?? "").includes("prod")) {
+      throw new Error("Refusing to prune: R2_BUCKET looks like production.");
+    }
+    const { page, continueCursor, isDone } = await ctx.db
+      .query("games")
+      .paginate({ numItems: 5, cursor: cursor ?? null });
+    let deleted = 0;
+    for (const g of page) {
+      // Keep ~1 in 4 (deterministic hash of the id → ~25% kept, 75% pruned).
+      const hash = [...g._id].reduce((a, c) => a + c.charCodeAt(0), 0);
+      if (hash % 4 === 0) continue;
+      await purgeGame(ctx, g);
+      deleted++;
+    }
+    if (!isDone) {
+      await ctx.scheduler.runAfter(0, internal.games.pruneDevGames, {
+        confirm,
+        cursor: continueCursor,
+      });
+    }
+    return { deleted, done: isDone };
   },
 });

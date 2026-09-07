@@ -49,10 +49,15 @@ export default defineSchema({
     // widely in later stages.
     username: v.optional(v.string()),
     usernameLower: v.optional(v.string()),
-    // Uploaded avatar in Convex storage; falls back to the OAuth `image` URL.
+    // Uploaded avatar; falls back to the OAuth `image` URL. `avatarKey` is the R2
+    // object key (served from our CDN); `avatarStorageId` is the legacy Convex
+    // blob, read as a fallback until the R2 backfill completes, then dropped.
+    avatarKey: v.optional(v.string()),
     avatarStorageId: v.optional(v.id("_storage")),
     // The last ≤5 avatars the user uploaded (most-recent first) for quick reuse.
-    // A 6th upload evicts + deletes the oldest.
+    // A 6th upload evicts + deletes the oldest. `avatarKeys` = R2 keys (new),
+    // `avatarHistory` = legacy Convex blob ids (fallback until backfilled).
+    avatarKeys: v.optional(v.array(v.string())),
     avatarHistory: v.optional(v.array(v.id("_storage"))),
     // What the user chooses to expose on their public /user/<username> page.
     // All optional; read with defaults (name/avatar/top-lists on, collection off).
@@ -117,14 +122,17 @@ export default defineSchema({
     slug: v.string(),
     isExpansion: v.boolean(),
     parentId: v.optional(v.id("games")),
-    // media — Convex storage ids (served via ctx.storage.getUrl). Kept as a
-    // fallback; covers are served from BGG's CDN when the URLs below are set.
+    // media — cover + thumbnail. `imageKey`/`thumbnailKey` are R2 object keys
+    // (served from our CDN, preferred); `imageId`/`thumbnailId` are the legacy
+    // Convex blobs, read as a fallback until the R2 backfill completes.
+    imageKey: v.optional(v.string()),
+    thumbnailKey: v.optional(v.string()),
     imageId: v.optional(v.id("_storage")),
     thumbnailId: v.optional(v.id("_storage")),
-    // Original BoardGameGeek image URLs (cf.geekdo-images.com). Preferred over
-    // the stored Convex blob when serving covers, so BGG's CDN carries the image
-    // egress instead of our storage. `bggThumbUrl` = small (<thumbnail>) for
-    // cards/lists; `bggImageUrl` = full (<image>) for the detail hero.
+    // Original BoardGameGeek image URLs (cf.geekdo-images.com). Now the LAST
+    // fallback (after our R2 copy) — we serve covers from our own CDN so they
+    // don't break if BGG rotates/removes an image. `bggThumbUrl` = small
+    // (<thumbnail>) for cards/lists; `bggImageUrl` = full (<image>) for the hero.
     bggImageUrl: v.optional(v.string()),
     bggThumbUrl: v.optional(v.string()),
     // metadata (entered manually in the admin form)
@@ -205,7 +213,10 @@ export default defineSchema({
     gameId: v.id("games"),
     label: v.string(),
     filename: v.string(),
-    storageId: v.id("_storage"),
+    // R2 object key (new); `storageId` is the legacy Convex blob (fallback until
+    // backfilled). One of the two is always set.
+    storageKey: v.optional(v.string()),
+    storageId: v.optional(v.id("_storage")),
     // "rulebook" = ingested + used in chat; "download" = add-on (scoring sheet,
     // diagram, …) that is only listed on the game page for download. Missing =
     // "rulebook" (legacy rows).
@@ -218,6 +229,17 @@ export default defineSchema({
       v.literal("committed"),
     ),
   }).index("by_game", ["gameId"]),
+
+  // A user asking for a game's rulebook to be added + ingested (shown on the game
+  // page when it has no ingested rulebook yet). One row per (game, user) so the
+  // count reflects unique demand; the admin Requests tab ranks games by it.
+  rulebookRequests: defineTable({
+    gameId: v.id("games"),
+    userId: v.id("users"),
+    createdAt: v.number(),
+  })
+    .index("by_game", ["gameId"])
+    .index("by_game_and_user", ["gameId", "userId"]),
 
   // One row per retrievable chunk, with its embedding inline.
   chunks: defineTable({
@@ -418,7 +440,9 @@ export default defineSchema({
           v.literal("top"),
           v.literal("bottom"),
         ),
-        storageId: v.id("_storage"),
+        // R2 object key (new); `storageId` is the legacy Convex blob (fallback).
+        key: v.optional(v.string()),
+        storageId: v.optional(v.id("_storage")),
         naturalWidth: v.number(),
         naturalHeight: v.number(),
         transform: v.object({
@@ -431,7 +455,8 @@ export default defineSchema({
     ),
     wrap: v.optional(
       v.object({
-        storageId: v.id("_storage"),
+        key: v.optional(v.string()),
+        storageId: v.optional(v.id("_storage")),
         naturalWidth: v.number(),
         naturalHeight: v.number(),
         transform: v.object({
@@ -442,7 +467,9 @@ export default defineSchema({
         }),
       }),
     ),
-    // Front (or wrap) blob, reused as the gallery thumbnail.
+    // Front (or wrap) image, reused as the gallery thumbnail. `coverKey` = R2
+    // (new); `coverStorageId` = legacy Convex blob (fallback).
+    coverKey: v.optional(v.string()),
     coverStorageId: v.optional(v.id("_storage")),
     updatedAt: v.number(),
   }).index("by_user", ["userId"]),

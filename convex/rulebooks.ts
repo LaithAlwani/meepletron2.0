@@ -1,6 +1,24 @@
 import { v } from "convex/values";
 import { mutation } from "./_generated/server";
 import { requireAdmin } from "./lib/auth";
+import { r2, deleteMedia } from "./r2";
+import { rulebookKey } from "./lib/r2keys";
+
+/**
+ * Admin: mint an R2 upload URL for a rulebook/download file, foldered under the
+ * game's slug. The client PUTs the file to `url`, then calls `addRulebook` with
+ * the returned `key`.
+ */
+export const generateRulebookUploadUrl = mutation({
+  args: { gameId: v.id("games"), filename: v.string() },
+  handler: async (ctx, { gameId, filename }) => {
+    await requireAdmin(ctx);
+    const game = await ctx.db.get("games", gameId);
+    if (!game) throw new Error("Game not found");
+    const safeName = filename.replace(/[^a-zA-Z0-9._-]+/g, "-").slice(-80);
+    return await r2.generateUploadUrl(rulebookKey(game.slug, safeName));
+  },
+});
 
 /**
  * Admin: attach an uploaded file to a game.
@@ -12,15 +30,15 @@ export const addRulebook = mutation({
     gameId: v.id("games"),
     label: v.string(),
     filename: v.string(),
-    storageId: v.id("_storage"),
+    storageKey: v.string(),
     kind: v.optional(v.union(v.literal("rulebook"), v.literal("download"))),
   },
-  handler: async (ctx, { gameId, label, filename, storageId, kind }) => {
+  handler: async (ctx, { gameId, label, filename, storageKey, kind }) => {
     await requireAdmin(ctx);
     const fileKind = kind ?? "rulebook";
-    const meta = await ctx.db.system.get("_storage", storageId);
-    if (!meta) throw new Error("File not found");
-    if (fileKind === "rulebook" && meta.contentType !== "application/pdf") {
+    // Content-type isn't reliably synced yet at attach time, so gate on the
+    // filename extension (the ingest pipeline also fails loudly on non-PDFs).
+    if (fileKind === "rulebook" && !/\.pdf$/i.test(filename)) {
       throw new Error("Rulebooks must be PDFs");
     }
     const game = await ctx.db.get("games", gameId);
@@ -30,7 +48,7 @@ export const addRulebook = mutation({
       gameId,
       label: label.trim() || (fileKind === "download" ? "Download" : "Rulebook"),
       filename,
-      storageId,
+      storageKey,
       kind: fileKind,
       isIngested: false,
       ingestState: "none",
@@ -80,7 +98,7 @@ export const deleteRulebook = mutation({
       await ctx.db.delete("migrationDrafts", draft._id);
     }
 
-    await ctx.storage.delete(rb.storageId);
+    await deleteMedia(ctx, rb.storageKey, rb.storageId);
     await ctx.db.delete("rulebooks", rulebookId);
   },
 });

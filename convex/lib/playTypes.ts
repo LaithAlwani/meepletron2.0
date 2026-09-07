@@ -77,6 +77,9 @@ export const playRowValidator = v.object({
   coopScore: v.optional(v.number()),
   teams: v.optional(v.array(playTeamValidator)),
   players: v.array(playPlayerValidator),
+  // `photoKeys` = R2 object keys (new, served from our CDN); `photoIds` = legacy
+  // Convex blob ids (fallback until backfilled). A play uses one or the other.
+  photoKeys: v.optional(v.array(v.string())),
   photoIds: v.optional(v.array(v.id("_storage"))),
   visibility: playVisibilityValidator,
   source: playSourceValidator,

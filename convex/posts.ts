@@ -9,6 +9,7 @@ import {
 import type { Doc, Id } from "./_generated/dataModel";
 import { internal } from "./_generated/api";
 import { getCurrentUser, requireUser } from "./lib/auth";
+import { imageUrl } from "./lib/media";
 
 const SITE_URL = process.env.SITE_URL || "https://www.meepletron.com";
 
@@ -29,9 +30,8 @@ const SITE_URL = process.env.SITE_URL || "https://www.meepletron.com";
 /** Public author info for a post / comment — the username, never the real name. */
 async function postOwner(ctx: QueryCtx, userId: Id<"users">) {
   const u = await ctx.db.get("users", userId);
-  const avatarUrl = u?.avatarStorageId
-    ? await ctx.storage.getUrl(u.avatarStorageId)
-    : (u?.image ?? null);
+  const avatarUrl =
+    (await imageUrl(ctx, u?.avatarKey, u?.avatarStorageId)) ?? u?.image ?? null;
   return {
     name: u?.username ?? "Player",
     username: u?.username ?? null,
@@ -365,8 +365,11 @@ async function notificationView(ctx: QueryCtx, nt: Doc<"notifications">) {
           (await ctx.db.get("topGamesLists", post.topListId))?.title ??
           "Top Games list";
       } else if (post.kind === "image") {
-        const first = post.photoIds?.[0];
-        thumbUrl = first ? await ctx.storage.getUrl(first) : null;
+        thumbUrl = await imageUrl(
+          ctx,
+          post.photoKeys?.[0],
+          post.photoIds?.[0],
+        );
       }
     }
   }

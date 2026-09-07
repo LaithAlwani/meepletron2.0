@@ -20,6 +20,9 @@ import {
 } from "./lib/playTypes";
 import { syncPlayPost, deletePlayPost } from "./lib/feed";
 import { thumbUrl, coverUrls } from "./lib/gameCover";
+import { r2, deleteMedia } from "./r2";
+import { playPhotoKey, publicUrl } from "./lib/r2keys";
+import { imageUrl } from "./lib/media";
 
 /**
  * Plays — one recorded game session. Entered by hand (the log-play wizard) or
@@ -70,9 +73,10 @@ async function withHandles<T extends { name: string; userId?: Id<"users"> }>(
     players.map(async (p) => {
       if (!p.userId) return { ...p, username: null, avatarUrl: null };
       const u = await ctx.db.get("users", p.userId);
-      const avatarUrl = u?.avatarStorageId
-        ? await ctx.storage.getUrl(u.avatarStorageId)
-        : (u?.image ?? null);
+      const avatarUrl =
+        (await imageUrl(ctx, u?.avatarKey, u?.avatarStorageId)) ??
+        u?.image ??
+        null;
       // A linked member is shown by their username, never their real name.
       return {
         ...p,
@@ -100,15 +104,17 @@ export async function playCard(
   viewerId?: Id<"users"> | null,
 ) {
   const cover = await gameCover(ctx, play.gameId);
-  const firstPhoto =
-    play.photoIds && play.photoIds.length > 0
-      ? await ctx.storage.getUrl(play.photoIds[0])
-      : null;
+  const firstPhoto = await imageUrl(
+    ctx,
+    play.photoKeys?.[0],
+    play.photoIds?.[0],
+  );
   const resolved = await withHandles(ctx, play.players);
   const owner = await ctx.db.get("users", play.userId);
-  const ownerAvatarUrl = owner?.avatarStorageId
-    ? await ctx.storage.getUrl(owner.avatarStorageId)
-    : (owner?.image ?? null);
+  const ownerAvatarUrl =
+    (await imageUrl(ctx, owner?.avatarKey, owner?.avatarStorageId)) ??
+    owner?.image ??
+    null;
   // A public play has exactly one feed post; likes/comments key on it.
   const post = await ctx.db
     .query("posts")
@@ -137,7 +143,7 @@ export async function playCard(
     title: play.title,
     coverUrl: cover?.coverUrl ?? null,
     photoUrl: firstPhoto,
-    photoCount: play.photoIds?.length ?? 0,
+    photoCount: play.photoKeys?.length ?? play.photoIds?.length ?? 0,
     date: play.date,
     lengthMinutes: play.lengthMinutes ?? null,
     location: play.location ?? null,
@@ -249,22 +255,15 @@ const playBodyValidator = {
   coopScore: v.optional(v.number()),
   teams: v.optional(v.array(playTeamValidator)),
   players: v.array(playerInputValidator),
-  photoIds: v.optional(v.array(v.id("_storage"))),
+  photoKeys: v.optional(v.array(v.string())),
   visibility: playVisibilityValidator,
 };
 
-/** Only keep storage ids that point at an image blob. */
-export async function keepImages(
-  ctx: MutationCtx,
-  ids?: Id<"_storage">[],
-): Promise<Id<"_storage">[] | undefined> {
-  if (!ids || ids.length === 0) return undefined;
-  const kept: Id<"_storage">[] = [];
-  for (const id of ids.slice(0, 12)) {
-    const meta = await ctx.db.system.get("_storage", id);
-    if (meta && (meta.contentType ?? "").startsWith("image/")) kept.push(id);
-    else if (meta) await ctx.storage.delete(id);
-  }
+/** Cap the uploaded photo set (R2 keys, already validated client-side as images
+ *  during compression) at a sane maximum. */
+export function keepPhotoKeys(keys?: string[]): string[] | undefined {
+  if (!keys || keys.length === 0) return undefined;
+  const kept = keys.slice(0, 12);
   return kept.length ? kept : undefined;
 }
 
@@ -459,7 +458,7 @@ export const logPlay = mutation({
       args.teams,
       players,
     );
-    const photoIds = await keepImages(ctx, args.photoIds);
+    const photoKeys = keepPhotoKeys(args.photoKeys);
     const now = Date.now();
 
     const playId = await ctx.db.insert("plays", {
@@ -477,7 +476,7 @@ export const logPlay = mutation({
       coopScore: args.format === "cooperative" ? args.coopScore : undefined,
       teams: derived.teams,
       players: derived.players,
-      photoIds,
+      photoKeys,
       visibility: args.visibility,
       source: "manual",
       createdAt: now,
@@ -534,12 +533,16 @@ export const updatePlay = mutation({
       args.teams,
       players,
     );
-    const photoIds = await keepImages(ctx, args.photoIds);
-    // Delete photos that were removed in the edit.
-    const removed = (play.photoIds ?? []).filter(
-      (id) => !(photoIds ?? []).includes(id),
+    const photoKeys = keepPhotoKeys(args.photoKeys);
+    // Delete photos removed in the edit (by R2 key).
+    const removed = (play.photoKeys ?? []).filter(
+      (k) => !(photoKeys ?? []).includes(k),
     );
-    for (const id of removed) await ctx.storage.delete(id);
+    for (const k of removed) await deleteMedia(ctx, k, null);
+    // A provided photo set supersedes any legacy Convex blobs on this play.
+    if (photoKeys && photoKeys.length) {
+      for (const id of play.photoIds ?? []) await ctx.storage.delete(id);
+    }
 
     await ctx.db.patch("plays", playId, {
       gameId: args.gameId,
@@ -555,7 +558,8 @@ export const updatePlay = mutation({
       coopScore: args.format === "cooperative" ? args.coopScore : undefined,
       teams: derived.teams,
       players: derived.players,
-      photoIds,
+      photoKeys,
+      photoIds: photoKeys && photoKeys.length ? undefined : play.photoIds,
       visibility: args.visibility,
       // Editing confirms an imported play's guessed format.
       needsReview: false,
@@ -601,6 +605,7 @@ export const deletePlay = mutation({
     const user = await requireUser(ctx);
     const play = await ctx.db.get("plays", playId);
     if (!play || play.userId !== user._id) return;
+    for (const k of play.photoKeys ?? []) await deleteMedia(ctx, k, null);
     for (const id of play.photoIds ?? []) await ctx.storage.delete(id);
     await clearParticipants(ctx, playId);
     await deletePlayPost(ctx, playId);
@@ -638,12 +643,17 @@ export const setPlayVisibility = mutation({
   },
 });
 
-/** A short-lived upload URL for a live-game photo (compressed client-side). */
+/**
+ * A short-lived R2 upload URL for a live-game photo (compressed client-side).
+ * Keys are foldered by the play's game (slug), never an id.
+ */
 export const generatePlayPhotoUploadUrl = mutation({
-  args: {},
-  handler: async (ctx) => {
+  args: { gameId: v.optional(v.id("games")), gameName: v.optional(v.string()) },
+  handler: async (ctx, { gameId, gameName }) => {
     await requireUser(ctx);
-    return await ctx.storage.generateUploadUrl();
+    const game = gameId ? await ctx.db.get("games", gameId) : null;
+    const folder = game?.slug ?? gameName ?? "misc";
+    return await r2.generateUploadUrl(playPhotoKey(folder, crypto.randomUUID()));
   },
 });
 
@@ -778,9 +788,11 @@ export const getPlay = query({
     // when the play has no photos of its own.
     const game = play.gameId ? await ctx.db.get("games", play.gameId) : null;
     const coverImageUrl = game ? (await coverUrls(ctx, game)).imageUrl : null;
-    const photoUrls = await Promise.all(
-      (play.photoIds ?? []).map((id) => ctx.storage.getUrl(id)),
-    );
+    const photoUrls = play.photoKeys?.length
+      ? play.photoKeys.map((k) => publicUrl(k))
+      : await Promise.all(
+          (play.photoIds ?? []).map((id) => ctx.storage.getUrl(id)),
+        );
     const owner = await ctx.db.get("users", play.userId);
     const players = await withHandles(ctx, play.players);
     // Likes + comments live on the play's feed post (public plays only).
@@ -1180,9 +1192,10 @@ export const gameDetailStats = query({
             const u = await ctx.db.get("users", cp.userId);
             if (u) {
               username = u.username ?? null;
-              avatarUrl = u.avatarStorageId
-                ? await ctx.storage.getUrl(u.avatarStorageId)
-                : (u.image ?? null);
+              avatarUrl =
+                (await imageUrl(ctx, u.avatarKey, u.avatarStorageId)) ??
+                u.image ??
+                null;
             }
           }
           return { name: cp.name, plays: cp.plays, username, avatarUrl };
@@ -1302,9 +1315,10 @@ export const myPeople = query({
           username = u?.username ?? null;
           // A joined person is shown by their username, not the name you typed.
           displayName = u?.username ? `@${u.username}` : r.name;
-          avatarUrl = u?.avatarStorageId
-            ? await ctx.storage.getUrl(u.avatarStorageId)
-            : (u?.image ?? null);
+          avatarUrl =
+            (await imageUrl(ctx, u?.avatarKey, u?.avatarStorageId)) ??
+            u?.image ??
+            null;
         }
         return {
           _id: r._id,
@@ -1474,6 +1488,7 @@ export const purgeUserPlays = internalMutation({
         .withIndex("by_play", (q) => q.eq("playId", p._id))
         .collect();
       for (const pt of parts) await ctx.db.delete("playParticipants", pt._id);
+      for (const k of p.photoKeys ?? []) await deleteMedia(ctx, k, null);
       for (const id of p.photoIds ?? []) await ctx.storage.delete(id);
       await deletePlayPost(ctx, p._id);
       await ctx.db.delete("plays", p._id);

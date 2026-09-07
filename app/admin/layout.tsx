@@ -11,6 +11,7 @@ const adminNav = [
   { href: "/admin/usage", label: "Usage" },
   { href: "/admin/site-config", label: "Config" },
   { href: "/admin/searches", label: "Searches" },
+  { href: "/admin/requests", label: "Requests" },
   { href: "/admin/users", label: "Users" },
 ];
 
@@ -21,6 +22,10 @@ export default function AdminLayout({
 }) {
   const me = useQuery(api.users.me);
   const pathname = usePathname();
+  const requestCount = useQuery(
+    api.rulebookRequests.pendingRequestCount,
+    me?.role === "admin" ? {} : "skip",
+  );
 
   if (me === undefined) {
     return (
@@ -60,18 +65,29 @@ export default function AdminLayout({
                 item.href === "/admin"
                   ? pathname === "/admin"
                   : pathname.startsWith(item.href);
+              const badge =
+                item.href === "/admin/requests" &&
+                typeof requestCount === "number" &&
+                requestCount > 0
+                  ? requestCount
+                  : null;
               return (
                 <Link
                   key={item.href}
                   href={item.href}
                   aria-current={active ? "page" : undefined}
-                  className={`shrink-0 whitespace-nowrap border-b-2 px-3 py-2 text-sm font-medium transition-colors ${
+                  className={`flex shrink-0 items-center gap-1.5 whitespace-nowrap border-b-2 px-3 py-2 text-sm font-medium transition-colors ${
                     active
                       ? "border-accent text-foreground"
                       : "border-transparent text-muted hover:text-foreground"
                   }`}
                 >
                   {item.label}
+                  {badge !== null && (
+                    <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-accent px-1.5 py-0.5 text-xs font-semibold leading-none text-accent-foreground tabular-nums">
+                      {badge}
+                    </span>
+                  )}
                 </Link>
               );
             })}

@@ -12,6 +12,7 @@ import { Die } from "@/components/ui/icons";
 import { useToast } from "@/components/ui/Toast";
 import { useConfirm } from "@/components/ui/Confirm";
 import { friendlyError } from "@/lib/friendlyError";
+import { putToSignedUrl } from "@/components/lib/r2Upload";
 import { buttonClasses } from "@/components/ui/Button";
 import { cn } from "@/lib/cn";
 
@@ -75,7 +76,7 @@ export function AccountSection() {
           canEdit={!isGuest}
           isGuest={isGuest}
           initial={(me.name || me.email || "?").charAt(0).toUpperCase()}
-          hasUpload={!!me.avatarStorageId}
+          hasUpload={!!(me.avatarKey || me.avatarStorageId)}
           recentAvatars={me.recentAvatars}
         />
         <div className="min-w-0 flex-1">
@@ -128,9 +129,10 @@ function ProfileAvatar({
   isGuest: boolean;
   initial: string;
   hasUpload: boolean;
-  recentAvatars: { storageId: Id<"_storage">; url: string }[];
+  recentAvatars: { key: string; url: string }[];
 }) {
   const genUrl = useMutation(api.users.generateAvatarUploadUrl);
+  const syncMetadata = useMutation(api.r2.syncMetadata);
   const setAvatar = useMutation(api.users.setAvatar);
   const applyRecentAvatar = useMutation(api.users.useRecentAvatar);
   const removeAvatar = useMutation(api.users.removeAvatar);
@@ -149,15 +151,10 @@ function ProfileAvatar({
     setBusy(true);
     try {
       const blob = await compressImage(file);
-      const url = await genUrl({});
-      const res = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "image/jpeg" },
-        body: blob,
-      });
-      if (!res.ok) throw new Error("upload failed");
-      const { storageId } = await res.json();
-      await setAvatar({ storageId });
+      const { key, url } = await genUrl({});
+      await putToSignedUrl(url, blob);
+      await syncMetadata({ key });
+      await setAvatar({ key });
       toast("Photo updated", "success");
     } catch (err) {
       toast(friendlyError(err, "Couldn't upload that photo"), "error");
@@ -166,10 +163,10 @@ function ProfileAvatar({
     }
   }
 
-  async function pickRecent(storageId: Id<"_storage">) {
+  async function pickRecent(key: string) {
     setBusy(true);
     try {
-      await applyRecentAvatar({ storageId });
+      await applyRecentAvatar({ key });
     } catch {
       toast("Couldn't switch photo", "error");
     } finally {
@@ -231,9 +228,9 @@ function ProfileAvatar({
             const current = r.url === avatarUrl;
             return (
               <button
-                key={r.storageId}
+                key={r.key}
                 type="button"
-                onClick={() => !current && pickRecent(r.storageId)}
+                onClick={() => !current && pickRecent(r.key)}
                 disabled={busy || current}
                 aria-label="Use this photo"
                 className={cn(

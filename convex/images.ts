@@ -5,6 +5,8 @@ import { action, internalAction, type ActionCtx } from "./_generated/server";
 import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { PhotonImage, resize, SamplingFilter } from "@cf-wasm/photon/node";
+import { r2 } from "./r2";
+import { gameCoverKey, gameThumbKey } from "./lib/r2keys";
 import {
   parseItem,
   parseFullItem,
@@ -56,6 +58,9 @@ export const setGameCoverFromUrl = action({
       throw new ConvexError("Enter a valid http(s) image URL");
     }
 
+    const slug = await ctx.runQuery(internal.games.slugOf, { gameId });
+    if (!slug) throw new ConvexError("Game not found");
+
     const res = await fetch(url.trim());
     if (!res.ok) throw new ConvexError("Couldn't fetch that URL");
     const contentType = res.headers.get("content-type") ?? "";
@@ -77,26 +82,30 @@ export const setGameCoverFromUrl = action({
       outBytes = coverJpeg;
       outType = "image/jpeg";
     }
-    const storageId = await ctx.storage.store(
-      new Blob([Buffer.from(outBytes)], { type: outType }),
-    );
+    const storageKey = await r2.store(ctx, Buffer.from(outBytes), {
+      key: gameCoverKey(slug),
+      type: outType,
+      cacheControl: "public, max-age=31536000, immutable",
+    });
 
     // Thumbnail: a small dedicated crop for grids/lists. Only store a separate
-    // blob when we could actually decode + shrink it; otherwise the cover is
+    // object when we could actually decode + shrink it; otherwise the cover is
     // reused (setGameImage aliases thumbnail → cover when none is given).
-    let thumbnailId: Id<"_storage"> | undefined;
+    let thumbnailKey: string | undefined;
     const thumbJpeg = encodeJpeg(original, THUMB_WIDTH);
     if (thumbJpeg && thumbJpeg.byteLength < outBytes.byteLength) {
-      thumbnailId = await ctx.storage.store(
-        new Blob([Buffer.from(thumbJpeg)], { type: "image/jpeg" }),
-      );
+      thumbnailKey = await r2.store(ctx, Buffer.from(thumbJpeg), {
+        key: gameThumbKey(slug),
+        type: "image/jpeg",
+        cacheControl: "public, max-age=31536000, immutable",
+      });
     }
 
     // Reuse the admin-gated mutation (auth propagates from this action).
     await ctx.runMutation(api.games.setGameImage, {
       gameId,
-      storageId,
-      thumbnailId,
+      storageKey,
+      thumbnailKey,
     });
   },
 });
@@ -107,9 +116,10 @@ export const setGameCoverFromUrl = action({
  * any game — the enrichment mutation attaches them. Never throws.
  */
 async function fetchAndStoreCover(
-  ctx: { storage: { store: (b: Blob) => Promise<Id<"_storage">> } },
+  ctx: ActionCtx,
   url: string,
-): Promise<{ imageId?: Id<"_storage">; thumbnailId?: Id<"_storage"> }> {
+  slug: string,
+): Promise<{ imageKey?: string; thumbnailKey?: string }> {
   try {
     const res = await fetch(url);
     if (!res.ok) return {};
@@ -126,17 +136,21 @@ async function fetchAndStoreCover(
       outBytes = coverJpeg;
       outType = "image/jpeg";
     }
-    const imageId = await ctx.storage.store(
-      new Blob([Buffer.from(outBytes)], { type: outType }),
-    );
-    let thumbnailId: Id<"_storage"> | undefined;
+    const imageKey = await r2.store(ctx, Buffer.from(outBytes), {
+      key: gameCoverKey(slug),
+      type: outType,
+      cacheControl: "public, max-age=31536000, immutable",
+    });
+    let thumbnailKey: string | undefined;
     const thumbJpeg = encodeJpeg(original, THUMB_WIDTH);
     if (thumbJpeg && thumbJpeg.byteLength < outBytes.byteLength) {
-      thumbnailId = await ctx.storage.store(
-        new Blob([Buffer.from(thumbJpeg)], { type: "image/jpeg" }),
-      );
+      thumbnailKey = await r2.store(ctx, Buffer.from(thumbJpeg), {
+        key: gameThumbKey(slug),
+        type: "image/jpeg",
+        cacheControl: "public, max-age=31536000, immutable",
+      });
     }
-    return { imageId, thumbnailId };
+    return { imageKey, thumbnailKey };
   } catch {
     return {};
   }
@@ -213,18 +227,88 @@ async function enrichGameFromBgg(
     }
   }
 
-  const cover = imageUrl ? await fetchAndStoreCover(ctx, imageUrl) : {};
+  // Build cover keys from the game's real (name-based) slug.
+  const slug = await ctx.runQuery(internal.games.slugOf, { gameId });
+  const cover =
+    imageUrl && slug ? await fetchAndStoreCover(ctx, imageUrl, slug) : {};
 
   await ctx.runMutation(internal.games.applyStubEnrichment, {
     gameId,
     meta,
     bgg,
-    imageId: cover.imageId,
-    thumbnailId: cover.thumbnailId,
+    imageKey: cover.imageKey,
+    thumbnailKey: cover.thumbnailKey,
     bggImageUrl: imageUrl,
     bggThumbUrl: thumbnailUrl,
     isExpansion,
     parentId,
+  });
+}
+
+/**
+ * One-time backfill: give EVERY game an R2 cover so we serve covers from our own
+ * CDN (not BGG). For a game with an existing Convex blob we copy the bytes; for a
+ * BGG-only game we re-fetch + compress from its BGG URL. Idempotent + resumable —
+ * skips games that already have an `imageKey`. Run once R2 env is set:
+ *   npx convex run images:backfillGameCovers '{}'
+ */
+export const backfillGameCovers = internalAction({
+  args: { cursor: v.optional(v.union(v.string(), v.null())) },
+  handler: async (ctx, { cursor }): Promise<void> => {
+    const { page, continueCursor, isDone } = await ctx.runQuery(
+      internal.games.gamesPage,
+      { paginationOpts: { numItems: 20, cursor: cursor ?? null } },
+    );
+    for (const g of page) {
+      if (g.imageKey) continue;
+      let imageKey: string | undefined;
+      let thumbnailKey: string | undefined;
+      if (g.imageId) {
+        // Existing (already-compressed) blob → copy the bytes to R2.
+        imageKey = (await copyBlobToR2(ctx, g.imageId, gameCoverKey(g.slug))) ?? undefined;
+        if (g.thumbnailId) {
+          thumbnailKey =
+            g.thumbnailId === g.imageId
+              ? imageKey
+              : ((await copyBlobToR2(ctx, g.thumbnailId, gameThumbKey(g.slug))) ?? undefined);
+        }
+      } else if (g.bggImageUrl) {
+        // BGG-only game → fetch + compress from BGG, store both crops.
+        const cover = await fetchAndStoreCover(ctx, g.bggImageUrl, g.slug);
+        imageKey = cover.imageKey;
+        thumbnailKey = cover.thumbnailKey;
+      }
+      if (imageKey) {
+        await ctx.runMutation(internal.games.setGameCoverKeys, {
+          gameId: g._id,
+          imageKey,
+          thumbnailKey,
+        });
+      }
+    }
+    if (!isDone) {
+      await ctx.scheduler.runAfter(0, internal.images.backfillGameCovers, {
+        cursor: continueCursor,
+      });
+    }
+  },
+});
+
+/** Copy a legacy Convex blob to R2 at `key`; returns the key (or null). */
+async function copyBlobToR2(
+  ctx: ActionCtx,
+  storageId: Id<"_storage">,
+  key: string,
+): Promise<string | null> {
+  const url = await ctx.storage.getUrl(storageId);
+  if (!url) return null;
+  const res = await fetch(url);
+  if (!res.ok) return null;
+  const bytes = new Uint8Array(await res.arrayBuffer());
+  return await r2.store(ctx, Buffer.from(bytes), {
+    key,
+    type: res.headers.get("content-type") ?? undefined,
+    cacheControl: "public, max-age=31536000, immutable",
   });
 }
 

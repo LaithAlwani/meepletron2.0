@@ -10,6 +10,7 @@
 
 import type * as admin from "../admin.js";
 import type * as auth from "../auth.js";
+import type * as backfillR2 from "../backfillR2.js";
 import type * as bgg from "../bgg.js";
 import type * as bggSync from "../bggSync.js";
 import type * as chat from "../chat.js";
@@ -51,12 +52,14 @@ import type * as lib_feed from "../lib/feed.js";
 import type * as lib_gameCover from "../lib/gameCover.js";
 import type * as lib_gameSearch from "../lib/gameSearch.js";
 import type * as lib_gameSort from "../lib/gameSort.js";
+import type * as lib_media from "../lib/media.js";
 import type * as lib_num from "../lib/num.js";
 import type * as lib_pdf from "../lib/pdf.js";
 import type * as lib_playTypes from "../lib/playTypes.js";
 import type * as lib_postTypes from "../lib/postTypes.js";
 import type * as lib_prompts from "../lib/prompts.js";
 import type * as lib_purge from "../lib/purge.js";
+import type * as lib_r2keys from "../lib/r2keys.js";
 import type * as lib_slug from "../lib/slug.js";
 import type * as lib_topGamesCategories from "../lib/topGamesCategories.js";
 import type * as maintenance from "../maintenance.js";
@@ -64,8 +67,10 @@ import type * as migrations from "../migrations.js";
 import type * as otp_EmailOtp from "../otp/EmailOtp.js";
 import type * as plays from "../plays.js";
 import type * as posts from "../posts.js";
+import type * as r2 from "../r2.js";
 import type * as rag from "../rag.js";
 import type * as reminders from "../reminders.js";
+import type * as rulebookRequests from "../rulebookRequests.js";
 import type * as rulebooks from "../rulebooks.js";
 import type * as search from "../search.js";
 import type * as seed from "../seed.js";
@@ -84,6 +89,7 @@ import type {
 declare const fullApi: ApiFromModules<{
   admin: typeof admin;
   auth: typeof auth;
+  backfillR2: typeof backfillR2;
   bgg: typeof bgg;
   bggSync: typeof bggSync;
   chat: typeof chat;
@@ -125,12 +131,14 @@ declare const fullApi: ApiFromModules<{
   "lib/gameCover": typeof lib_gameCover;
   "lib/gameSearch": typeof lib_gameSearch;
   "lib/gameSort": typeof lib_gameSort;
+  "lib/media": typeof lib_media;
   "lib/num": typeof lib_num;
   "lib/pdf": typeof lib_pdf;
   "lib/playTypes": typeof lib_playTypes;
   "lib/postTypes": typeof lib_postTypes;
   "lib/prompts": typeof lib_prompts;
   "lib/purge": typeof lib_purge;
+  "lib/r2keys": typeof lib_r2keys;
   "lib/slug": typeof lib_slug;
   "lib/topGamesCategories": typeof lib_topGamesCategories;
   maintenance: typeof maintenance;
@@ -138,8 +146,10 @@ declare const fullApi: ApiFromModules<{
   "otp/EmailOtp": typeof otp_EmailOtp;
   plays: typeof plays;
   posts: typeof posts;
+  r2: typeof r2;
   rag: typeof rag;
   reminders: typeof reminders;
+  rulebookRequests: typeof rulebookRequests;
   rulebooks: typeof rulebooks;
   search: typeof search;
   seed: typeof seed;
@@ -176,4 +186,6 @@ export declare const internal: FilterApi<
   FunctionReference<any, "internal">
 >;
 
-export declare const components: {};
+export declare const components: {
+  r2: import("@convex-dev/r2/_generated/component.js").ComponentApi<"r2">;
+};

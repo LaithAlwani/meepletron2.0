@@ -45,12 +45,12 @@ export default function NewGamePage() {
     }
 
     for (const { file, label } of pdfs) {
-      const storageId = await upload(file);
+      const storageKey = await upload(gameId, file);
       await addRulebook({
         gameId,
         label: label.trim() || file.name.replace(/\.pdf$/i, ""),
         filename: file.name,
-        storageId,
+        storageKey,
       });
     }
 
