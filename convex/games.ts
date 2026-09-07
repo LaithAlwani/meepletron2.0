@@ -1583,39 +1583,3 @@ export const deleteGame = mutation({
     await purgeGame(ctx, game);
   },
 });
-
-/**
- * DEV ONLY: prune ~75% of games (and their whole cascade) to shrink the dataset
- * before the R2 backfill, so we don't waste writes migrating soon-to-be-deleted
- * data. Deterministic (keeps ~1 in 4 by an id hash), batched + resumable. Refuses
- * to run against a prod-tagged deployment. Run:
- *   npx convex run games:pruneDevGames '{"confirm":"PRUNE"}'
- */
-export const pruneDevGames = internalMutation({
-  args: { confirm: v.string(), cursor: v.optional(v.union(v.string(), v.null())) },
-  handler: async (ctx, { confirm, cursor }): Promise<{ deleted: number; done: boolean }> => {
-    if (confirm !== "PRUNE") throw new Error('Pass {"confirm":"PRUNE"} to run.');
-    // Safety: never prune the prod deployment (its bucket is `…-prod`).
-    if ((process.env.R2_BUCKET ?? "").includes("prod")) {
-      throw new Error("Refusing to prune: R2_BUCKET looks like production.");
-    }
-    const { page, continueCursor, isDone } = await ctx.db
-      .query("games")
-      .paginate({ numItems: 5, cursor: cursor ?? null });
-    let deleted = 0;
-    for (const g of page) {
-      // Keep ~1 in 4 (deterministic hash of the id → ~25% kept, 75% pruned).
-      const hash = [...g._id].reduce((a, c) => a + c.charCodeAt(0), 0);
-      if (hash % 4 === 0) continue;
-      await purgeGame(ctx, g);
-      deleted++;
-    }
-    if (!isDone) {
-      await ctx.scheduler.runAfter(0, internal.games.pruneDevGames, {
-        confirm,
-        cursor: continueCursor,
-      });
-    }
-    return { deleted, done: isDone };
-  },
-});
