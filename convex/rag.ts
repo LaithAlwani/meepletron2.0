@@ -159,6 +159,7 @@ export async function buildAnswer(
   // One retrieval pass: embed → vector-search (scoped to the selected rulebooks)
   // → score threshold → rerank. Returns the reranked chunks (possibly empty).
   const retrieve = async (
+    label: string,
     embedText: string,
     rerankText: string,
     topK: number,
@@ -187,17 +188,38 @@ export async function buildAnswer(
     const candidates = hydrated
       .filter((c) => c.chunkType !== "legend")
       .filter((c) => (scoreById.get(c.chunkId) ?? 0) >= threshold);
-    return await rerankChunks(
+    // TEMP diagnostics: what the vector search returned + which survived the
+    // score threshold, so we can see why the answer chunk did/didn't make it.
+    console.log(
+      `[rag:${label}] topK=${topK} thr=${threshold} hits=${hits.length} kept=${candidates.length} ` +
+        `top=${JSON.stringify(
+          hydrated.slice(0, 8).map((c) => ({
+            s: Number((scoreById.get(c.chunkId) ?? 0).toFixed(3)),
+            h: (c.breadcrumb || c.chunkType || "?").slice(0, 60),
+          })),
+        )}`,
+    );
+    const ranked = await rerankChunks(
       rerankText,
       candidates.slice(0, config.rerankCandidates),
       config.rerankTopN,
       usage,
     );
+    console.log(
+      `[rag:${label}] ranked=${JSON.stringify(
+        ranked.map((c) => (c.breadcrumb || c.chunkType || "?").slice(0, 60)),
+      )}`,
+    );
+    return ranked;
   };
 
   // 1. Primary pass: rewrite the question, then retrieve at the normal threshold.
   const searchQuery = await rewriteQuery(query, history, usage);
+  console.log(
+    `[rag] q=${JSON.stringify(query)} rewritten=${JSON.stringify(searchQuery)} histLen=${history.length}`,
+  );
   let ranked = await retrieve(
+    "primary",
     searchQuery,
     searchQuery,
     config.v2TopK,
@@ -211,7 +233,7 @@ export async function buildAnswer(
   // precision. This is what makes the "ask again and it works" symptom go away.
   if (ranked.length === 0) {
     console.warn("[buildAnswer] empty retrieval — retrying with a relaxed pass");
-    ranked = await retrieve(query, query, config.v2TopK * 2, 0);
+    ranked = await retrieve("relaxed", query, query, config.v2TopK * 2, 0);
   }
 
   if (ranked.length === 0) {
