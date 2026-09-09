@@ -24,7 +24,7 @@ export function Fab({
   className?: string;
 }) {
   const classes = cn(
-    "fixed bottom-[calc(3.75rem+env(safe-area-inset-bottom))] right-4 z-40 flex h-13 w-13 items-center justify-center rounded-full bg-accent text-accent-foreground shadow-lg ring-1 ring-black/10 transition-transform hover:scale-105 active:scale-95 sm:bottom-6",
+    "fixed bottom-[calc(3.75rem+env(safe-area-inset-bottom))] right-4 z-40 flex h-13 w-13 items-center justify-center rounded-full bg-accent text-accent-foreground shadow-lg ring-1 ring-black/10 transition-transform hover:scale-105 active:scale-95 nav:bottom-6",
     className,
   );
   if (href) {

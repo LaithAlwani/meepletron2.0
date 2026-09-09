@@ -238,8 +238,8 @@ export function NotificationsBell({
       ref={ref}
       className={
         variant === "floating"
-          ? "fixed right-3 top-[calc(env(safe-area-inset-top)+0.6rem)] z-40 sm:hidden"
-          : "relative hidden sm:block"
+          ? "fixed right-3 top-[calc(env(safe-area-inset-top)+0.6rem)] z-40 nav:hidden"
+          : "relative hidden nav:block"
       }
     >
       <button

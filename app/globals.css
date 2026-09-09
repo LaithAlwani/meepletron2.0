@@ -86,6 +86,10 @@
   --radius-lg: 1rem;
   --radius-xl: 1.25rem;
   --radius-2xl: 1.5rem;
+  /* Dedicated breakpoint for the app chrome (top-nav ↔ bottom-nav, notifications
+     bell, FAB offset): keep the mobile chrome until 867px, independent of the
+     `sm` content breakpoint (640px). Use as `nav:` (e.g. `nav:hidden`). */
+  --breakpoint-nav: 867px;
 }
 
 /* Gentle global down-scale — the whole UI is built in rem, so lowering the

@@ -37,9 +37,9 @@ export function BottomNav() {
     <>
       <div
         aria-hidden
-        className="h-[calc(3.25rem+env(safe-area-inset-bottom))] sm:hidden"
+        className="h-[calc(3.25rem+env(safe-area-inset-bottom))] nav:hidden"
       />
-      <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-surface/95 pb-[env(safe-area-inset-bottom)] backdrop-blur sm:hidden">
+      <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-surface/95 pb-[env(safe-area-inset-bottom)] backdrop-blur nav:hidden">
         <ul className="mx-auto flex max-w-md items-stretch">
           <li className="flex-1">
             <Link
