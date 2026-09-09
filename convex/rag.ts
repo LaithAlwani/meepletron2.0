@@ -156,47 +156,63 @@ export async function buildAnswer(
 
   const answerTemperature = config.answerTemperature;
 
-  // One retrieval pass: embed → vector-search (scoped to the selected rulebooks)
-  // → score threshold → rerank. Returns the reranked chunks (possibly empty).
+  // One retrieval pass: embed each query formulation → vector-search (scoped to
+  // the selected rulebooks) → union the hits (keeping the best score per chunk)
+  // → score threshold → rerank against `rerankText`. Unioning the raw question
+  // with the rewritten query means a rewrite that drifts toward the wrong
+  // passages can't hide the right chunk. Returns the reranked chunks.
   const retrieve = async (
     label: string,
-    embedText: string,
+    embedTexts: string[],
     rerankText: string,
     topK: number,
     threshold: number,
   ) => {
-    const { embedding, tokens } = await embedQuery(embedText);
-    usage.push({
-      purpose: "chat-embed",
-      model: EMBEDDING_MODEL_ID,
-      promptTokens: finite(tokens),
-      completionTokens: 0,
-      totalTokens: finite(tokens),
-    });
-    const hits = await ctx.vectorSearch("chunks", "by_embedding", {
-      vector: embedding,
-      limit: topK,
-      filter: (q) => {
-        const exprs = rulebookIds.map((id) => q.eq("rulebookId", id));
-        return exprs.length === 1 ? exprs[0] : q.or(...exprs);
-      },
-    });
-    const scoreById = new Map(hits.map((h) => [h._id, h._score]));
+    const scoreById = new Map<Id<"chunks">, number>();
+    for (const text of embedTexts) {
+      if (!text.trim()) continue;
+      const { embedding, tokens } = await embedQuery(text);
+      usage.push({
+        purpose: "chat-embed",
+        model: EMBEDDING_MODEL_ID,
+        promptTokens: finite(tokens),
+        completionTokens: 0,
+        totalTokens: finite(tokens),
+      });
+      const hits = await ctx.vectorSearch("chunks", "by_embedding", {
+        vector: embedding,
+        limit: topK,
+        filter: (q) => {
+          const exprs = rulebookIds.map((id) => q.eq("rulebookId", id));
+          return exprs.length === 1 ? exprs[0] : q.or(...exprs);
+        },
+      });
+      for (const h of hits) {
+        const prev = scoreById.get(h._id);
+        if (prev === undefined || h._score > prev) scoreById.set(h._id, h._score);
+      }
+    }
     const hydrated = await ctx.runQuery(internal.chat.hydrateChunks, {
-      chunkIds: hits.map((h) => h._id),
+      chunkIds: [...scoreById.keys()],
     });
     const candidates = hydrated
       .filter((c) => c.chunkType !== "legend")
       .filter((c) => (scoreById.get(c.chunkId) ?? 0) >= threshold);
-    // TEMP diagnostics: what the vector search returned + which survived the
-    // score threshold, so we can see why the answer chunk did/didn't make it.
+    // TEMP diagnostics: the union hits (best-scored first) + which survived the
+    // score threshold, so we can see where the answer chunk ranked.
     console.log(
-      `[rag:${label}] topK=${topK} thr=${threshold} hits=${hits.length} kept=${candidates.length} ` +
+      `[rag:${label}] topK=${topK} thr=${threshold} hits=${scoreById.size} kept=${candidates.length} ` +
         `top=${JSON.stringify(
-          hydrated.slice(0, 8).map((c) => ({
-            s: Number((scoreById.get(c.chunkId) ?? 0).toFixed(3)),
-            h: (c.breadcrumb || c.chunkType || "?").slice(0, 60),
-          })),
+          [...hydrated]
+            .sort(
+              (a, b) =>
+                (scoreById.get(b.chunkId) ?? 0) - (scoreById.get(a.chunkId) ?? 0),
+            )
+            .slice(0, 8)
+            .map((c) => ({
+              s: Number((scoreById.get(c.chunkId) ?? 0).toFixed(3)),
+              h: (c.breadcrumb || c.chunkType || "?").slice(0, 60),
+            })),
         )}`,
     );
     const ranked = await rerankChunks(
@@ -220,8 +236,8 @@ export async function buildAnswer(
   );
   let ranked = await retrieve(
     "primary",
-    searchQuery,
-    searchQuery,
+    [searchQuery, query],
+    query,
     config.v2TopK,
     config.v2ScoreThreshold,
   );
@@ -233,7 +249,7 @@ export async function buildAnswer(
   // precision. This is what makes the "ask again and it works" symptom go away.
   if (ranked.length === 0) {
     console.warn("[buildAnswer] empty retrieval — retrying with a relaxed pass");
-    ranked = await retrieve("relaxed", query, query, config.v2TopK * 2, 0);
+    ranked = await retrieve("relaxed", [query], query, config.v2TopK * 2, 0);
   }
 
   if (ranked.length === 0) {
