@@ -101,8 +101,11 @@ export default function ProfilePage({
   const counts = data.counts;
   const ownedCount = data.owned?.total ?? 0;
   // Stats is a self-only tab (it includes your private activity); it defaults
-  // for you, Plays defaults for everyone else.
-  const activeTab: Tab = tab ?? (isSelf ? "stats" : "plays");
+  // for you, Plays defaults for everyone else. Clamp `stats` to `plays` for a
+  // non-self viewer so a shared `?tab=stats` link can't land on a blank tab.
+  const requestedTab = tab ?? (isSelf ? "stats" : "plays");
+  const activeTab: Tab =
+    requestedTab === "stats" && !isSelf ? "plays" : requestedTab;
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-8">

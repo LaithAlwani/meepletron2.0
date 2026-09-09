@@ -6,6 +6,7 @@ import { Providers } from "./providers";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
 import { BottomNav } from "@/components/BottomNav";
+import { NavigationTracker } from "@/components/NavigationTracker";
 import { NotificationsBell } from "@/components/notifications/NotificationsBell";
 import { PreferencesEffects } from "@/components/PreferencesEffects";
 import { SITE_URL } from "@/lib/site";
@@ -79,6 +80,7 @@ export default function RootLayout({
         <script dangerouslySetInnerHTML={{ __html: installCaptureScript }} />
         <Providers>
           <PreferencesEffects />
+          <NavigationTracker />
           <SiteHeader />
           <NotificationsBell variant="floating" />
           <main className="relative z-10 flex-1">{children}</main>

@@ -1,14 +1,12 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import Link from "next/link";
 import { usePaginatedQuery, useQuery, useMutation } from "convex/react";
 import {
   Search,
   SlidersHorizontal,
   List,
   LayoutGrid,
-  ChevronLeft,
 } from "lucide-react";
 import { api } from "@/convex/_generated/api";
 import { GameCard } from "@/components/boardgames/GameCard";
@@ -18,6 +16,7 @@ import { useBggSearch } from "@/components/boardgames/useBggSearch";
 import { FilterDrawer } from "@/components/boardgames/FilterDrawer";
 import { useLibraryFilters } from "@/components/boardgames/useLibraryFilters";
 import { SortControl } from "@/components/boardgames/SortControl";
+import { BackButton } from "@/components/ui/BackButton";
 import { useScrollRestore } from "@/components/lib/useScrollRestore";
 
 type View = "grid" | "list";
@@ -94,13 +93,10 @@ export default function AllBoardgamesPage() {
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-8">
-      <Link
-        href="/boardgames"
+      <BackButton
+        fallbackHref="/boardgames"
         className="mb-3 inline-flex items-center gap-1 text-sm font-medium text-muted transition-colors hover:text-foreground"
-      >
-        <ChevronLeft className="h-4 w-4" />
-        Library
-      </Link>
+      />
 
       {/* Header */}
       <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">

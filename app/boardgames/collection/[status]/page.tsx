@@ -9,11 +9,11 @@ import {
   Unauthenticated,
   AuthLoading,
 } from "convex/react";
-import { ChevronLeft } from "lucide-react";
 import { api } from "@/convex/_generated/api";
 import { GameCard } from "@/components/boardgames/GameCard";
 import { SortControl } from "@/components/boardgames/SortControl";
 import { buttonClasses } from "@/components/ui/Button";
+import { BackButton } from "@/components/ui/BackButton";
 import { statusBySlug, type CollStatus } from "@/components/collection/status";
 import { DEFAULT_SORT, type GameSortKey } from "@/convex/lib/gameSort";
 
@@ -30,13 +30,10 @@ export default function CollectionListPage({
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-8">
-      <Link
-        href="/boardgames"
+      <BackButton
+        fallbackHref="/boardgames"
         className="mb-3 inline-flex items-center gap-1 text-sm font-medium text-muted transition-colors hover:text-foreground"
-      >
-        <ChevronLeft className="h-4 w-4" />
-        Library
-      </Link>
+      />
       <h1 className="font-display mb-5 flex items-center gap-2 text-3xl font-extrabold tracking-tight">
         <status.icon className="h-6 w-6 text-accent" />
         {status.title}

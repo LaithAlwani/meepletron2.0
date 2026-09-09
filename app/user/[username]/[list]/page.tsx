@@ -3,9 +3,9 @@
 import { use, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useQuery, usePaginatedQuery } from "convex/react";
-import { ArrowLeft } from "lucide-react";
 import { api } from "@/convex/_generated/api";
 import { Skeleton } from "@/components/ui/Surface";
+import { BackButton } from "@/components/ui/BackButton";
 import { Die } from "@/components/ui/icons";
 import { SortControl } from "@/components/boardgames/SortControl";
 import { DEFAULT_SORT, type GameSortKey } from "@/convex/lib/gameSort";
@@ -60,13 +60,10 @@ export default function CollectionListPage({
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-8">
-      <Link
-        href={valid ? `/user/${username}` : "/top-games"}
+      <BackButton
+        fallbackHref={valid ? `/user/${username}` : "/top-games"}
         className="mb-4 inline-flex items-center gap-1 text-sm font-medium text-muted hover:text-foreground"
-      >
-        <ArrowLeft className="h-4 w-4" />
-        {meta?.author?.name ?? (valid ? `@${username}` : "Back")}
-      </Link>
+      />
 
       <div className="mb-5 flex items-center justify-between gap-3">
         <h1 className="font-display text-2xl font-extrabold tracking-tight">

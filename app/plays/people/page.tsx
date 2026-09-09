@@ -10,9 +10,10 @@ import {
   AuthLoading,
 } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
-import { ArrowLeft, Pencil, Trash2, Mail, BadgeCheck } from "lucide-react";
+import { Pencil, Trash2, Mail, BadgeCheck } from "lucide-react";
 import { api } from "@/convex/_generated/api";
 import { PageTitle } from "@/components/ui/PageTitle";
+import { BackButton } from "@/components/ui/BackButton";
 import { buttonClasses } from "@/components/ui/Button";
 import { Skeleton } from "@/components/ui/Surface";
 import { useToast } from "@/components/ui/Toast";
@@ -25,13 +26,10 @@ type Person = FunctionReturnType<typeof api.plays.myPeople>[number];
 export default function PeoplePage() {
   return (
     <div className="mx-auto max-w-xl px-4 py-8">
-      <Link
-        href="/plays"
+      <BackButton
+        fallbackHref="/plays"
         className="mb-4 inline-flex items-center gap-1 text-sm font-medium text-muted transition-colors hover:text-foreground"
-      >
-        <ArrowLeft className="h-4 w-4" />
-        My plays
-      </Link>
+      />
       <PageTitle>Friends</PageTitle>
       <p className="mt-1 text-sm text-muted">
         Friends you&apos;ve added who aren&apos;t on Meepletron yet. Fix a name or

@@ -58,7 +58,7 @@ export function UserMenu({
     touchOnly?: boolean;
   }[] = [
     { href: "/tuckbox", label: "Tuckbox", icon: Scissors },
-    { href: "/who-goes-first", label: "First Player", icon: Hand, touchOnly: true },
+    { href: "/who-goes-first", label: "Who goes first", icon: Hand, touchOnly: true },
     { href: "/about", label: "About", icon: Info },
     ...(isAdmin
       ? [{ href: "/admin", label: "Admin", icon: Shield as LucideIcon }]

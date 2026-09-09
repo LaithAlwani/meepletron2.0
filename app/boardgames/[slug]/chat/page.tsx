@@ -34,6 +34,7 @@ import { ThinkingIndicator } from "@/components/chat/ThinkingIndicator";
 import { BackgroundCover } from "@/components/boardgames/BackgroundCover";
 import { ArrowLeft } from "lucide-react";
 import { Die } from "@/components/ui/icons";
+import { useBackNav } from "@/components/ui/BackButton";
 
 const SITE_URL = process.env.NEXT_PUBLIC_CONVEX_SITE_URL!;
 
@@ -127,6 +128,7 @@ function ChatView({ gameId, slug }: { gameId: Id<"games">; slug: string }) {
   const addModule = useMutation(api.chat.addModuleRulebooks);
   const token = useAuthToken();
   const router = useRouter();
+  const goBack = useBackNav(`/boardgames/${slug}`);
   const searchParams = useSearchParams();
   const moduleParam = searchParams.get("module");
   const qParam = searchParams.get("q");
@@ -374,11 +376,7 @@ function ChatView({ gameId, slug }: { gameId: Id<"games">; slug: string }) {
           <div className="mx-auto flex max-w-3xl items-center gap-2 px-4 py-2.5">
             <button
               type="button"
-              onClick={() =>
-                window.history.length > 1
-                  ? router.back()
-                  : router.push(`/boardgames/${slug}`)
-              }
+              onClick={goBack}
               aria-label="Go back"
               className="rounded-lg p-2 text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
             >

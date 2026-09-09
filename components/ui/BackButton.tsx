@@ -2,12 +2,25 @@
 
 import { useRouter } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
+import { canGoBack } from "@/components/lib/navHistory";
 
 /**
- * A "Back" button that returns to the previous page via real browser back — so
- * the list the user came from is restored with its scroll position and active
- * tab. Falls back to `fallbackHref` when there's no in-app history to go back to
- * (e.g. the page was opened directly or shared).
+ * Returns a handler that goes back to the previous in-app page (restoring its
+ * scroll + state) when there's in-app history to return to, and otherwise
+ * navigates to `fallbackHref` — so a directly-opened / shared / new-tab page
+ * still has a sensible destination instead of leaving the app.
+ */
+export function useBackNav(fallbackHref: string) {
+  const router = useRouter();
+  return () => {
+    if (canGoBack()) router.back();
+    else router.push(fallbackHref);
+  };
+}
+
+/**
+ * A consistent "Back" button used across detail pages. Real in-app back with a
+ * parent-page fallback (see {@link useBackNav}).
  */
 export function BackButton({
   fallbackHref,
@@ -18,19 +31,9 @@ export function BackButton({
   label?: string;
   className?: string;
 }) {
-  const router = useRouter();
+  const onBack = useBackNav(fallbackHref);
   return (
-    <button
-      type="button"
-      onClick={() => {
-        if (typeof window !== "undefined" && window.history.length > 1) {
-          router.back();
-        } else {
-          router.push(fallbackHref);
-        }
-      }}
-      className={className}
-    >
+    <button type="button" onClick={onBack} className={className}>
       <ArrowLeft className="h-4 w-4" />
       {label}
     </button>

@@ -10,6 +10,7 @@ import { TopGamesEditor } from "@/components/top-games/TopGamesEditor";
 import { TopGamesView, type TopListData } from "@/components/top-games/TopGamesView";
 import { Skeleton } from "@/components/ui/Surface";
 import { buttonClasses } from "@/components/ui/Button";
+import { BackButton } from "@/components/ui/BackButton";
 
 export default function TopListPage({
   params,
@@ -38,12 +39,10 @@ export default function TopListPage({
         </div>
       ) : data.isOwner && data.status === "draft" ? (
         <>
-          <Link
-            href="/top-games"
-            className="mb-4 inline-block text-sm font-medium text-muted hover:text-foreground"
-          >
-            ← All lists
-          </Link>
+          <BackButton
+            fallbackHref="/top-games"
+            className="mb-4 inline-flex items-center gap-1 text-sm font-medium text-muted hover:text-foreground"
+          />
           <TopGamesEditor
             listId={data._id}
             category={data.category}
@@ -55,12 +54,10 @@ export default function TopListPage({
         </>
       ) : (
         <>
-          <Link
-            href="/top-games"
-            className="mb-4 inline-block text-sm font-medium text-muted hover:text-foreground"
-          >
-            ← All lists
-          </Link>
+          <BackButton
+            fallbackHref="/top-games"
+            className="mb-4 inline-flex items-center gap-1 text-sm font-medium text-muted hover:text-foreground"
+          />
           <TopGamesView data={data as TopListData} />
         </>
       )}
