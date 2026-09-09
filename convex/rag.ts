@@ -155,6 +155,12 @@ export async function buildAnswer(
   const config = await ctx.runQuery(internal.chat.getActiveConfig, {});
 
   const answerTemperature = config.answerTemperature;
+  // Pools were too small (v2TopK=8, rerankTopN≈1): on a miss the answer chunk
+  // sat just outside the top 8, and the model got a single passage of grounding.
+  // Floor them so retrieval has room; the vector-search cost is the index scan,
+  // not the result count, so a bigger topK is ~free.
+  const vecTopK = Math.max(config.v2TopK, 24);
+  const rerankTopN = Math.max(config.rerankTopN, 5);
 
   // One retrieval pass: embed each query formulation → vector-search (scoped to
   // the selected rulebooks) → union the hits (keeping the best score per chunk)
@@ -218,7 +224,7 @@ export async function buildAnswer(
     const ranked = await rerankChunks(
       rerankText,
       candidates.slice(0, config.rerankCandidates),
-      config.rerankTopN,
+      rerankTopN,
       usage,
     );
     console.log(
@@ -234,11 +240,16 @@ export async function buildAnswer(
   console.log(
     `[rag] q=${JSON.stringify(query)} rewritten=${JSON.stringify(searchQuery)} histLen=${history.length}`,
   );
+  // A standalone first question → embed the raw words (a synonym-heavy rewrite
+  // can drift toward adjacent passages, e.g. "coins" → the "bank" rule instead
+  // of "setup"). A follow-up → embed the rewrite so pronouns/references resolve.
+  // One search either way; rerank on the raw question for precision.
+  const embedText = history.length <= 1 ? query : searchQuery;
   let ranked = await retrieve(
     "primary",
-    [searchQuery, query],
+    [embedText],
     query,
-    config.v2TopK,
+    vecTopK,
     config.v2ScoreThreshold,
   );
 
@@ -249,7 +260,7 @@ export async function buildAnswer(
   // precision. This is what makes the "ask again and it works" symptom go away.
   if (ranked.length === 0) {
     console.warn("[buildAnswer] empty retrieval — retrying with a relaxed pass");
-    ranked = await retrieve("relaxed", [query], query, config.v2TopK * 2, 0);
+    ranked = await retrieve("relaxed", [query], query, vecTopK * 2, 0);
   }
 
   if (ranked.length === 0) {
