@@ -72,7 +72,11 @@ async function rewriteQuery(
       totalTokens: finite(u.totalTokens) || it + ot,
     });
     return rewritten ? `${query} ${rewritten}` : query;
-  } catch {
+  } catch (err) {
+    // Don't swallow silently — a cold-start failure here degrades retrieval to
+    // the raw question, which is exactly the "first question returns nothing"
+    // symptom. Log it so it's visible; the relaxed retry in buildAnswer recovers.
+    console.error("[rewriteQuery] failed; falling back to the raw question", err);
     return query;
   }
 }
@@ -152,43 +156,63 @@ export async function buildAnswer(
 
   const answerTemperature = config.answerTemperature;
 
-  // 1. Expand + embed the question.
+  // One retrieval pass: embed → vector-search (scoped to the selected rulebooks)
+  // → score threshold → rerank. Returns the reranked chunks (possibly empty).
+  const retrieve = async (
+    embedText: string,
+    rerankText: string,
+    topK: number,
+    threshold: number,
+  ) => {
+    const { embedding, tokens } = await embedQuery(embedText);
+    usage.push({
+      purpose: "chat-embed",
+      model: EMBEDDING_MODEL_ID,
+      promptTokens: finite(tokens),
+      completionTokens: 0,
+      totalTokens: finite(tokens),
+    });
+    const hits = await ctx.vectorSearch("chunks", "by_embedding", {
+      vector: embedding,
+      limit: topK,
+      filter: (q) => {
+        const exprs = rulebookIds.map((id) => q.eq("rulebookId", id));
+        return exprs.length === 1 ? exprs[0] : q.or(...exprs);
+      },
+    });
+    const scoreById = new Map(hits.map((h) => [h._id, h._score]));
+    const hydrated = await ctx.runQuery(internal.chat.hydrateChunks, {
+      chunkIds: hits.map((h) => h._id),
+    });
+    const candidates = hydrated
+      .filter((c) => c.chunkType !== "legend")
+      .filter((c) => (scoreById.get(c.chunkId) ?? 0) >= threshold);
+    return await rerankChunks(
+      rerankText,
+      candidates.slice(0, config.rerankCandidates),
+      config.rerankTopN,
+      usage,
+    );
+  };
+
+  // 1. Primary pass: rewrite the question, then retrieve at the normal threshold.
   const searchQuery = await rewriteQuery(query, history, usage);
-  const { embedding, tokens: embedTokens } = await embedQuery(searchQuery);
-  usage.push({
-    purpose: "chat-embed",
-    model: EMBEDDING_MODEL_ID,
-    promptTokens: finite(embedTokens),
-    completionTokens: 0,
-    totalTokens: finite(embedTokens),
-  });
-
-  // 2. Vector search scoped to the selected rulebooks.
-  const hits = await ctx.vectorSearch("chunks", "by_embedding", {
-    vector: embedding,
-    limit: config.v2TopK,
-    filter: (q) => {
-      const exprs = rulebookIds.map((id) => q.eq("rulebookId", id));
-      return exprs.length === 1 ? exprs[0] : q.or(...exprs);
-    },
-  });
-  const scoreById = new Map(hits.map((h) => [h._id, h._score]));
-
-  // 3. Hydrate, drop legend hits, apply score threshold.
-  const hydrated = await ctx.runQuery(internal.chat.hydrateChunks, {
-    chunkIds: hits.map((h) => h._id),
-  });
-  const candidates = hydrated
-    .filter((c) => c.chunkType !== "legend")
-    .filter((c) => (scoreById.get(c.chunkId) ?? 0) >= config.v2ScoreThreshold);
-
-  // 4. Rerank down to N (or fall back to top-by-score).
-  const ranked = await rerankChunks(
+  let ranked = await retrieve(
     searchQuery,
-    candidates.slice(0, config.rerankCandidates),
-    config.rerankTopN,
-    usage,
+    searchQuery,
+    config.v2TopK,
+    config.v2ScoreThreshold,
   );
+
+  // 2. Self-heal: a cold/degraded first request can under-retrieve (e.g. the
+  // rewrite fell back to the raw question, giving weaker recall), producing a
+  // false "I couldn't find it". Before giving up, widen the net once — raw
+  // question, more candidates, no score floor — and let the reranker keep
+  // precision. This is what makes the "ask again and it works" symptom go away.
+  if (ranked.length === 0) {
+    console.warn("[buildAnswer] empty retrieval — retrying with a relaxed pass");
+    ranked = await retrieve(query, query, config.v2TopK * 2, 0);
+  }
 
   if (ranked.length === 0) {
     return {
