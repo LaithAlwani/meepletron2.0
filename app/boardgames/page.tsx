@@ -12,6 +12,7 @@ import { useBggSearch } from "@/components/boardgames/useBggSearch";
 import { FilterDrawer } from "@/components/boardgames/FilterDrawer";
 import { useLibraryFilters } from "@/components/boardgames/useLibraryFilters";
 import { SortControl } from "@/components/boardgames/SortControl";
+import { ChatReadyToggle } from "@/components/boardgames/ChatReadyToggle";
 import { CollectionSection } from "@/components/collection/CollectionSection";
 
 const cellClass = "w-40 shrink-0 snap-start sm:w-44";
@@ -75,6 +76,12 @@ export default function BoardgamesPage() {
             />
           </div>
           <div className="flex items-center justify-end gap-2">
+            <ChatReadyToggle
+              active={filters.chatOnly}
+              onToggle={() =>
+                setFilters({ ...filters, chatOnly: !filters.chatOnly })
+              }
+            />
             {!searching && (
               <SortControl
                 value={sort}

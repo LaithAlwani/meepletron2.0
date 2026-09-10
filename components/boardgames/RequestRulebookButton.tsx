@@ -2,11 +2,13 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useMutation, useQuery } from "convex/react";
 import { BookPlus, Check, LogIn } from "lucide-react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { useToast } from "@/components/ui/Toast";
+import { useConfirm } from "@/components/ui/Confirm";
 import { friendlyError } from "@/lib/friendlyError";
 
 /**
@@ -24,6 +26,8 @@ export function RequestRulebookButton({
   const me = useQuery(api.users.me);
   const request = useMutation(api.rulebookRequests.requestRulebook);
   const toast = useToast();
+  const confirm = useConfirm();
+  const router = useRouter();
   const [done, setDone] = useState(false);
   const [busy, setBusy] = useState(false);
 
@@ -42,12 +46,27 @@ export function RequestRulebookButton({
     try {
       const res = await request({ gameId });
       setDone(true);
-      toast(
-        res.alreadyRequested
-          ? "You've already requested this — we'll add it soon."
-          : "Requested! We'll add this rulebook soon.",
-        "success",
-      );
+
+      // If product-update emails are off, we can't tell them when the manual
+      // lands — nudge them to switch it on (and deep-link to that exact toggle).
+      const updatesOff = !(me?.preferences?.emailUpdates ?? false);
+      if (updatesOff) {
+        const go = await confirm({
+          title: "Want an email when it's ready?",
+          message:
+            "Your request is in! But “Product update emails” are turned off, so we can't email you when this rulebook is added and ready to chat. Turn them on to get notified.",
+          confirmText: "Turn on in settings",
+          cancelText: "Not now",
+        });
+        if (go) router.push("/settings#product-updates");
+      } else {
+        toast(
+          res.alreadyRequested
+            ? "You've already requested this — we'll add it soon."
+            : "Requested! We'll email you when it's ready.",
+          "success",
+        );
+      }
     } catch (e) {
       toast(friendlyError(e, "Couldn't send your request"), "error");
     } finally {

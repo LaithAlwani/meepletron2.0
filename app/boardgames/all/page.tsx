@@ -16,6 +16,7 @@ import { useBggSearch } from "@/components/boardgames/useBggSearch";
 import { FilterDrawer } from "@/components/boardgames/FilterDrawer";
 import { useLibraryFilters } from "@/components/boardgames/useLibraryFilters";
 import { SortControl } from "@/components/boardgames/SortControl";
+import { ChatReadyToggle } from "@/components/boardgames/ChatReadyToggle";
 import { BackButton } from "@/components/ui/BackButton";
 import { useScrollRestore } from "@/components/lib/useScrollRestore";
 
@@ -129,6 +130,12 @@ export default function AllBoardgamesPage() {
             />
           </div>
           <div className="flex items-center justify-end gap-2">
+            <ChatReadyToggle
+              active={filters.chatOnly}
+              onToggle={() =>
+                setFilters({ ...filters, chatOnly: !filters.chatOnly })
+              }
+            />
             {!searching && (
               <SortControl
                 value={sort}

@@ -12,6 +12,7 @@ import type { Id } from "./_generated/dataModel";
 import { getCurrentUser, requireUser, requireAdmin } from "./lib/auth";
 import { generateText } from "ai";
 import { CHAT_MODEL, buildAnswer, type Annotation } from "./rag";
+import { stripIconTokens } from "./lib/prompts";
 import { annotationValidator } from "./lib/annotations";
 
 /** Common questions asked of almost any game. Answers are grounded per-game. */
@@ -108,7 +109,7 @@ export const generateForGame = internalAction({
         system,
         messages: [{ role: "user", content: question }],
       });
-      const answer = text.trim();
+      const answer = stripIconTokens(text.trim());
       if (answer) results.push({ question, answer, annotations });
     }
 

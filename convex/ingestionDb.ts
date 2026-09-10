@@ -378,6 +378,11 @@ export const finalizeCommit = internalMutation({
     // `isIngested === true` means it was already ingested before this commit.
     const firstIngest = !!rb && rb.isIngested !== true;
     if (rb && firstIngest) {
+      // Email anyone who requested this rulebook that it's now ready, and clear
+      // their fulfilled requests.
+      await ctx.scheduler.runAfter(0, internal.rulebookRequests.fulfillRequests, {
+        gameId: rb.gameId,
+      });
       await ctx.scheduler.runAfter(0, internal.faqs.generateForGame, {
         gameId: rb.gameId,
       });

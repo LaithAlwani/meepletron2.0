@@ -7,6 +7,7 @@ import { streamText } from "ai";
 import { auth } from "./auth";
 import { finite } from "./lib/num";
 import { CHAT_MODEL, buildAnswer } from "./rag";
+import { createIconTokenStripper } from "./lib/prompts";
 
 const http = httpRouter();
 
@@ -153,10 +154,21 @@ const chat = httpAction(async (ctx, request) => {
   const stream = new ReadableStream({
     async start(controller) {
       let full = "";
+      // Strip bracketed icon tokens ("[WOOD]" → "wood") as we stream, keeping
+      // numeric [N] citation markers intact so the chips still render.
+      const stripper = createIconTokenStripper();
       try {
         for await (const delta of result.textStream) {
-          full += delta;
-          controller.enqueue(encoder.encode(delta));
+          const clean = stripper.push(delta);
+          if (clean) {
+            full += clean;
+            controller.enqueue(encoder.encode(clean));
+          }
+        }
+        const tail = stripper.flush();
+        if (tail) {
+          full += tail;
+          controller.enqueue(encoder.encode(tail));
         }
         const answerUsage = await result.usage;
         const inTok = finite(answerUsage.inputTokens);

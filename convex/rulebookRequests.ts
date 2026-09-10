@@ -1,8 +1,16 @@
 import { v } from "convex/values";
-import { mutation, query, type QueryCtx } from "./_generated/server";
+import {
+  mutation,
+  query,
+  internalMutation,
+  type QueryCtx,
+} from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
+import { internal } from "./_generated/api";
 import { requireUser, requireAdmin } from "./lib/auth";
 import { thumbUrl } from "./lib/gameCover";
+
+const SITE_URL = process.env.SITE_URL || "https://www.meepletron.com";
 
 /**
  * Request counts per game, keyed by gameId, for games that DON'T yet have an
@@ -49,7 +57,60 @@ export const requestRulebook = mutation({
       userId: user._id,
       createdAt: Date.now(),
     });
+
+    // Confirm the request by email — a transactional acknowledgement of an
+    // explicit action, so it sends regardless of the product-updates pref (that
+    // pref gates the later "it's ready" notification). Best-effort.
+    const game = await ctx.db.get("games", gameId);
+    if (game && user.email) {
+      await ctx.scheduler.runAfter(0, internal.email.sendNotificationEmail, {
+        to: user.email,
+        recipientName: user.username ?? user.name ?? undefined,
+        subject: `We got your rulebook request for ${game.title}`,
+        heading: `Your rulebook request is in ✅`,
+        body: `Thanks! You asked us to add the rulebook for ${game.title}. We'll ingest it and email you the moment it's ready to chat with.`,
+        ctaLabel: `View ${game.title}`,
+        ctaUrl: `${SITE_URL}/boardgames/${game.slug}`,
+        footerNote:
+          "You're receiving this because you requested a rulebook on Meepletron.",
+      });
+    }
     return { alreadyRequested: false };
+  },
+});
+
+/**
+ * Fulfill every pending request for a game once its rulebook is ingested: email
+ * each requester that it's ready, then clear the (now-fulfilled) request rows.
+ * Scheduled from `finalizeCommit` on a rulebook's FIRST ingest. Best-effort —
+ * a missing email/opt-out just skips the send; the row is cleared either way.
+ */
+export const fulfillRequests = internalMutation({
+  args: { gameId: v.id("games") },
+  handler: async (ctx, { gameId }) => {
+    const game = await ctx.db.get("games", gameId);
+    if (!game) return;
+    const reqs = await ctx.db
+      .query("rulebookRequests")
+      .withIndex("by_game", (q) => q.eq("gameId", gameId))
+      .take(5000);
+    for (const r of reqs) {
+      const user = await ctx.db.get("users", r.userId);
+      if (user?.email && (user.preferences?.emailUpdates ?? false)) {
+        await ctx.scheduler.runAfter(0, internal.email.sendNotificationEmail, {
+          to: user.email,
+          recipientName: user.username ?? user.name ?? undefined,
+          subject: `The rulebook for ${game.title} is ready on Meepletron`,
+          heading: `${game.title} is ready to chat 📖`,
+          body: `Good news — we've added and processed the rulebook for ${game.title} that you requested. You can now ask the rules assistant anything about it.`,
+          ctaLabel: `Ask about ${game.title}`,
+          ctaUrl: `${SITE_URL}/boardgames/${game.slug}`,
+          footerNote:
+            "You're receiving this because you requested this rulebook on Meepletron.",
+        });
+      }
+      await ctx.db.delete("rulebookRequests", r._id);
+    }
   },
 });
 

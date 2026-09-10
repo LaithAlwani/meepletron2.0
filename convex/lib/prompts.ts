@@ -18,6 +18,69 @@ export type RetrievedChunk = {
 /** Bracketed ALL-CAPS iconography tokens, e.g. [WOOD], [VP]. */
 export const ICON_TOKEN_REGEX = /\[[A-Z0-9][A-Z0-9 _/-]*\]/g;
 
+/**
+ * Streaming-safe transformer that removes bracketed icon tokens from a model
+ * answer (e.g. "[WOOD]" → "wood") so the prose reads naturally, while keeping
+ * numeric citation markers ("[1]", "[2]") intact so the chips still render. The
+ * answer prompt already asks the model to expand these tokens; this guarantees
+ * it even when the model slips. A bracket group split across streamed deltas is
+ * held in a buffer until it can be resolved.
+ */
+export function createIconTokenStripper() {
+  // Characters allowed inside an icon-token / citation bracket (see regex above).
+  const INNER = /[A-Z0-9 _/-]/;
+  const MAX = 48; // never buffer more than a token's worth before giving up
+  let pending = ""; // an in-progress "[…" not yet resolved
+
+  function resolve(group: string): string {
+    const inner = group.slice(1, -1);
+    // Pure-digit groups are citation markers — keep them verbatim (for chips).
+    if (/^[0-9]+$/.test(inner)) return group;
+    // Anything with a letter is an icon token — drop brackets, lowercase it.
+    return inner.toLowerCase();
+  }
+
+  function push(delta: string): string {
+    let out = "";
+    for (const ch of delta) {
+      if (pending) {
+        if (ch === "]") {
+          out += resolve(pending + "]");
+          pending = "";
+        } else if (ch === "[") {
+          out += pending; // abandon the old run as literal, start fresh
+          pending = "[";
+        } else if (INNER.test(ch) && pending.length < MAX) {
+          pending += ch;
+        } else {
+          out += pending + ch; // not a token/citation — flush literally
+          pending = "";
+        }
+      } else if (ch === "[") {
+        pending = "[";
+      } else {
+        out += ch;
+      }
+    }
+    return out;
+  }
+
+  /** Emit any unresolved buffer (call once the stream ends). */
+  function flush(): string {
+    const rest = pending;
+    pending = "";
+    return rest;
+  }
+
+  return { push, flush };
+}
+
+/** One-shot version of {@link createIconTokenStripper} for non-streamed text. */
+export function stripIconTokens(text: string): string {
+  const s = createIconTokenStripper();
+  return s.push(text) + s.flush();
+}
+
 /** Whether the answer likely needs the iconography legend as context. */
 export function needsIconLegend(query: string, chunks: RetrievedChunk[]): boolean {
   if (ICON_TOKEN_REGEX.test(query)) return true;
@@ -75,7 +138,7 @@ Grounding rules:
   - Cite ONLY that leading [N] index. NEVER cite by a section name, heading, or glossary/legend term (never "[Glossary: round]", never "[SEQUENCE OF PLAY]"), and NEVER a number that appears inside the passage or a section/subsection number (never "[1.1]"). If it is not one of the [N] numbers shown in CONTEXT, it does not go in brackets.
   - Place markers at the END of the sentence or clause (right before the punctuation), and NEVER read them aloud or turn them into words.
   - Use square brackets ONLY for these [N] markers — NEVER wrap a quantity, amount, or any game number in brackets. For example write "you gain 3 coins [2]", never "you gain [3] coins".
-- Expand any bracketed iconography tokens (e.g. [WOOD], [VP]) into their meaning using the LEGEND when present.
+- The rulebook text uses bracketed ALL-CAPS icon tokens (e.g. [WOOD], [VP], [FOOD]). NEVER write these tokens in your answer. Always replace them with the plain English word(s) they stand for so the writing reads naturally — write "wood", "victory points", "food", NOT "[WOOD]", "[VP]", "[FOOD]". Use the LEGEND to look up a token's meaning when present; otherwise use the obvious word inside the brackets in lowercase. The ONLY square brackets allowed anywhere in your answer are the numeric [N] citation markers.
 - Be concise and clear. Use short paragraphs or bullet points. Do not restate the question.
 
 When the CONTEXT does not actually answer the question:

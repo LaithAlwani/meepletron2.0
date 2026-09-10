@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
   useMutation,
@@ -54,6 +55,25 @@ const FONT_OPTIONS: { value: FontSize; label: string }[] = [
 function SettingsBody() {
   const prefs = usePreferences();
   const save = useMutation(api.users.updateSettings);
+
+  // Deep-link support: `/settings#product-updates` (e.g. from the "request a
+  // rulebook" nudge) scrolls to and briefly highlights that exact toggle.
+  const [highlightUpdates, setHighlightUpdates] = useState(false);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (window.location.hash !== "#product-updates") return;
+    const scroll = setTimeout(() => {
+      document
+        .getElementById("product-updates")
+        ?.scrollIntoView({ behavior: "smooth", block: "center" });
+      setHighlightUpdates(true);
+    }, 150);
+    const clear = setTimeout(() => setHighlightUpdates(false), 3200);
+    return () => {
+      clearTimeout(scroll);
+      clearTimeout(clear);
+    };
+  }, []);
 
   function set(patch: Partial<Preferences>) {
     void save({ preferences: { ...prefs, ...patch } });
@@ -163,8 +183,10 @@ function SettingsBody() {
           onChange={(v) => set({ emailMentions: v })}
         />
         <Toggle
+          id="product-updates"
+          highlight={highlightUpdates}
           label="Product update emails"
-          hint="Occasional emails about new features."
+          hint="Occasional emails about new features, plus a heads-up when a rulebook you requested is added."
           checked={prefs.emailUpdates}
           onChange={(v) => set({ emailUpdates: v })}
         />
@@ -197,14 +219,23 @@ function Toggle({
   hint,
   checked,
   onChange,
+  id,
+  highlight,
 }: {
   label: string;
   hint?: string;
   checked: boolean;
   onChange: (v: boolean) => void;
+  id?: string;
+  highlight?: boolean;
 }) {
   return (
-    <div className="flex items-center justify-between gap-4 px-4 py-3.5">
+    <div
+      id={id}
+      className={`flex scroll-mt-24 items-center justify-between gap-4 px-4 py-3.5 transition-colors duration-500 ${
+        highlight ? "bg-accent/10 ring-2 ring-inset ring-accent" : ""
+      }`}
+    >
       <div className="min-w-0">
         <p className="text-sm font-medium text-foreground">{label}</p>
         {hint && <p className="mt-0.5 text-xs text-muted">{hint}</p>}
