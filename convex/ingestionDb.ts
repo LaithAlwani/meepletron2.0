@@ -362,6 +362,11 @@ export const finalizeCommit = internalMutation({
       isIngested: true,
       ingestState: "committed",
     });
+    // A game becoming chat-ready is a meaningful editorial change — bump it so
+    // it surfaces in the "Last updated" library sort.
+    if (rb) {
+      await ctx.db.patch("games", rb.gameId, { contentUpdatedAt: Date.now() });
+    }
     await ctx.db.patch("migrationDrafts", draftId, { status: "committed" });
     await ctx.db.insert("usageLog", {
       purpose: "embed",

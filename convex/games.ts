@@ -401,6 +401,12 @@ async function filteredLibrary(
 function libraryBase(ctx: QueryCtx, sort: GameSortKey) {
   const q = ctx.db.query("games");
   switch (sort) {
+    case "updated":
+      return q
+        .withIndex("by_lib_updated", (i) =>
+          i.eq("isStub", false).eq("isExpansion", false),
+        )
+        .order("desc");
     case "title":
       return q
         .withIndex("by_lib_title", (i) =>
@@ -449,6 +455,9 @@ function sortLibrary(
   const num = (v?: number) => v ?? -Infinity;
   const arr = [...games];
   switch (sort) {
+    case "updated":
+      arr.sort((a, b) => num(b.contentUpdatedAt) - num(a.contentUpdatedAt));
+      break;
     case "title":
       arr.sort((a, b) =>
         (a.sortTitle ?? a.title.toLowerCase()).localeCompare(
@@ -1161,6 +1170,7 @@ export const createGame = mutation({
         gameMechanics: args.gameMechanics,
       }),
       ...sortKeys({ title, year: args.year, bgg: args.bgg }),
+      contentUpdatedAt: Date.now(),
     });
     // Adopt any collection rows already pointing at this BGG id.
     if (args.bggId) {
@@ -1211,6 +1221,7 @@ export const updateGame = mutation({
         bgg: rest.bgg ?? game.bgg,
       }),
     );
+    patch.contentUpdatedAt = Date.now();
     await ctx.db.patch("games", gameId, patch);
 
     // Newly-set BGG id: adopt the collection rows that were waiting for it.
@@ -1266,6 +1277,7 @@ export const setGameImage = mutation({
       // Clear legacy blob pointers now that the R2 copy is canonical.
       imageId: undefined,
       thumbnailId: undefined,
+      contentUpdatedAt: Date.now(),
     });
   },
 });
@@ -1558,5 +1570,35 @@ export const deleteGame = mutation({
     const game = await ctx.db.get("games", gameId);
     if (!game) return;
     await purgeGame(ctx, game);
+  },
+});
+
+/**
+ * One-off: seed `contentUpdatedAt` for pre-existing games (baseline
+ * `_creationTime`) so the "Last updated" library sort has a sensible order
+ * before any editorial edit touches them. Idempotent + self-paginating — run
+ * `npx convex run games:backfillContentUpdatedAt` once per deployment.
+ */
+export const backfillContentUpdatedAt = internalMutation({
+  args: { cursor: v.optional(v.string()) },
+  handler: async (ctx, { cursor }): Promise<{ patched: number; done: boolean }> => {
+    const page = await ctx.db
+      .query("games")
+      .paginate({ cursor: cursor ?? null, numItems: 200 });
+    let patched = 0;
+    for (const g of page.page) {
+      if (g.contentUpdatedAt === undefined) {
+        await ctx.db.patch("games", g._id, { contentUpdatedAt: g._creationTime });
+        patched++;
+      }
+    }
+    if (!page.isDone) {
+      await ctx.scheduler.runAfter(
+        0,
+        internal.games.backfillContentUpdatedAt,
+        { cursor: page.continueCursor },
+      );
+    }
+    return { patched, done: page.isDone };
   },
 });

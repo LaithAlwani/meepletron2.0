@@ -8,6 +8,7 @@
  */
 
 export type GameSortKey =
+  | "updated"
   | "rating"
   | "title"
   | "newest"
@@ -16,6 +17,7 @@ export type GameSortKey =
   | "rated";
 
 export const GAME_SORTS: { key: GameSortKey; label: string }[] = [
+  { key: "updated", label: "Last updated" },
   { key: "rating", label: "Top rated" },
   { key: "title", label: "A–Z" },
   { key: "newest", label: "Newest added" },
@@ -24,7 +26,7 @@ export const GAME_SORTS: { key: GameSortKey; label: string }[] = [
   { key: "rated", label: "Most rated" },
 ];
 
-export const DEFAULT_SORT: GameSortKey = "rating";
+export const DEFAULT_SORT: GameSortKey = "updated";
 
 export const GAME_SORT_KEYS: readonly string[] = GAME_SORTS.map((s) => s.key);
 

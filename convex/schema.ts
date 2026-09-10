@@ -182,6 +182,12 @@ export default defineSchema({
     bggRating: v.optional(v.number()), // = bgg.rating
     bggRatingCount: v.optional(v.number()), // = bgg.ratingCount (popularity)
     bggWeight: v.optional(v.number()), // = bgg.weight (complexity)
+    // When the game was last *editorially* changed — admin create/edit, cover
+    // set, or a rulebook added/ingested. Deliberately NOT bumped by the hourly
+    // BGG stats refresh/enrichment, so the "Last updated" library sort reflects
+    // real curation, not background syncs. Backfilled to _creationTime for
+    // pre-existing rows (see games.backfillContentUpdatedAt).
+    contentUpdatedAt: v.optional(v.number()),
   })
     .index("by_slug", ["slug"])
     .index("by_isExpansion", ["isExpansion"])
@@ -202,6 +208,7 @@ export default defineSchema({
     .index("by_lib_rating", ["isStub", "isExpansion", "bggRating"])
     .index("by_lib_weight", ["isStub", "isExpansion", "bggWeight"])
     .index("by_lib_rated", ["isStub", "isExpansion", "bggRatingCount"])
+    .index("by_lib_updated", ["isStub", "isExpansion", "contentUpdatedAt"])
     .searchIndex("search_text", {
       searchField: "searchText",
       filterFields: ["isExpansion", "isStub"],

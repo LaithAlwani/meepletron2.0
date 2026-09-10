@@ -44,7 +44,7 @@ export const addRulebook = mutation({
     const game = await ctx.db.get("games", gameId);
     if (!game) throw new Error("Game not found");
 
-    return await ctx.db.insert("rulebooks", {
+    const rulebookId = await ctx.db.insert("rulebooks", {
       gameId,
       label: label.trim() || (fileKind === "download" ? "Download" : "Rulebook"),
       filename,
@@ -53,6 +53,9 @@ export const addRulebook = mutation({
       isIngested: false,
       ingestState: "none",
     });
+    // Adding a rulebook is an editorial change — surface the game in "Last updated".
+    await ctx.db.patch("games", gameId, { contentUpdatedAt: Date.now() });
+    return rulebookId;
   },
 });
 
