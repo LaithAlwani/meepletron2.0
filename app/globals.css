@@ -92,11 +92,13 @@
   --breakpoint-nav: 867px;
 }
 
-/* Gentle global down-scale — the whole UI is built in rem, so lowering the
-   root size shrinks text and spacing together for a more refined, less bulky
-   feel. Bump toward 16px to enlarge, toward 14px to tighten further. */
+/* Root rem base — everything is built in rem, so this scales all text + spacing
+   together. Keep it at 16px (never lower): a sub-16px default is a Lighthouse
+   deduction and an accessibility/readability regression. The per-user "Small"
+   font preference can still opt an individual down; this is only the default,
+   and it matches the "base" preference PreferencesEffects applies after load. */
 html {
-  font-size: 15px;
+  font-size: 16px;
 }
 
 body {
