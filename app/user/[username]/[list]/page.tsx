@@ -69,20 +69,21 @@ export default function CollectionListPage({
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-8">
-      <BackButton
-        fallbackHref={valid ? `/user/${username}` : "/top-games"}
-        className="mb-4 hidden nav:inline-flex items-center gap-1 text-sm font-medium text-muted hover:text-foreground"
-      />
-
       <div className="mb-5 flex items-center justify-between gap-3">
-        <h1 className="font-display hidden nav:block text-2xl font-extrabold tracking-tight">
-          {title}
-        </h1>
+        <div className="hidden items-center gap-3 nav:flex">
+          <BackButton
+            fallbackHref={valid ? `/user/${username}` : "/top-games"}
+            className="shrink-0 inline-flex items-center gap-1 text-sm font-medium text-muted transition-colors hover:text-foreground"
+          />
+          <h1 className="font-display text-2xl font-extrabold tracking-tight">
+            {title}
+          </h1>
+        </div>
         {valid && meta?.shared && (
           <SortControl
             value={sort}
             onChange={setSort}
-            className="w-40 shrink-0"
+            className="ml-auto w-40 shrink-0"
           />
         )}
       </div>

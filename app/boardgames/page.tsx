@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePaginatedQuery, useQuery } from "convex/react";
 import { Search, SlidersHorizontal, ArrowRight } from "lucide-react";
 import { api } from "@/convex/_generated/api";
+import { useTopBarTitle } from "@/components/topbar/MobileTopBar";
 import { GameCard } from "@/components/boardgames/GameCard";
 import { PreviewCard } from "@/components/boardgames/PreviewCard";
 import { CardRail } from "@/components/boardgames/CardRail";
@@ -39,6 +40,8 @@ export default function BoardgamesPage() {
   // Skip the exact count while searching — it's a full-catalogue scan, and the
   // search path already shows a live result count.
   const total = useQuery(api.games.libraryCount, searching ? "skip" : args);
+  // The count lives in the desktop heading; on mobile it rides the top bar.
+  useTopBarTitle("Library", { count: total });
 
   const loadingFirst = status === "LoadingFirstPage";
 

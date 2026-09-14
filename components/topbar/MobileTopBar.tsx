@@ -19,7 +19,12 @@ import { cn } from "@/lib/cn";
  * A title a page supplies for itself, tagged with the path it belongs to so a
  * route change never shows the previous page's title while the new page loads.
  */
-type Override = { pathname: string; title: string; href?: string } | null;
+type Override = {
+  pathname: string;
+  title: string;
+  href?: string;
+  count?: number;
+} | null;
 
 const TitleCtx = createContext<{
   override: Override;
@@ -40,22 +45,25 @@ export function TopBarTitleProvider({ children }: { children: ReactNode }) {
  * from a query — a game, a play, a top-games list — call this with the title
  * once it's loaded (and `undefined` while it isn't).
  *
- * Pass `href` where the heading it replaces was itself a link (a play's title
- * links to the game), so hiding that heading on mobile doesn't strand the only
- * route to it.
+ * `href` covers a heading that was itself a link (a play's title links to the
+ * game), so hiding it on mobile doesn't strand the only route there. `count` is
+ * the tally some headings carry — the library's game total — shown after the
+ * title in the same muted style the desktop heading uses.
  */
 export function useTopBarTitle(
   title: string | undefined | null,
-  href?: string | null,
+  options?: { href?: string | null; count?: number | null },
 ) {
   const pathname = usePathname() ?? "";
   const { setOverride } = useContext(TitleCtx);
+  const href = options?.href ?? undefined;
+  const count = options?.count ?? undefined;
   useEffect(() => {
     if (!title) return;
-    setOverride({ pathname, title, href: href ?? undefined });
+    setOverride({ pathname, title, href, count });
     // Leaving the page drops the title, so it can't outlive the route.
     return () => setOverride(null);
-  }, [pathname, title, href, setOverride]);
+  }, [pathname, title, href, count, setOverride]);
 }
 
 /**
@@ -88,6 +96,17 @@ export function MobileTopBar() {
   const title = active ? active.title : route.title;
   const titleClass =
     "font-display min-w-0 flex-1 truncate text-center text-[17px] font-bold tracking-tight";
+  const label =
+    active?.count != null ? (
+      <>
+        {title}
+        <span className="ml-1.5 align-middle text-sm font-bold text-subtle">
+          {active.count}
+        </span>
+      </>
+    ) : (
+      title
+    );
 
   return (
     <header
@@ -115,10 +134,10 @@ export function MobileTopBar() {
 
         {active?.href ? (
           <Link href={active.href} className={titleClass}>
-            {title}
+            {label}
           </Link>
         ) : (
-          <h1 className={titleClass}>{title}</h1>
+          <h1 className={titleClass}>{label}</h1>
         )}
 
         {/* A fixed slot, so the title stays centred whether or not the bell

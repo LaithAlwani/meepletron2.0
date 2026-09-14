@@ -26,11 +26,10 @@ type Person = FunctionReturnType<typeof api.plays.myPeople>[number];
 export default function PeoplePage() {
   return (
     <div className="mx-auto max-w-xl px-4 py-8">
-      <BackButton
-        fallbackHref="/plays"
-        className="mb-4 hidden nav:inline-flex items-center gap-1 text-sm font-medium text-muted transition-colors hover:text-foreground"
-      />
-      <PageTitle className="hidden nav:block">Friends</PageTitle>
+      <div className="hidden items-center gap-3 nav:flex">
+        <BackButton fallbackHref="/plays" className="shrink-0 inline-flex items-center gap-1 text-sm font-medium text-muted transition-colors hover:text-foreground" />
+        <PageTitle>Friends</PageTitle>
+      </div>
       <p className="mt-1 text-sm text-muted">
         Friends you&apos;ve added who aren&apos;t on Meepletron yet. Fix a name or
         email, or remove someone you added by mistake.

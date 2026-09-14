@@ -52,10 +52,9 @@ export default function PlayPage({
   const [rematch, setRematch] = useState(false);
   const [editing, setEditing] = useState(false);
   const [commentsOpen, setCommentsOpen] = useState(false);
-  useTopBarTitle(
-    play?.title,
-    play?.gameSlug ? `/boardgames/${play.gameSlug}` : null,
-  );
+  useTopBarTitle(play?.title, {
+    href: play?.gameSlug ? `/boardgames/${play.gameSlug}` : null,
+  });
 
   if (play === undefined) {
     return (
@@ -123,12 +122,6 @@ export default function PlayPage({
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-8">
-      <BackButton
-        fallbackHref="/plays"
-        label="Back"
-        className="mb-4 hidden nav:inline-flex items-center gap-1 text-sm font-medium text-muted transition-colors hover:text-foreground"
-      />
-
       {/* Header */}
       <div className="min-w-0">
         <div className="flex items-center gap-2">
@@ -147,15 +140,18 @@ export default function PlayPage({
             </span>
           )}
         </div>
-        <h1 className="font-display mt-1 hidden nav:block text-2xl font-extrabold tracking-tight sm:text-3xl">
-          {play.gameSlug ? (
-            <Link href={`/boardgames/${play.gameSlug}`} className="hover:text-accent">
-              {play.title}
-            </Link>
-          ) : (
-            play.title
-          )}
-        </h1>
+        <div className="mt-1 hidden items-center gap-3 nav:flex">
+          <BackButton fallbackHref="/plays" className="shrink-0 inline-flex items-center gap-1 text-sm font-medium text-muted transition-colors hover:text-foreground" />
+          <h1 className="font-display min-w-0 text-2xl font-extrabold tracking-tight sm:text-3xl">
+            {play.gameSlug ? (
+              <Link href={`/boardgames/${play.gameSlug}`} className="hover:text-accent">
+                {play.title}
+              </Link>
+            ) : (
+              play.title
+            )}
+          </h1>
+        </div>
         <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted">
           <span>{playDate(play.date)}</span>
           <span className="inline-flex items-center gap-1">

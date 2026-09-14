@@ -94,16 +94,13 @@ export default function AllBoardgamesPage() {
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-8">
-      <BackButton
-        fallbackHref="/boardgames"
-        className="mb-3 hidden nav:inline-flex items-center gap-1 text-sm font-medium text-muted transition-colors hover:text-foreground"
-      />
-
-      {/* Header — the title gets its own line; the search + filters sit on the
-          next line, right-aligned on desktop (matches /boardgames). */}
+      {/* Header — on desktop the back link and title share the first line; the
+          search + filters sit on the next, right-aligned (matches /boardgames).
+          Mobile gets all of it from the top bar instead. */}
       <div className="mb-4 sm:mb-5">
-        <div>
-          <h1 className="font-display hidden nav:block text-3xl font-extrabold tracking-tight sm:text-4xl">
+        <div className="hidden items-center gap-3 nav:flex">
+          <BackButton fallbackHref="/boardgames" className="shrink-0 inline-flex items-center gap-1 text-sm font-medium text-muted transition-colors hover:text-foreground" />
+          <h1 className="font-display text-3xl font-extrabold tracking-tight sm:text-4xl">
             All board games
             {searching ? (
               results.length > 0 && (
