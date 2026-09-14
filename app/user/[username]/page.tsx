@@ -31,6 +31,7 @@ import { ListCard } from "@/components/top-games/ListCard";
 import { CoverScroller } from "@/components/top-games/CoverScroller";
 import { PlaysGrid } from "@/components/plays/PlaysGrid";
 import { StatsPanel } from "@/components/plays/StatsPanel";
+import { useScrollRestore } from "@/components/lib/useScrollRestore";
 import { FriendButton } from "@/components/friends/FriendButton";
 import { FriendsSheet } from "@/components/friends/FriendsSheet";
 import { CreateListDrawer } from "@/components/top-games/CreateListDrawer";
@@ -504,6 +505,21 @@ function CollectionTab({
   wishlist: Section;
   prevOwned: Section;
 }) {
+  // Restore page scroll when returning from a game's detail page. The previews
+  // are bounded, so gate on how many covers have rendered.
+  const rendered =
+    (owned?.items.length ?? 0) +
+    (forTrade?.items.length ?? 0) +
+    (wishlist?.items.length ?? 0) +
+    (prevOwned?.items.length ?? 0);
+  const { restoreIfReady, save } = useScrollRestore(
+    `profile-collection:${username}`,
+    1,
+  );
+  useEffect(() => {
+    restoreIfReady(rendered);
+  }, [rendered, restoreIfReady]);
+
   const empty =
     (owned?.total ?? 0) === 0 &&
     (forTrade?.total ?? 0) === 0 &&
@@ -515,7 +531,12 @@ function CollectionTab({
     );
   }
   return (
-    <div className="space-y-6">
+    <div
+      className="space-y-6"
+      onClickCapture={(e) => {
+        if ((e.target as HTMLElement).closest("a")) save(rendered);
+      }}
+    >
       <CollectionBlock
         icon={Package}
         title="Owned games"

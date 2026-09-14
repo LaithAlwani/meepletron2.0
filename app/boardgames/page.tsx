@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePaginatedQuery, useQuery } from "convex/react";
 import { Search, SlidersHorizontal, ArrowRight } from "lucide-react";
@@ -14,6 +14,7 @@ import { useLibraryFilters } from "@/components/boardgames/useLibraryFilters";
 import { SortControl } from "@/components/boardgames/SortControl";
 import { ChatReadyToggle } from "@/components/boardgames/ChatReadyToggle";
 import { CollectionSection } from "@/components/collection/CollectionSection";
+import { useScrollRestore } from "@/components/lib/useScrollRestore";
 
 const cellClass = "w-40 shrink-0 snap-start sm:w-44";
 
@@ -22,11 +23,19 @@ export default function BoardgamesPage() {
     useLibraryFilters();
   const [drawerOpen, setDrawerOpen] = useState(false);
 
+  // Restore page scroll when returning from a game's detail page.
+  const { initialNumItems, restoreIfReady, save } = useScrollRestore(
+    "library-home",
+    20,
+  );
   const { results, status } = usePaginatedQuery(
     api.games.libraryGames,
     { ...args, sort },
-    { initialNumItems: 20 },
+    { initialNumItems },
   );
+  useEffect(() => {
+    restoreIfReady(results.length);
+  }, [results.length, restoreIfReady]);
   // Skip the exact count while searching — it's a full-catalogue scan, and the
   // search path already shows a live result count.
   const total = useQuery(api.games.libraryCount, searching ? "skip" : args);
@@ -45,7 +54,13 @@ export default function BoardgamesPage() {
   );
 
   return (
-    <div className="mx-auto max-w-3xl px-4 py-8">
+    <div
+      className="mx-auto max-w-3xl px-4 py-8"
+      onClickCapture={(e) => {
+        // Remember scroll before navigating to any card's detail page.
+        if ((e.target as HTMLElement).closest("a")) save(results.length);
+      }}
+    >
       {/* Header — the title gets its own line; the search + sort + filter sit on
           the next line, aligned to the right on desktop. */}
       <div className="mb-4 sm:mb-5">

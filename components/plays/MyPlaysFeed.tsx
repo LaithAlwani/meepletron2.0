@@ -9,6 +9,9 @@ import { buttonClasses } from "@/components/ui/Button";
 import { Fab } from "@/components/ui/Fab";
 import { PlayPostCard } from "@/components/plays/PlayPostCard";
 import { LogPlayWizard } from "@/components/plays/LogPlayWizard";
+import { useScrollRestore } from "@/components/lib/useScrollRestore";
+
+const PAGE = 15;
 
 /**
  * The signed-in user's full plays feed — every play they took part in (any
@@ -24,18 +27,26 @@ export function MyPlaysFeed() {
     void claim({});
   }, [claim]);
 
+  // Restore scroll + how-many-loaded when returning from a play's detail page.
+  const { initialNumItems, restoreIfReady, save } = useScrollRestore(
+    "plays-feed",
+    PAGE,
+  );
   const { results, status, loadMore } = usePaginatedQuery(
     api.plays.myPlays,
     {},
-    { initialNumItems: 15 },
+    { initialNumItems },
   );
+  useEffect(() => {
+    restoreIfReady(results.length);
+  }, [results.length, restoreIfReady]);
 
   const sentinel = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
     const el = sentinel.current;
     if (!el || status !== "CanLoadMore") return;
     const io = new IntersectionObserver(
-      (entries) => entries[0]?.isIntersecting && loadMore(15),
+      (entries) => entries[0]?.isIntersecting && loadMore(PAGE),
       { rootMargin: "600px" },
     );
     io.observe(el);
@@ -66,7 +77,12 @@ export function MyPlaysFeed() {
         </div>
       ) : (
         <>
-          <ul className="space-y-3">
+          <ul
+            className="space-y-3"
+            onClickCapture={(e) => {
+              if ((e.target as HTMLElement).closest("a")) save(results.length);
+            }}
+          >
             {results.map((p) => (
               <li key={p._id}>
                 <PlayPostCard play={p} />

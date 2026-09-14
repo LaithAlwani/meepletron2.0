@@ -8,6 +8,7 @@ import { Skeleton } from "@/components/ui/Surface";
 import { BackButton } from "@/components/ui/BackButton";
 import { Die } from "@/components/ui/icons";
 import { SortControl } from "@/components/boardgames/SortControl";
+import { useScrollRestore } from "@/components/lib/useScrollRestore";
 import { DEFAULT_SORT, type GameSortKey } from "@/convex/lib/gameSort";
 
 const TITLES: Record<string, string> = {
@@ -38,12 +39,20 @@ export default function CollectionListPage({
     ? { username, list: list as CollectionList }
     : ("skip" as const);
 
+  // Restore scroll + how-many-loaded when returning from a game's detail page.
+  const { initialNumItems, restoreIfReady, save } = useScrollRestore(
+    `public-list:${username}:${list}`,
+    48,
+  );
   const meta = useQuery(api.topGames.publicCollectionMeta, args);
   const { results, status, loadMore } = usePaginatedQuery(
     api.topGames.publicCollectionPage,
     args === "skip" ? "skip" : { ...args, sort },
-    { initialNumItems: 48 },
+    { initialNumItems },
   );
+  useEffect(() => {
+    restoreIfReady(results.length);
+  }, [results.length, restoreIfReady]);
 
   const sentinel = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -125,6 +134,7 @@ export default function CollectionListPage({
                   {g.slug ? (
                     <Link
                       href={`/boardgames/${g.slug}`}
+                      onClick={() => save(results.length)}
                       className="group block"
                     >
                       {inner}
