@@ -7,13 +7,16 @@ import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { buttonClasses } from "@/components/ui/buttonStyles";
 import { InlineAsk } from "@/components/boardgames/InlineAsk";
+import { Markdown } from "@/components/ui/Markdown";
+import { decodeHtmlEntities } from "@/lib/htmlEntities";
 import { SITE_URL } from "@/lib/site";
 import { formatPlayTime } from "@/lib/format";
 
-/** Strip inline citation markers ("[1]") so the text reads cleanly on the page
- *  and in structured data (the source chips only make sense in the live chat). */
+/** Decode HTML entities and strip inline citation markers ("[1]") so the text
+ *  reads cleanly on the page and in structured data (the source chips only make
+ *  sense in the live chat). Markdown formatting is preserved for rendering. */
 function clean(text: string): string {
-  return text.replace(/\s*\[\d+\]/g, "").trim();
+  return decodeHtmlEntities(text).replace(/\s*\[\d+\]/g, "").trim();
 }
 
 async function load(slug: string) {
@@ -227,7 +230,9 @@ export default async function HowToPlayPage({
             {reminders.map((r, i) => (
               <li key={i} className="py-3.5">
                 <p className="font-semibold">{r.label}</p>
-                <p className="mt-0.5 text-sm text-muted">{clean(r.detail)}</p>
+                <Markdown className="mt-0.5 text-sm text-muted">
+                  {clean(r.detail)}
+                </Markdown>
               </li>
             ))}
           </ul>
@@ -249,9 +254,9 @@ export default async function HowToPlayPage({
                     +
                   </span>
                 </summary>
-                <p className="whitespace-pre-wrap pb-4 text-sm text-muted">
+                <Markdown className="pb-4 text-sm text-muted">
                   {clean(f.answer)}
-                </p>
+                </Markdown>
               </details>
             ))}
           </div>

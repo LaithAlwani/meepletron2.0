@@ -5,6 +5,7 @@ import { BellRing } from "lucide-react";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
+import { Markdown } from "@/components/ui/Markdown";
 
 const heading =
   "mb-3 text-[11px] font-bold uppercase tracking-[0.16em] text-subtle";
@@ -89,9 +90,9 @@ export function RemindersList({ gameId }: { gameId: Id<"games"> }) {
             className="rounded-xl border border-border bg-surface p-3"
           >
             <p className="text-sm font-bold text-foreground">{r.label}</p>
-            <p className="mt-0.5 text-sm leading-relaxed text-muted">
+            <Markdown className="mt-0.5 text-sm leading-relaxed text-muted">
               {r.detail}
-            </p>
+            </Markdown>
           </li>
         ))}
       </ul>

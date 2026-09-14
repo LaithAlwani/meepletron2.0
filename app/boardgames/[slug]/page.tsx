@@ -28,6 +28,7 @@ import { ShareButton } from "@/components/boardgames/ShareButton";
 import { RequestRulebookButton } from "@/components/boardgames/RequestRulebookButton";
 import { ComponentsList } from "@/components/boardgames/GameReference";
 import { ExpandableText } from "@/components/ui/ExpandableText";
+import { decodeHtmlEntities } from "@/lib/htmlEntities";
 import { Fab } from "@/components/ui/Fab";
 import { buttonClasses } from "@/components/ui/Button";
 import { Die } from "@/components/ui/icons";
@@ -388,7 +389,10 @@ export default function GameDetailPage({
 
               {game.description && (
                 <div className="mt-4 max-w-2xl">
-                  <ExpandableText text={game.description} className="text-muted" />
+                  <ExpandableText
+                    text={decodeHtmlEntities(game.description)}
+                    className="text-muted"
+                  />
                 </div>
               )}
 

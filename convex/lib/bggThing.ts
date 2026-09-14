@@ -88,15 +88,55 @@ export function parseItem(block: string) {
  * the collection API (`&amp;#039;`), so after the XML parser turns that into the
  * literal `&#039;` this second pass is what actually yields `'`.
  */
+const NAMED_ENTITIES: Record<string, string> = {
+  amp: "&",
+  lt: "<",
+  gt: ">",
+  quot: '"',
+  apos: "'",
+  nbsp: " ",
+  mdash: "—",
+  ndash: "–",
+  hellip: "…",
+  lsquo: "‘",
+  rsquo: "’",
+  ldquo: "“",
+  rdquo: "”",
+  sbquo: "‚",
+  bdquo: "„",
+  laquo: "«",
+  raquo: "»",
+  middot: "·",
+  bull: "•",
+  deg: "°",
+  copy: "©",
+  reg: "®",
+  trade: "™",
+  plusmn: "±",
+  times: "×",
+  divide: "÷",
+  frac12: "½",
+  frac14: "¼",
+  frac34: "¾",
+  eacute: "é",
+  egrave: "è",
+  agrave: "à",
+  uuml: "ü",
+  ouml: "ö",
+  auml: "ä",
+  ccedil: "ç",
+  ntilde: "ñ",
+};
+
 export function decodeEntities(s: string): string {
   return s
     .replace(/&#x([0-9a-fA-F]+);/g, (_, h) => String.fromCodePoint(parseInt(h, 16)))
     .replace(/&#(\d+);/g, (_, d) => String.fromCodePoint(Number(d)))
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&apos;/g, "'");
+    .replace(/&([a-zA-Z][a-zA-Z0-9]*);/g, (whole, name: string) =>
+      Object.prototype.hasOwnProperty.call(NAMED_ENTITIES, name)
+        ? NAMED_ENTITIES[name]
+        : whole,
+    );
 }
 
 /** Parse the full editable metadata from a BGG /thing item block. */

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { fetchQuery } from "convex/nextjs";
 import { api } from "@/convex/_generated/api";
+import { decodeHtmlEntities } from "@/lib/htmlEntities";
 
 /**
  * Per-game metadata so a shared link unfurls with the game's own cover (not the
@@ -19,9 +20,10 @@ export async function generateMetadata({
     const cover = game.imageUrl ?? game.thumbnailUrl ?? undefined;
     const title = game.title;
     const description =
-      (game.description?.trim().slice(0, 200) ||
-        `Rules, reference, and rulebook chat for ${game.title} on Meepletron.`) ??
-      undefined;
+      (game.description
+        ? decodeHtmlEntities(game.description).trim().slice(0, 200)
+        : "") ||
+      `Rules, reference, and rulebook chat for ${game.title} on Meepletron.`;
     return {
       title,
       description,
