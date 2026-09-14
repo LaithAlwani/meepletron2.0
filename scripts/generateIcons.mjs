@@ -1,11 +1,10 @@
 /**
  * Regenerates public/icons/icon-*.webp from public/logo.webp.
  *
- * The old icons were a tight crop that sliced the antenna ball off the top, and
- * they were transparent — which iOS composites onto black and which left the
- * Android splash showing the manifest's background_color straight through. So
- * each icon is now the logo on the app's cream background, cropped square from
- * the top of the antenna down through the manual, with a padded margin.
+ * The icons are the logo cropped square — from the top of the antenna down
+ * through the widest part of the manual — filling the tile edge to edge on a
+ * transparent ground. No padding: launchers and the splash screen supply their
+ * own backdrop, so any margin baked in here just makes the robot look small.
  *
  * Rendering goes through Chromium's canvas (best-quality downscaling, and it
  * encodes WebP), so this needs Playwright — a dev-only tool, deliberately not a
@@ -24,21 +23,17 @@ const SOURCE = path.join(ROOT, "public/logo.webp");
 const OUT_DIR = path.join(ROOT, "public/icons");
 
 const SIZES = [48, 72, 96, 128, 144, 152, 192, 256, 384, 512];
-/** The app's light background (--background in app/globals.css). */
-const BACKGROUND = "#faf6ee";
+/** Transparent — the launcher (and the splash's background_color) fills in. */
+const BACKGROUND = null;
 /**
  * Square crop of the 1851x2312 source: the full width, from the very top of the
  * antenna down through the widest part of the manual. Cutting below that keeps
  * the head large enough to read at 48px.
  */
 const CROP = { x: 0, y: 0, w: 1851, h: 1850 };
-/** Margin on every side, as a fraction of the icon — keeps art off the edge. */
-const PADDING = 0.12;
-/**
- * Lossless. At any lossy setting the flat cream drifts a step (250,247,239
- * instead of 250,246,238), which shows up as a faint square outline where the
- * icon meets the splash screen's background_color.
- */
+/** Margin on every side, as a fraction of the icon. None: fill the tile. */
+const PADDING = 0;
+/** Lossless, so the alpha edge stays clean instead of fringing at small sizes. */
 const QUALITY = 1;
 
 const source = fs.readFileSync(SOURCE).toString("base64");
@@ -79,8 +74,12 @@ for (const size of SIZES) {
       out.width = size;
       out.height = size;
       const o = out.getContext("2d");
-      o.fillStyle = background;
-      o.fillRect(0, 0, size, size);
+      // `background` is null for a transparent icon — assigning it to fillStyle
+      // is ignored, which would leave canvas's default black, so guard the fill.
+      if (background) {
+        o.fillStyle = background;
+        o.fillRect(0, 0, size, size);
+      }
       o.imageSmoothingQuality = "high";
       o.drawImage(step, Math.round((size - w) / 2), Math.round((size - h) / 2), w, h);
       return out.toDataURL("image/webp", quality);

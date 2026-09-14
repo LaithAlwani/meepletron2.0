@@ -27,9 +27,9 @@ export default function manifest(): MetadataRoute.Manifest {
     background_color: "#faf6ee",
     theme_color: "#191512",
     categories: ["games", "reference", "utilities"],
-    // No "maskable" variant: the icons are padded, but the manual still reaches
-    // the bottom corners of the art, which a circular mask would clip. "any"
-    // shows the whole logo. See scripts/generateIcons.mjs.
+    // No "maskable" variant: the icons are transparent and full-bleed, so a
+    // circular mask would clip the manual at the bottom corners. "any" lets the
+    // launcher supply its own backdrop. See scripts/generateIcons.mjs.
     icons,
   };
 }
