@@ -5,7 +5,7 @@ export const metadata: Metadata = { title: "Terms of Service" };
 export default function TermsOfServicePage() {
   return (
     <div className="mx-auto max-w-3xl px-4 py-12">
-      <h1 className="mb-4 text-2xl font-bold">Terms of Service</h1>
+      <h1 className="mb-4 hidden nav:block text-2xl font-bold">Terms of Service</h1>
       <div className="space-y-4 text-sm leading-relaxed text-muted">
         <p>
           Meepletron is provided as-is to help you learn board game rules. Answers

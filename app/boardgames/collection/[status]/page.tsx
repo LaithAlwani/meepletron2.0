@@ -39,9 +39,9 @@ export default function CollectionListPage({
     <div className="mx-auto max-w-3xl px-4 py-8">
       <BackButton
         fallbackHref="/boardgames"
-        className="mb-3 inline-flex items-center gap-1 text-sm font-medium text-muted transition-colors hover:text-foreground"
+        className="mb-3 hidden nav:inline-flex items-center gap-1 text-sm font-medium text-muted transition-colors hover:text-foreground"
       />
-      <h1 className="font-display mb-5 flex items-center gap-2 text-3xl font-extrabold tracking-tight sm:text-4xl">
+      <h1 className="font-display mb-5 hidden nav:flex items-center gap-2 text-3xl font-extrabold tracking-tight sm:text-4xl">
         <status.icon className="h-6 w-6 text-accent" />
         {status.title}
       </h1>

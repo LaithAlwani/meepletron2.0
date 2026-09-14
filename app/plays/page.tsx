@@ -9,7 +9,7 @@ import { MyPlaysFeed } from "@/components/plays/MyPlaysFeed";
 export default function PlaysPage() {
   return (
     <div className="mx-auto max-w-xl px-4 py-8">
-      <PageTitle className="mb-6">My plays</PageTitle>
+      <PageTitle className="mb-6 hidden nav:block">My plays</PageTitle>
 
       <AuthLoading>
         <PlaysSkeleton />

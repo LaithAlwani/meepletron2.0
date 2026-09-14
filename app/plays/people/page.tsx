@@ -28,9 +28,9 @@ export default function PeoplePage() {
     <div className="mx-auto max-w-xl px-4 py-8">
       <BackButton
         fallbackHref="/plays"
-        className="mb-4 inline-flex items-center gap-1 text-sm font-medium text-muted transition-colors hover:text-foreground"
+        className="mb-4 hidden nav:inline-flex items-center gap-1 text-sm font-medium text-muted transition-colors hover:text-foreground"
       />
-      <PageTitle>Friends</PageTitle>
+      <PageTitle className="hidden nav:block">Friends</PageTitle>
       <p className="mt-1 text-sm text-muted">
         Friends you&apos;ve added who aren&apos;t on Meepletron yet. Fix a name or
         email, or remove someone you added by mistake.

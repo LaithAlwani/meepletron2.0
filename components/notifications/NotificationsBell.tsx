@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
 import {
   usePaginatedQuery,
   useQuery,
@@ -179,16 +178,16 @@ export function NotificationsList({ onNavigate }: { onNavigate?: () => void }) {
 /**
  * The notifications bell + unread badge with a dropdown. Two variants:
  *  - "header": inline in the desktop header (anchored dropdown).
- *  - "floating": a fixed top-right button on mobile; the panel is viewport-fixed
- *    so it always stays fully on screen.
+ *  - "bar": inside the mobile top bar — a bare icon with no fill, ring or
+ *    shadow. The panel is viewport-fixed so it always stays fully on screen
+ *    regardless of how narrow the bar's own slot is.
  */
 export function NotificationsBell({
   variant,
 }: {
-  variant: "header" | "floating";
+  variant: "header" | "bar";
 }) {
   const { isAuthenticated } = useConvexAuth();
-  const pathname = usePathname() ?? "";
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -221,26 +220,14 @@ export function NotificationsBell({
     }
   }, [open, unread, markRead]);
 
-  // The floating bell is mobile-only and hidden where the bottom nav is hidden.
-  const floatingHidden =
-    variant === "floating" &&
-    (pathname === "/" ||
-      pathname === "/auth" ||
-      pathname === "/who-goes-first" ||
-      /^\/boardgames\/[^/]+\/chat/.test(pathname));
-
-  if (!isAuthenticated || floatingHidden) return null;
+  if (!isAuthenticated) return null;
 
   const badge = unread > 0 ? (unread > 99 ? "99+" : String(unread)) : null;
 
   return (
     <div
       ref={ref}
-      className={
-        variant === "floating"
-          ? "fixed right-3 top-[calc(env(safe-area-inset-top)+0.6rem)] z-40 nav:hidden"
-          : "relative hidden nav:block"
-      }
+      className={variant === "bar" ? "relative" : "relative hidden nav:block"}
     >
       <button
         onClick={() => setOpen((v) => !v)}
@@ -248,12 +235,12 @@ export function NotificationsBell({
         aria-expanded={open}
         className={cn(
           "relative flex items-center justify-center transition-colors",
-          variant === "floating"
-            ? "h-10 w-10 rounded-xl bg-surface/90 text-muted shadow-sm ring-1 ring-border backdrop-blur hover:text-foreground"
+          variant === "bar"
+            ? "h-11 w-11 rounded-xl text-muted active:bg-surface-2"
             : "h-9 w-9 rounded-lg text-muted hover:bg-surface-2 hover:text-foreground",
         )}
       >
-        <Bell className="h-5 w-5" />
+        <Bell className={variant === "bar" ? "h-[23px] w-[23px]" : "h-5 w-5"} />
         {badge && (
           <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-accent px-1 text-[10px] font-bold leading-none text-accent-foreground">
             {badge}
@@ -264,8 +251,8 @@ export function NotificationsBell({
         <div
           className={cn(
             "animate-in overflow-hidden rounded-2xl border border-border bg-surface shadow-xl",
-            variant === "floating"
-              ? "fixed right-2 top-[calc(env(safe-area-inset-top)+3.4rem)] max-h-[70vh] w-[calc(100vw-1rem)] max-w-sm overflow-y-auto"
+            variant === "bar"
+              ? "fixed right-2 top-[calc(env(safe-area-inset-top)+3.6rem)] z-40 max-h-[70vh] w-[calc(100vw-1rem)] max-w-sm overflow-y-auto"
               : "absolute right-0 mt-2 max-h-[70vh] w-96 overflow-y-auto",
           )}
         >

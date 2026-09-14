@@ -68,7 +68,7 @@ export default function BoardgamesPage() {
           <p className="mb-1 hidden text-[11px] font-bold uppercase tracking-[0.18em] text-accent sm:block">
             The library
           </p>
-          <h1 className="font-display text-2xl font-extrabold tracking-tight text-foreground sm:text-4xl">
+          <h1 className="font-display hidden nav:block text-2xl font-extrabold tracking-tight text-foreground sm:text-4xl">
             Board games
             {total !== undefined && (
               <span className="ml-2.5 align-middle text-base font-bold text-subtle">

@@ -17,6 +17,7 @@ import {
   Dices,
 } from "lucide-react";
 import { api } from "@/convex/_generated/api";
+import { useTopBarTitle } from "@/components/topbar/MobileTopBar";
 import { formatPlayTime } from "@/lib/format";
 import { CollectionButton } from "@/components/boardgames/CollectionButton";
 import { CollectionTags } from "@/components/boardgames/CollectionTags";
@@ -193,6 +194,7 @@ export default function GameDetailPage({
 }) {
   const { slug: handle } = use(params);
   const game = useQuery(api.games.getByHandle, { handle });
+  useTopBarTitle(game?.title);
   const me = useQuery(api.users.me);
   const isAdmin = me?.role === "admin";
 

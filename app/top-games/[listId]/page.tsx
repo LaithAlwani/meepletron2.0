@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useQuery } from "convex/react";
 import { Lock } from "lucide-react";
 import { api } from "@/convex/_generated/api";
+import { useTopBarTitle } from "@/components/topbar/MobileTopBar";
 import type { Id } from "@/convex/_generated/dataModel";
 import { TopGamesEditor } from "@/components/top-games/TopGamesEditor";
 import { TopGamesView, type TopListData } from "@/components/top-games/TopGamesView";
@@ -20,6 +21,9 @@ export default function TopListPage({
   const { listId } = use(params);
   const id = listId as Id<"topGamesLists">;
   const data = useQuery(api.topGames.getList, { id });
+  useTopBarTitle(
+    data ? (data.title ?? `Top ${data.size} · ${data.year}`) : undefined,
+  );
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-8">
@@ -41,7 +45,7 @@ export default function TopListPage({
         <>
           <BackButton
             fallbackHref="/top-games"
-            className="mb-4 inline-flex items-center gap-1 text-sm font-medium text-muted hover:text-foreground"
+            className="mb-4 hidden nav:inline-flex items-center gap-1 text-sm font-medium text-muted hover:text-foreground"
           />
           <TopGamesEditor
             listId={data._id}
@@ -56,7 +60,7 @@ export default function TopListPage({
         <>
           <BackButton
             fallbackHref="/top-games"
-            className="mb-4 inline-flex items-center gap-1 text-sm font-medium text-muted hover:text-foreground"
+            className="mb-4 hidden nav:inline-flex items-center gap-1 text-sm font-medium text-muted hover:text-foreground"
           />
           <TopGamesView data={data as TopListData} />
         </>

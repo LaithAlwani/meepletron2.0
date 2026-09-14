@@ -43,7 +43,7 @@ export default function TopGamesPage() {
   return (
     <div className="mx-auto max-w-3xl px-4 py-8">
       <div className="mb-6 flex items-center justify-between gap-4">
-        <PageTitle>Top Games</PageTitle>
+        <PageTitle className="hidden nav:block">Top Games</PageTitle>
         {/* Creating + managing your own lists lives on your profile; here we
             browse the community. The create shortcut stays for convenience. */}
         <Authenticated>

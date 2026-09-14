@@ -28,6 +28,7 @@ import { LogPlayWizard, buildInitialPlay } from "@/components/plays/LogPlayWizar
 import { CommentsDrawer } from "@/components/plays/CommentsDrawer";
 import { PhotoCarousel } from "@/components/plays/PhotoCarousel";
 import { PlayersPanel } from "@/components/plays/PlayersPanel";
+import { useTopBarTitle } from "@/components/topbar/MobileTopBar";
 import { useUsernameGate } from "@/components/feed/UsernameGate";
 import { FORMAT_LABEL, playDate } from "@/components/plays/PlayCard";
 import { formatPlayTime } from "@/lib/format";
@@ -51,6 +52,10 @@ export default function PlayPage({
   const [rematch, setRematch] = useState(false);
   const [editing, setEditing] = useState(false);
   const [commentsOpen, setCommentsOpen] = useState(false);
+  useTopBarTitle(
+    play?.title,
+    play?.gameSlug ? `/boardgames/${play.gameSlug}` : null,
+  );
 
   if (play === undefined) {
     return (
@@ -121,7 +126,7 @@ export default function PlayPage({
       <BackButton
         fallbackHref="/plays"
         label="Back"
-        className="mb-4 inline-flex items-center gap-1 text-sm font-medium text-muted transition-colors hover:text-foreground"
+        className="mb-4 hidden nav:inline-flex items-center gap-1 text-sm font-medium text-muted transition-colors hover:text-foreground"
       />
 
       {/* Header */}
@@ -142,7 +147,7 @@ export default function PlayPage({
             </span>
           )}
         </div>
-        <h1 className="font-display mt-1 text-2xl font-extrabold tracking-tight sm:text-3xl">
+        <h1 className="font-display mt-1 hidden nav:block text-2xl font-extrabold tracking-tight sm:text-3xl">
           {play.gameSlug ? (
             <Link href={`/boardgames/${play.gameSlug}`} className="hover:text-accent">
               {play.title}

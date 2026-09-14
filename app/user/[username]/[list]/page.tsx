@@ -71,11 +71,11 @@ export default function CollectionListPage({
     <div className="mx-auto max-w-3xl px-4 py-8">
       <BackButton
         fallbackHref={valid ? `/user/${username}` : "/top-games"}
-        className="mb-4 inline-flex items-center gap-1 text-sm font-medium text-muted hover:text-foreground"
+        className="mb-4 hidden nav:inline-flex items-center gap-1 text-sm font-medium text-muted hover:text-foreground"
       />
 
       <div className="mb-5 flex items-center justify-between gap-3">
-        <h1 className="font-display text-2xl font-extrabold tracking-tight">
+        <h1 className="font-display hidden nav:block text-2xl font-extrabold tracking-tight">
           {title}
         </h1>
         {valid && meta?.shared && (
