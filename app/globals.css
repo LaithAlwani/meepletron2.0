@@ -106,6 +106,19 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* iOS Safari zooms toward any focused form control whose font-size is under
+   16px, and never zooms back out. Our root is 15px, so even text-base inputs
+   trip it. Pin form controls to 16px on touch devices — this stops the zoom
+   without disabling pinch-zoom (an accessibility anti-pattern). Desktop keeps
+   the smaller, denser sizing. */
+@media (pointer: coarse) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+}
+
 /* Display face for headings/wordmark. */
 .font-display {
   font-family: var(--font-display);
