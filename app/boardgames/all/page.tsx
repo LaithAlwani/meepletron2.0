@@ -99,26 +99,29 @@ export default function AllBoardgamesPage() {
         className="mb-3 inline-flex items-center gap-1 text-sm font-medium text-muted transition-colors hover:text-foreground"
       />
 
-      {/* Header */}
-      <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <h1 className="font-display text-3xl font-extrabold tracking-tight sm:text-4xl">
-          All board games
-          {searching ? (
-            results.length > 0 && (
+      {/* Header — the title gets its own line; the search + filters sit on the
+          next line, right-aligned on desktop (matches /boardgames). */}
+      <div className="mb-4 sm:mb-5">
+        <div>
+          <h1 className="font-display text-3xl font-extrabold tracking-tight sm:text-4xl">
+            All board games
+            {searching ? (
+              results.length > 0 && (
+                <span className="ml-2.5 align-middle text-base font-bold text-subtle">
+                  {results.length}
+                  {status === "CanLoadMore" || status === "LoadingMore" ? "+" : ""}
+                </span>
+              )
+            ) : total !== undefined ? (
               <span className="ml-2.5 align-middle text-base font-bold text-subtle">
-                {results.length}
-                {status === "CanLoadMore" || status === "LoadingMore" ? "+" : ""}
+                {total}
               </span>
-            )
-          ) : total !== undefined ? (
-            <span className="ml-2.5 align-middle text-base font-bold text-subtle">
-              {total}
-            </span>
-          ) : null}
-        </h1>
+            ) : null}
+          </h1>
+        </div>
 
-        {/* Mobile: search on its own row, action buttons below. Desktop: inline. */}
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+        {/* Next line: search + filters, right-aligned on desktop. */}
+        <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
           <div className="relative w-full sm:w-64">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-subtle" />
             <input

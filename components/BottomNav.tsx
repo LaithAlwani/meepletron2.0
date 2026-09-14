@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useQuery } from "convex/react";
-import { Home, LayoutGrid, MessageCircle, MoreHorizontal } from "lucide-react";
+import { LayoutGrid, MessageCircle, Trophy, MoreHorizontal } from "lucide-react";
 import { api } from "@/convex/_generated/api";
 import { AvatarImg } from "@/components/ui/Avatar";
 import { cn } from "@/lib/cn";
@@ -13,6 +13,7 @@ import { MoreSheet } from "@/components/MoreSheet";
 const TABS = [
   { href: "/boardgames", label: "Library", icon: LayoutGrid },
   { href: "/chats", label: "Chats", icon: MessageCircle },
+  { href: "/top-games", label: "Top Games", icon: Trophy },
 ];
 
 /**
@@ -26,8 +27,9 @@ export function BottomNav() {
   const me = useQuery(api.users.me);
   const [moreOpen, setMoreOpen] = useState(false);
   const hidden =
-    // The signed-out landing (`/`) is chrome-free; the signed-in dashboard keeps it.
-    (pathname === "/" && me === null) ||
+    // The home route (`/`) is chrome-free: it's the signed-out landing, and
+    // signed-in users are redirected off it (there's no logged-in home).
+    pathname === "/" ||
     pathname === "/auth" ||
     pathname === "/who-goes-first" ||
     /^\/boardgames\/[^/]+\/chat/.test(pathname);
@@ -41,24 +43,6 @@ export function BottomNav() {
       />
       <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-surface/95 pb-[env(safe-area-inset-bottom)] backdrop-blur nav:hidden">
         <ul className="mx-auto flex max-w-md items-stretch">
-          <li className="flex-1">
-            <Link
-              href="/"
-              aria-current={pathname === "/" ? "page" : undefined}
-              className={cn(
-                "flex h-13 flex-col items-center justify-center gap-0.5 text-[10px] font-semibold transition-colors",
-                pathname === "/"
-                  ? "text-accent"
-                  : "text-subtle hover:text-muted",
-              )}
-            >
-              <Home
-                className="h-4.5 w-4.5"
-                strokeWidth={pathname === "/" ? 2.4 : 2}
-              />
-              Home
-            </Link>
-          </li>
           <li className="flex-1">
             <Link
               href="/profile"

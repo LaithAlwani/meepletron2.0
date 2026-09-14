@@ -9,7 +9,7 @@ import {
   Unauthenticated,
   AuthLoading,
 } from "convex/react";
-import { Home, LayoutGrid, MessageCircle, Trophy, LogIn } from "lucide-react";
+import { LayoutGrid, MessageCircle, Trophy, LogIn } from "lucide-react";
 import { api } from "@/convex/_generated/api";
 import { UserMenu } from "@/components/UserMenu";
 import { NotificationsBell } from "@/components/notifications/NotificationsBell";
@@ -17,10 +17,9 @@ import { AvatarImg } from "@/components/ui/Avatar";
 import { cn } from "@/lib/cn";
 
 const NAV = [
-  { href: "/", label: "Home", icon: Home },
   { href: "/boardgames", label: "Library", icon: LayoutGrid },
-  { href: "/top-games", label: "Top Games", icon: Trophy },
   { href: "/chats", label: "Chats", icon: MessageCircle },
+  { href: "/top-games", label: "Top Games", icon: Trophy },
 ];
 
 function Brand() {

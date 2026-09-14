@@ -10,7 +10,7 @@ import {
 import type { Doc, Id } from "./_generated/dataModel";
 import { internal } from "./_generated/api";
 import { getCurrentUser, requireUser } from "./lib/auth";
-import { canViewProfile, acceptedFriendIds } from "./friends";
+import { canViewProfile } from "./friends";
 import {
   playFormatValidator,
   playScoreModeValidator,
@@ -949,35 +949,6 @@ export const userPublicPlaysPaged = query({
       isDone: end >= ids.length,
       continueCursor: String(end),
     };
-  },
-});
-
-/** A light social strip for the dashboard: the caller's accepted friends' most
- *  recent public plays, newest first (a peek, not a feed). */
-export const friendsRecentPlays = query({
-  args: {},
-  handler: async (ctx) => {
-    const user = await getCurrentUser(ctx);
-    if (!user) return [];
-    const friendIds = await acceptedFriendIds(ctx, user._id);
-    if (friendIds.length === 0) return [];
-    const perFriend = await Promise.all(
-      friendIds.slice(0, 30).map((fid) =>
-        ctx.db
-          .query("plays")
-          .withIndex("by_user_and_date", (q) => q.eq("userId", fid))
-          .order("desc")
-          .filter((q) => q.eq(q.field("visibility"), "public"))
-          .take(5),
-      ),
-    );
-    const merged = perFriend
-      .flat()
-      .sort((a, b) =>
-        a.date < b.date ? 1 : a.date > b.date ? -1 : b.createdAt - a.createdAt,
-      )
-      .slice(0, 8);
-    return await Promise.all(merged.map((p) => playCard(ctx, p, user._id)));
   },
 });
 
