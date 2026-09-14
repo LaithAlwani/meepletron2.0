@@ -13,6 +13,7 @@ import {
   Trophy,
   ImagePlus,
   Loader2,
+  Trash2,
 } from "lucide-react";
 import type { FunctionReturnType } from "convex/server";
 import { api } from "@/convex/_generated/api";
@@ -170,6 +171,47 @@ function todayStr(): string {
 let KEY = 0;
 const nextKey = () => `p${++KEY}`;
 
+// Persist the from-scratch "Log a play" flow so an accidental dismiss (swipe,
+// backdrop, or the mobile keyboard/scroll) never loses progress — restored
+// until the user saves or explicitly discards.
+const DRAFT_KEY = "logplay-draft-v1";
+
+type StoredDraft = {
+  step: number;
+  game: WizardInitialGame | null;
+  date: string;
+  length: string;
+  location: string;
+  comments: string;
+  format: PlayFormat;
+  scoreMode: ScoreMode;
+  coopOutcome: "win" | "loss";
+  coopScore: string;
+  teamCount: number;
+  teamNames: string[];
+  teamWinner: number;
+  players: PlayerForm[];
+  visibility: "private" | "public";
+};
+
+/** Read the saved draft, keeping the key counter ahead of any restored player
+ *  keys so freshly-added players don't collide. */
+function readDraft(): StoredDraft | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = sessionStorage.getItem(DRAFT_KEY);
+    if (!raw) return null;
+    const d = JSON.parse(raw) as StoredDraft;
+    for (const p of d.players ?? []) {
+      const n = Number(String(p.key).replace(/^p/, ""));
+      if (Number.isFinite(n) && n > KEY) KEY = n;
+    }
+    return d;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * The guided "log a play" wizard — a bottom-sheet on mobile / right-side drawer
  * on desktop. Steps: game → format → players/teams → scores → photos & share.
@@ -217,37 +259,58 @@ export function LogPlayWizard({
         }))
       : [];
 
-  const [step, setStep] = useState(initStep);
+  // The from-scratch flow (no edit/rematch, no preset game) persists a draft so a
+  // dismiss never loses progress; edit/rematch/game-preset flows don't.
+  const draftEnabled = !ip && !initialGame;
+  const [draft] = useState<StoredDraft | null>(() =>
+    draftEnabled ? readDraft() : null,
+  );
+
+  const [step, setStep] = useState(draft?.step ?? initStep);
   const [busy, setBusy] = useState(false);
 
   // form
   const [game, setGame] = useState<WizardInitialGame | null>(
-    ip?.game ?? initialGame ?? null,
+    draft?.game ?? ip?.game ?? initialGame ?? null,
   );
-  const [date, setDate] = useState((isEdit && ip?.date) || todayStr());
+  const [date, setDate] = useState(
+    draft?.date ?? ((isEdit && ip?.date) || todayStr()),
+  );
   const [length, setLength] = useState<string>(
-    isEdit && ip?.lengthMinutes != null ? String(ip.lengthMinutes) : "",
+    draft?.length ??
+      (isEdit && ip?.lengthMinutes != null ? String(ip.lengthMinutes) : ""),
   );
   const [location, setLocation] = useState(
-    (isEdit && ip?.location) || "",
+    draft?.location ?? ((isEdit && ip?.location) || ""),
   );
-  const [comments, setComments] = useState((isEdit && ip?.comments) || "");
-  const [format, setFormat] = useState<PlayFormat>(ip?.format ?? "competitive");
+  const [comments, setComments] = useState(
+    draft?.comments ?? ((isEdit && ip?.comments) || ""),
+  );
+  const [format, setFormat] = useState<PlayFormat>(
+    draft?.format ?? ip?.format ?? "competitive",
+  );
   const [scoreMode, setScoreMode] = useState<ScoreMode>(
-    ip?.scoreMode ?? "highest",
+    draft?.scoreMode ?? ip?.scoreMode ?? "highest",
   );
   const [coopOutcome, setCoopOutcome] = useState<"win" | "loss">(
-    ip?.coopOutcome ?? "win",
+    draft?.coopOutcome ?? ip?.coopOutcome ?? "win",
   );
   const [coopScore, setCoopScore] = useState<string>(
-    isEdit && ip?.coopScore != null ? String(ip.coopScore) : "",
+    draft?.coopScore ??
+      (isEdit && ip?.coopScore != null ? String(ip.coopScore) : ""),
   );
   const [teamCount, setTeamCount] = useState(
-    Math.min(4, Math.max(2, initTeamNames.length)),
+    draft?.teamCount ?? Math.min(4, Math.max(2, initTeamNames.length)),
   );
-  const [teamNames, setTeamNames] = useState<string[]>(initTeamNames);
-  const [teamWinner, setTeamWinner] = useState<number>(ip?.teamWinner ?? 0);
-  const [players, setPlayers] = useState<PlayerForm[]>(makePlayers);
+  const [teamNames, setTeamNames] = useState<string[]>(
+    draft?.teamNames ?? initTeamNames,
+  );
+  const [teamWinner, setTeamWinner] = useState<number>(
+    draft?.teamWinner ?? ip?.teamWinner ?? 0,
+  );
+  const [players, setPlayers] = useState<PlayerForm[]>(
+    () => draft?.players ?? makePlayers(),
+  );
   const [photoKeys, setPhotoKeys] = useState<string[]>(
     isEdit ? (ip?.photoKeys ?? []) : [],
   );
@@ -255,7 +318,7 @@ export function LogPlayWizard({
     isEdit ? (ip?.photoUrls ?? []) : [],
   );
   const [visibility, setVisibility] = useState<"private" | "public">(
-    ip?.visibility ?? "private",
+    draft?.visibility ?? ip?.visibility ?? "private",
   );
   const [uploading, setUploading] = useState(false);
 
@@ -275,6 +338,58 @@ export function LogPlayWizard({
     return () => cancelAnimationFrame(id);
   }, [open, me, players.length]);
 
+  // Persist the from-scratch draft on every change so a dismiss/reload doesn't
+  // lose progress. Cleared on save or explicit discard.
+  useEffect(() => {
+    if (!draftEnabled) return;
+    const d: StoredDraft = {
+      step,
+      game,
+      date,
+      length,
+      location,
+      comments,
+      format,
+      scoreMode,
+      coopOutcome,
+      coopScore,
+      teamCount,
+      teamNames,
+      teamWinner,
+      players,
+      visibility,
+    };
+    try {
+      sessionStorage.setItem(DRAFT_KEY, JSON.stringify(d));
+    } catch {
+      /* storage unavailable — draft just won't survive a reload */
+    }
+  }, [
+    draftEnabled,
+    step,
+    game,
+    date,
+    length,
+    location,
+    comments,
+    format,
+    scoreMode,
+    coopOutcome,
+    coopScore,
+    teamCount,
+    teamNames,
+    teamWinner,
+    players,
+    visibility,
+  ]);
+
+  function clearDraft() {
+    try {
+      sessionStorage.removeItem(DRAFT_KEY);
+    } catch {
+      /* ignore */
+    }
+  }
 
   const isTeams = format === "teams" || format === "onevsall";
 
@@ -300,7 +415,16 @@ export function LogPlayWizard({
     setVisibility(ip?.visibility ?? "private");
   }
 
+  // Dismissing keeps progress: edit/rematch re-seed from their source play on the
+  // next open, while the from-scratch flow keeps its (persisted) draft so a swipe,
+  // backdrop tap, or keyboard scroll never loses work. Use `discard()` to clear.
   function close() {
+    if (ip) reset();
+    onClose();
+  }
+
+  function discard() {
+    clearDraft();
     reset();
     onClose();
   }
@@ -383,7 +507,9 @@ export function LogPlayWizard({
         id = await logPlay(body);
       }
       toast(isEdit ? "Play updated" : "Play logged", "success");
-      close();
+      clearDraft();
+      reset();
+      onClose();
       router.push(`/plays/${id}`);
     } catch (err) {
       toast(err instanceof Error ? err.message : "Couldn't save the play", "error");
@@ -398,7 +524,7 @@ export function LogPlayWizard({
     step === 3;
 
   return (
-    <Sheet open={open} onClose={close} mobileMaxH="max-h-[92vh]">
+    <Sheet open={open} onClose={close} mobileMaxH="max-h-[92dvh]">
         {/* Header + step dots */}
         <div className="flex items-center justify-between gap-2 border-b border-border px-4 py-3">
           <div className="flex items-center gap-2">
@@ -415,13 +541,25 @@ export function LogPlayWizard({
               {isEdit ? "Edit play" : "Log a play"}
             </h2>
           </div>
-          <button
-            onClick={close}
-            aria-label="Close"
-            className="flex h-8 w-8 items-center justify-center rounded-lg text-muted hover:bg-surface-2 hover:text-foreground"
-          >
-            <X className="h-4.5 w-4.5" />
-          </button>
+          <div className="flex items-center gap-1">
+            {!ip && (
+              <button
+                onClick={discard}
+                aria-label="Discard draft"
+                title="Discard this draft"
+                className="flex h-8 w-8 items-center justify-center rounded-lg text-muted hover:bg-red-500/10 hover:text-red-500"
+              >
+                <Trash2 className="h-4.5 w-4.5" />
+              </button>
+            )}
+            <button
+              onClick={close}
+              aria-label="Close"
+              className="flex h-8 w-8 items-center justify-center rounded-lg text-muted hover:bg-surface-2 hover:text-foreground"
+            >
+              <X className="h-4.5 w-4.5" />
+            </button>
+          </div>
         </div>
         <div className="flex gap-1 px-4 pt-3">
           {[0, 1, 2, 3, 4].map((i) => (

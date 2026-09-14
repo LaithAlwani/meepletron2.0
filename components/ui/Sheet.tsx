@@ -13,7 +13,7 @@ type SheetProps = {
   desktop?: "right" | "center";
   /** Desktop width utility, e.g. "sm:w-104" (drawer) or "sm:max-w-2xl" (dialog). */
   desktopWidth?: string;
-  /** Max height of the mobile sheet (default `max-h-[92vh]`). */
+  /** Max height of the mobile sheet (default `max-h-[92dvh]`). */
   mobileMaxH?: string;
   /** Fixed height of the mobile sheet, e.g. `h-[75vh]`. Overrides `mobileMaxH`
    *  so the sheet stays that tall even when its content is short. */
@@ -36,7 +36,7 @@ export function Sheet({
   onClose,
   desktop = "right",
   desktopWidth = "sm:w-104",
-  mobileMaxH = "max-h-[92vh]",
+  mobileMaxH = "max-h-[92dvh]",
   mobileHeight,
   children,
 }: SheetProps) {
@@ -87,6 +87,11 @@ export function Sheet({
   return (
     <Drawer.Root
       open={open}
+      // Let the browser (interactive-widget: resizes-content) keep focused
+      // inputs visible above the keyboard. vaul's own input repositioning
+      // applies a transform that can stick after a scroll-to-dismiss, leaving
+      // the sheet shrunk — disabling it fixes the "drawer stays small" bug.
+      repositionInputs={false}
       onOpenChange={(o) => {
         if (!o) onClose();
       }}

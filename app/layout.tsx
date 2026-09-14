@@ -56,6 +56,10 @@ export const viewport: Viewport = {
   // A single default; the script + ThemeToggle keep it in sync with the actual
   // (class-based) theme so the mobile status bar always matches the app.
   themeColor: "#191512",
+  // Resize the layout to the space above the on-screen keyboard (instead of the
+  // keyboard overlaying content). Keeps bottom sheets / inputs sized correctly
+  // while typing and restores cleanly on dismiss — no stuck-small drawer.
+  interactiveWidget: "resizes-content",
 };
 
 // Runs before paint to set the theme class + status-bar colour, avoiding a flash
