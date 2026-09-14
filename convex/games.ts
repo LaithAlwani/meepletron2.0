@@ -632,7 +632,9 @@ export const filterFacets = query({
  * has at least one ingested rulebook — i.e. the games Meepletron can actually
  * chat about. "download" add-ons don't count. Scans rulebooks (~a few hundred).
  */
-async function chatEnabledBaseIds(ctx: QueryCtx): Promise<Set<Id<"games">>> {
+export async function chatEnabledBaseIds(
+  ctx: QueryCtx,
+): Promise<Set<Id<"games">>> {
   const rulebooks = await ctx.db.query("rulebooks").collect();
   const withRules = new Set<Id<"games">>();
   for (const rb of rulebooks) {

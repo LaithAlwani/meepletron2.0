@@ -20,6 +20,13 @@ export const COLLECTION_STATUSES: CollStatus[] = [
     empty: "Mark games “Owned” from any card, or link BoardGameGeek.",
   },
   {
+    filter: "wishlist",
+    slug: "wishlist",
+    title: "Wishlist",
+    icon: Heart,
+    empty: "Add games to your Wishlist from any card, or link BoardGameGeek.",
+  },
+  {
     filter: "forTrade",
     slug: "for-sale",
     title: "For Sale",
@@ -32,13 +39,6 @@ export const COLLECTION_STATUSES: CollStatus[] = [
     title: "Previously owned",
     icon: History,
     empty: "Mark games “Previously owned” from any card, or on BoardGameGeek.",
-  },
-  {
-    filter: "wishlist",
-    slug: "wishlist",
-    title: "Wishlist",
-    icon: Heart,
-    empty: "Add games to your Wishlist from any card, or link BoardGameGeek.",
   },
 ];
 

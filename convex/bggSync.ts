@@ -1,4 +1,4 @@
-import { v, ConvexError } from "convex/values";
+import { v, ConvexError, type Infer } from "convex/values";
 import { paginationOptsValidator } from "convex/server";
 import { getAuthUserId } from "@convex-dev/auth/server";
 import {
@@ -33,6 +33,8 @@ import {
 import { slugifyUnique } from "./lib/slug";
 import { sortKeys, isGameSort, type GameSortKey } from "./lib/gameSort";
 import { coverUrls } from "./lib/gameCover";
+import { matchesGameFilters, type LibraryTime } from "./lib/gameFilters";
+import { chatEnabledBaseIds } from "./games";
 
 /**
  * BoardGameGeek account linking + collection sync.
@@ -334,6 +336,11 @@ function sortCollection<T extends { game: Doc<"games"> }>(
   const num = (v?: number) => v ?? -Infinity;
   const arr = [...pairs];
   switch (sort) {
+    case "updated":
+      arr.sort(
+        (a, b) => num(b.game.contentUpdatedAt) - num(a.game.contentUpdatedAt),
+      );
+      break;
     case "year":
       arr.sort((a, b) => num(b.game.yearNum) - num(a.game.yearNum));
       break;
@@ -354,6 +361,98 @@ function sortCollection<T extends { game: Doc<"games"> }>(
   return arr;
 }
 
+type StatusField = "own" | "wishlist" | "forTrade" | "prevOwned";
+
+/** Read a bounded, alphabetical window of one status's rows (or every list when
+ *  `null`), via the per-status index so a sparse status never scans the whole
+ *  collection. `.take(cap)` caps reads for a very large list. */
+async function readStatusWindow(
+  ctx: QueryCtx,
+  userId: Id<"users">,
+  statusField: StatusField | null,
+  cap: number,
+): Promise<Doc<"bggCollection">[]> {
+  switch (statusField) {
+    case "own":
+      return ctx.db
+        .query("bggCollection")
+        .withIndex("by_user_own", (i) => i.eq("userId", userId).eq("own", true))
+        .take(cap);
+    case "wishlist":
+      return ctx.db
+        .query("bggCollection")
+        .withIndex("by_user_wishlist", (i) =>
+          i.eq("userId", userId).eq("wishlist", true),
+        )
+        .take(cap);
+    case "forTrade":
+      return ctx.db
+        .query("bggCollection")
+        .withIndex("by_user_forTrade", (i) =>
+          i.eq("userId", userId).eq("forTrade", true),
+        )
+        .take(cap);
+    case "prevOwned":
+      return ctx.db
+        .query("bggCollection")
+        .withIndex("by_user_prevOwned", (i) =>
+          i.eq("userId", userId).eq("prevOwned", true),
+        )
+        .take(cap);
+    default:
+      // "all": every row (a row only exists while it carries some status).
+      return ctx.db
+        .query("bggCollection")
+        .withIndex("by_user_and_sort_title", (i) => i.eq("userId", userId))
+        .take(cap);
+  }
+}
+
+type PagOpts = Infer<typeof paginationOptsValidator>;
+
+/** Cheap alphabetical pagination of one status (or all lists) via the per-status
+ *  index — reads ~one page, joining only the returned rows. */
+function paginateStatus(
+  ctx: QueryCtx,
+  userId: Id<"users">,
+  statusField: StatusField | null,
+  opts: PagOpts,
+) {
+  switch (statusField) {
+    case "own":
+      return ctx.db
+        .query("bggCollection")
+        .withIndex("by_user_own", (i) => i.eq("userId", userId).eq("own", true))
+        .paginate(opts);
+    case "wishlist":
+      return ctx.db
+        .query("bggCollection")
+        .withIndex("by_user_wishlist", (i) =>
+          i.eq("userId", userId).eq("wishlist", true),
+        )
+        .paginate(opts);
+    case "forTrade":
+      return ctx.db
+        .query("bggCollection")
+        .withIndex("by_user_forTrade", (i) =>
+          i.eq("userId", userId).eq("forTrade", true),
+        )
+        .paginate(opts);
+    case "prevOwned":
+      return ctx.db
+        .query("bggCollection")
+        .withIndex("by_user_prevOwned", (i) =>
+          i.eq("userId", userId).eq("prevOwned", true),
+        )
+        .paginate(opts);
+    default:
+      return ctx.db
+        .query("bggCollection")
+        .withIndex("by_user_and_sort_title", (i) => i.eq("userId", userId))
+        .paginate(opts);
+  }
+}
+
 export const myCollection = query({
   args: {
     paginationOpts: paginationOptsValidator,
@@ -368,96 +467,148 @@ export const myCollection = query({
       ),
     ),
     sort: v.optional(v.string()),
+    // Library-style filters, applied to THIS list only (see the browse page).
+    term: v.optional(v.string()),
+    players: v.optional(v.number()),
+    time: v.optional(
+      v.union(v.literal("quick"), v.literal("standard"), v.literal("epic")),
+    ),
+    hasExpansions: v.optional(v.boolean()),
+    chatOnly: v.optional(v.boolean()),
+    categories: v.optional(v.array(v.string())),
+    mechanics: v.optional(v.array(v.string())),
   },
-  handler: async (ctx, { paginationOpts, filter, sort }) => {
+  handler: async (
+    ctx,
+    {
+      paginationOpts,
+      filter,
+      sort,
+      term,
+      players,
+      time,
+      hasExpansions,
+      chatOnly,
+      categories,
+      mechanics,
+    },
+  ) => {
     const user = await getCurrentUser(ctx);
     if (!user) {
       return { page: [], isDone: true, continueCursor: "" };
     }
 
-    const FIELD = {
-      owned: "own",
-      wishlist: "wishlist",
-      forTrade: "forTrade",
-      prevOwned: "prevOwned",
-    } as const;
+    const FIELD: Record<Exclude<typeof filter, "all" | undefined>, StatusField> =
+      {
+        owned: "own",
+        wishlist: "wishlist",
+        forTrade: "forTrade",
+        prevOwned: "prevOwned",
+      };
+    const statusField = filter && filter !== "all" ? FIELD[filter] : null;
 
-    // `all` = in at least one of the four lists; otherwise the one chosen list.
-    // Inlined at each call site so Convex infers the filter-builder type.
-    // Sorted path: any game-field sort. `title` stays on the cheap cursor path
-    // below (the index is already alphabetical). Load a bounded window of rows,
-    // join their games (which carry the denormalized sort keys), sort, and
-    // offset-paginate — the collection is bounded at a couple of thousand rows.
-    const sortKey =
-      sort && isGameSort(sort) && sort !== "title" ? sort : null;
-    if (sortKey) {
-      const rows = await ctx.db
+    // Game-based filters applied after joining each row to its game (chat-ready
+    // needs the ingested set). The search term is handled by the search index,
+    // not here, so it's left out of the predicate.
+    const gf = {
+      players,
+      time: time as LibraryTime | undefined,
+      hasExpansions,
+      categories,
+      mechanics,
+    };
+    const chatIds = chatOnly ? await chatEnabledBaseIds(ctx) : null;
+    const keep = (game: Doc<"games">) =>
+      matchesGameFilters(game, gf) && (!chatIds || chatIds.has(game._id));
+
+    const searchTerm = (term ?? "").trim();
+    const searching = searchTerm.length >= 2;
+
+    // --- Search path: index-backed, scoped to the user + this one status, so it
+    //     reads only matching rows and scales to any collection size. ---
+    if (searching) {
+      const result = await ctx.db
         .query("bggCollection")
-        .withIndex("by_user_and_sort_title", (qq) => qq.eq("userId", user._id))
-        .filter((qq) =>
-          filter && filter !== "all"
-            ? qq.eq(qq.field(FIELD[filter]), true)
-            : qq.or(
-                qq.eq(qq.field("own"), true),
-                qq.eq(qq.field("wishlist"), true),
-                qq.eq(qq.field("forTrade"), true),
-                qq.eq(qq.field("prevOwned"), true),
-              ),
-        )
-        .take(COLLECTION_SORT_CAP);
-      const paired = (
+        .withSearchIndex("search_collection", (s) => {
+          const base = s.search("title", searchTerm).eq("userId", user._id);
+          return statusField ? base.eq(statusField, true) : base;
+        })
+        .paginate(paginationOpts);
+      const page = (
         await Promise.all(
-          rows.map(async (row) => {
-            const game = row.gameId
-              ? await ctx.db.get("games", row.gameId)
-              : null;
-            return game ? { row, game } : null;
+          result.page.map(async (row) => {
+            if (!row.gameId) return null;
+            const game = await ctx.db.get("games", row.gameId);
+            if (!game || !keep(game)) return null;
+            return await collectionCard(ctx, row, game);
           }),
         )
-      ).flatMap((p) => (p ? [p] : []));
-      const sorted = sortCollection(paired, sortKey);
-      const offset = Number(paginationOpts.cursor ?? "0") || 0;
-      const end = offset + paginationOpts.numItems;
-      const slice = sorted.slice(offset, end);
-      const page = await Promise.all(
-        slice.map(({ row, game }) => collectionCard(ctx, row, game)),
-      );
-      return {
-        page,
-        isDone: end >= sorted.length,
-        continueCursor: String(end),
-      };
+      ).flatMap((g) => (g ? [g] : []));
+      return { ...result, page };
     }
 
-    // `.filter` doesn't reduce rows read, but a single user's collection is
-    // bounded at a couple of thousand rows, so the scan stays cheap.
-    const result = await ctx.db
-      .query("bggCollection")
-      .withIndex("by_user_and_sort_title", (qq) => qq.eq("userId", user._id))
-      .filter((qq) =>
-        filter && filter !== "all"
-          ? qq.eq(qq.field(FIELD[filter]), true)
-          : qq.or(
-              qq.eq(qq.field("own"), true),
-              qq.eq(qq.field("wishlist"), true),
-              qq.eq(qq.field("forTrade"), true),
-              qq.eq(qq.field("prevOwned"), true),
-            ),
-      )
-      .paginate(paginationOpts);
-    // The collection renders library-style GameCards, so return the linked game
-    // + media. Rows whose game was deleted are dropped (nothing to card).
-    const page = (
+    // Filters / non-alphabetical sort decide whether we can paginate the index
+    // cheaply or must scan a bounded window.
+    const anyFilter =
+      players != null ||
+      time != null ||
+      !!hasExpansions ||
+      !!chatOnly ||
+      (categories?.length ?? 0) > 0 ||
+      (mechanics?.length ?? 0) > 0;
+    const sortKey = sort && isGameSort(sort) && sort !== "title" ? sort : null;
+
+    // --- Cheap path: no filters + alphabetical order → index-backed pagination,
+    //     joining only the returned page (the collection rails + default list). ---
+    if (!anyFilter && !sortKey) {
+      const result = await paginateStatus(
+        ctx,
+        user._id,
+        statusField,
+        paginationOpts,
+      );
+      const page = (
+        await Promise.all(
+          result.page.map(async (row) => {
+            if (!row.gameId) return null;
+            const game = await ctx.db.get("games", row.gameId);
+            if (!game) return null;
+            return await collectionCard(ctx, row, game);
+          }),
+        )
+      ).flatMap((g) => (g ? [g] : []));
+      return { ...result, page };
+    }
+
+    // --- Window path: filters and/or a game-field sort → read a bounded window
+    //     of this status's rows (per-status index → never scans the whole
+    //     collection), join, filter + sort in JS, then offset-paginate.
+    //     Searching narrows beyond the window cap. ---
+    const rows = await readStatusWindow(
+      ctx,
+      user._id,
+      statusField,
+      COLLECTION_SORT_CAP,
+    );
+    const paired = (
       await Promise.all(
-        result.page.map(async (row) => {
+        rows.map(async (row) => {
           if (!row.gameId) return null;
           const game = await ctx.db.get("games", row.gameId);
           if (!game) return null;
-          return await collectionCard(ctx, row, game);
+          if (anyFilter && !keep(game)) return null;
+          return { row, game };
         }),
       )
-    ).flatMap((g) => (g ? [g] : []));
-    return { ...result, page };
+    ).flatMap((p) => (p ? [p] : []));
+    const sorted = sortKey ? sortCollection(paired, sortKey) : paired;
+    const offset = Number(paginationOpts.cursor ?? "0") || 0;
+    const end = offset + paginationOpts.numItems;
+    const slice = sorted.slice(offset, end);
+    const page = await Promise.all(
+      slice.map(({ row, game }) => collectionCard(ctx, row, game)),
+    );
+    return { page, isDone: end >= sorted.length, continueCursor: String(end) };
   },
 });
 

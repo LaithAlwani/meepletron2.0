@@ -24,8 +24,9 @@ export const EMPTY_FILTERS: LibraryFilterState = {
 };
 
 // Persisted per tab so the /boardgames rows and the /boardgames/all grid share
-// the same search + filters — "View all" carries your context across.
-const KEY = "library-filters-v1";
+// the same search + filters — "View all" carries your context across. Callers
+// with an independent list (e.g. a collection status page) pass their own key.
+const DEFAULT_KEY = "library-filters-v1";
 
 /** Convex args for games.libraryGames / games.libraryCount (empties omitted). */
 export function toLibraryArgs(term: string, f: LibraryFilterState) {
@@ -52,15 +53,21 @@ export function countActiveFilters(f: LibraryFilterState): number {
 }
 
 /**
- * Shared search-term + filter state for the library, persisted to sessionStorage
- * so both the /boardgames rows and the /boardgames/all grid stay in sync. Exposes
- * a debounced Convex-args object to drive the queries.
+ * Shared search-term + filter state for a game list, persisted to sessionStorage
+ * so navigating away and back (or "View all") keeps your context — which also
+ * lets scroll restoration reconstruct the exact same list. Pass a `storageKey`
+ * for an independent list (e.g. one collection status) and a `defaultSort` to
+ * override the library default. Exposes a debounced Convex-args object.
  */
-export function useLibraryFilters() {
+export function useLibraryFilters(
+  storageKey: string = DEFAULT_KEY,
+  defaultSort: GameSortKey = DEFAULT_SORT,
+) {
+  const KEY = storageKey;
   const [term, setTerm] = useState("");
   const [debounced, setDebounced] = useState("");
   const [filters, setFilters] = useState<LibraryFilterState>(EMPTY_FILTERS);
-  const [sort, setSort] = useState<GameSortKey>(DEFAULT_SORT);
+  const [sort, setSort] = useState<GameSortKey>(defaultSort);
   const [hydrated, setHydrated] = useState(false);
 
   // Hydrate once from the persisted snapshot. Deferred a frame so we don't call
@@ -89,7 +96,7 @@ export function useLibraryFilters() {
       setHydrated(true);
     });
     return () => cancelAnimationFrame(id);
-  }, []);
+  }, [KEY]);
 
   // Debounce the search term feeding the query.
   useEffect(() => {
@@ -105,7 +112,7 @@ export function useLibraryFilters() {
     } catch {
       /* storage unavailable */
     }
-  }, [term, filters, sort, hydrated]);
+  }, [KEY, term, filters, sort, hydrated]);
 
   const args = useMemo(() => toLibraryArgs(debounced, filters), [debounced, filters]);
   const activeCount = countActiveFilters(filters);

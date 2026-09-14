@@ -595,8 +595,21 @@ export default defineSchema({
     .index("by_user_and_sort_title", ["userId", "sortTitle"]) // alphabetical page
     .index("by_user_and_synced_at", ["userId", "syncedAt"]) // sweep stale rows
     .index("by_user_and_game", ["userId", "gameId"])
+    // Per-status alphabetical pages: reading one list (e.g. "For Sale") stays
+    // bounded to that status's rows even for a huge collection — a sparse status
+    // never scans the whole list. Ordered by sortTitle within the status.
+    .index("by_user_own", ["userId", "own", "sortTitle"])
+    .index("by_user_wishlist", ["userId", "wishlist", "sortTitle"])
+    .index("by_user_forTrade", ["userId", "forTrade", "sortTitle"])
+    .index("by_user_prevOwned", ["userId", "prevOwned", "sortTitle"])
     // Cross-user: adopt every user's rows when an admin gives a game its BGG id.
-    .index("by_bgg_id", ["bggId"]),
+    .index("by_bgg_id", ["bggId"])
+    // Search a user's own list by title, scoped to one status — "search only in
+    // this list" without scanning, at any collection size.
+    .searchIndex("search_collection", {
+      searchField: "title",
+      filterFields: ["userId", "own", "wishlist", "forTrade", "prevOwned"],
+    }),
 
   // One row per recorded play session (hand-logged or imported from BGG).
   plays: defineTable(playRowValidator)
