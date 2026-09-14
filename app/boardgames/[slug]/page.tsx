@@ -330,7 +330,10 @@ export default function GameDetailPage({
                   />
                 )}
                 <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                  {/* The top bar names the game on mobile, so the hero title is
+                      desktop-only. The year has nowhere else to live, so it
+                      joins the designers line instead of sitting on its own. */}
+                  <div className="hidden flex-wrap items-center gap-x-3 gap-y-1 nav:flex">
                     <h1 className="font-display text-3xl font-extrabold leading-tight tracking-tight sm:text-4xl">
                       {game.title}
                     </h1>
@@ -340,9 +343,16 @@ export default function GameDetailPage({
                       </span>
                     )}
                   </div>
-                  {game.designers.length > 0 && (
-                    <p className="mt-1.5 text-sm text-muted">
-                      by {game.designers.join(", ")}
+                  {(game.year || game.designers.length > 0) && (
+                    <p className="mt-1.5 flex flex-wrap items-center gap-x-2 text-sm text-muted">
+                      {game.year && (
+                        <span className="rounded-full border border-border bg-surface-2 px-2 py-0.5 text-xs font-semibold nav:hidden">
+                          {game.year}
+                        </span>
+                      )}
+                      {game.designers.length > 0 && (
+                        <span>by {game.designers.join(", ")}</span>
+                      )}
                     </p>
                   )}
                   <CollectionTags
