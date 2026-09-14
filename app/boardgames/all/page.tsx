@@ -93,7 +93,7 @@ export default function AllBoardgamesPage() {
   const loadingFirst = status === "LoadingFirstPage";
 
   return (
-    <div className="mx-auto max-w-3xl px-4 py-8">
+    <div className="mx-auto max-w-3xl px-4 pb-8 pt-3 nav:pt-8">
       {/* Header — on desktop the back link and title share the first line; the
           search + filters sit on the next, right-aligned (matches /boardgames).
           Mobile gets all of it from the top bar instead. */}
@@ -118,7 +118,7 @@ export default function AllBoardgamesPage() {
         </div>
 
         {/* Next line: search + filters, right-aligned on desktop. */}
-        <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
+        <div className="flex flex-col gap-2 nav:mt-4 sm:flex-row sm:items-center sm:justify-end">
           <div className="relative w-full sm:w-64">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-subtle" />
             <input

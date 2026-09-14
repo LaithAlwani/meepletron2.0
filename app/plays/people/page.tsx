@@ -25,7 +25,7 @@ type Person = FunctionReturnType<typeof api.plays.myPeople>[number];
 
 export default function PeoplePage() {
   return (
-    <div className="mx-auto max-w-xl px-4 py-8">
+    <div className="mx-auto max-w-xl px-4 pb-8 pt-3 nav:pt-8">
       <div className="hidden items-center gap-3 nav:flex">
         <BackButton fallbackHref="/plays" className="shrink-0 inline-flex items-center gap-1 text-sm font-medium text-muted transition-colors hover:text-foreground" />
         <PageTitle>Friends</PageTitle>

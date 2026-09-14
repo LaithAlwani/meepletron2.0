@@ -19,7 +19,7 @@ import { AccountSection } from "@/components/settings/AccountSection";
 
 export default function SettingsPage() {
   return (
-    <div className="mx-auto max-w-3xl px-4 pb-16 pt-10">
+    <div className="mx-auto max-w-3xl px-4 pb-16 pt-3 nav:pt-10">
       <h1 className="mb-1 hidden nav:block text-2xl font-bold">Settings</h1>
       <p className="mb-6 text-sm text-muted">
         These preferences are saved to your account.

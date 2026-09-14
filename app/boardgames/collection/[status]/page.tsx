@@ -36,7 +36,7 @@ export default function CollectionListPage({
   if (!status) notFound();
 
   return (
-    <div className="mx-auto max-w-3xl px-4 py-8">
+    <div className="mx-auto max-w-3xl px-4 pb-8 pt-3 nav:pt-8">
       {/* Desktop only — mobile gets the same three things in the top bar.
           Back and title share one row so the arrow costs no vertical space. */}
       <div className="mb-5 hidden items-center gap-3 nav:flex">

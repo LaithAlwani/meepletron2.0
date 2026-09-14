@@ -58,7 +58,7 @@ export default function BoardgamesPage() {
 
   return (
     <div
-      className="mx-auto max-w-3xl px-4 py-8"
+      className="mx-auto max-w-3xl px-4 pb-8 pt-3 nav:pt-8"
       onClickCapture={(e) => {
         // Remember scroll before navigating to any card's detail page.
         if ((e.target as HTMLElement).closest("a")) save(results.length);
@@ -82,7 +82,7 @@ export default function BoardgamesPage() {
         </div>
 
         {/* Next line: search + sort + filter, right-aligned on desktop. */}
-        <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
+        <div className="flex flex-col gap-2 nav:mt-4 sm:flex-row sm:items-center sm:justify-end">
           <div className="relative w-full sm:w-64">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-subtle" />
             <input
@@ -134,7 +134,7 @@ export default function BoardgamesPage() {
       )}
 
       {/* Board games rail */}
-      <section className="mb-10">
+      <section className="mb-7 nav:mb-10">
         <div className="mb-3 flex items-end justify-between">
           <h2 className="font-display text-lg font-bold tracking-tight">
             {activeCount > 0 || term ? "Matches" : "Browse"}

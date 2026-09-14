@@ -213,7 +213,7 @@ export default function GameDetailPage({
 
   if (game === undefined) {
     return (
-      <div className="mx-auto max-w-3xl px-4 py-8">
+      <div className="mx-auto max-w-3xl px-4 pb-8 pt-3 nav:pt-8">
         <div className="flex flex-col gap-6 sm:flex-row">
           <div className="mx-auto h-64 w-48 shrink-0 animate-pulse rounded-2xl bg-surface-2 sm:mx-0" />
           <div className="flex-1 space-y-3">
@@ -257,7 +257,7 @@ export default function GameDetailPage({
 
       {/* Hero — light + warm */}
       <section className="border-b border-border-muted">
-        <div className="mx-auto max-w-3xl px-4 pb-6 pt-5">
+        <div className="mx-auto max-w-3xl px-4 pb-6 pt-3 nav:pt-5">
           <nav
             className="mb-5 hidden items-center gap-1.5 text-sm text-muted nav:flex"
             aria-label="Breadcrumb"
@@ -436,7 +436,7 @@ export default function GameDetailPage({
       </section>
 
       {/* Content */}
-      <div className="mx-auto max-w-3xl px-4 py-8">
+      <div className="mx-auto max-w-3xl px-4 pb-8 pt-3 nav:pt-8">
         <GamePlaysSection gameId={gameId} onLog={() => setLogOpen(true)} />
 
         {(game.designers.length > 0 ||
@@ -499,7 +499,7 @@ export default function GameDetailPage({
 
       {/* Footer CTA — the page's single accent moment */}
       <section className="bg-accent text-accent-foreground">
-        <div className="mx-auto flex max-w-3xl flex-col items-center gap-4 px-4 py-12 text-center sm:flex-row sm:justify-between sm:text-left">
+        <div className="mx-auto flex max-w-3xl flex-col items-center gap-4 px-4 pb-12 pt-3 nav:pt-12 text-center sm:flex-row sm:justify-between sm:text-left">
           <h2 className="font-display text-2xl font-extrabold leading-tight sm:text-3xl">
             Stop flipping through the rulebook mid-game.
           </h2>

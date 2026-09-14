@@ -71,7 +71,7 @@ export default function ProfilePage({
 
   if (data === undefined) {
     return (
-      <div className="mx-auto max-w-2xl px-4 py-8">
+      <div className="mx-auto max-w-2xl px-4 pb-8 pt-3 nav:pt-8">
         <div className="flex items-center gap-6">
           <Skeleton className="h-20 w-20 shrink-0 rounded-full" />
           <div className="flex-1 space-y-2">
@@ -84,7 +84,7 @@ export default function ProfilePage({
   }
   if (data === null) {
     return (
-      <div className="mx-auto max-w-2xl px-4 py-8">
+      <div className="mx-auto max-w-2xl px-4 pb-8 pt-3 nav:pt-8">
         <div className="rounded-2xl border border-dashed border-border p-10 text-center text-muted">
           <p className="font-medium">No such user.</p>
           <Link href="/boardgames" className={`mt-4 ${buttonClasses("ghost", "sm")}`}>
@@ -109,7 +109,7 @@ export default function ProfilePage({
     requestedTab === "stats" && !isSelf ? "plays" : requestedTab;
 
   return (
-    <div className="mx-auto max-w-2xl px-4 py-8">
+    <div className="mx-auto max-w-2xl px-4 pb-8 pt-3 nav:pt-8">
       {/* Header */}
       <div className="flex items-center gap-5 sm:gap-8">
         {author?.avatarUrl ? (

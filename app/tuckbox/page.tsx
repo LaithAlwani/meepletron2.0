@@ -36,7 +36,7 @@ export default function TuckboxPage() {
   return (
     <Suspense
       fallback={
-        <div className="mx-auto max-w-7xl px-4 py-8 text-muted">Loading…</div>
+        <div className="mx-auto max-w-7xl px-4 pb-8 pt-3 nav:pt-8 text-muted">Loading…</div>
       }
     >
       <TuckboxInner />

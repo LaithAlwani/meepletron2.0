@@ -17,7 +17,7 @@ import { PageTitle } from "@/components/ui/PageTitle";
 
 export default function ChatsPage() {
   return (
-    <div className="mx-auto max-w-3xl px-4 py-8">
+    <div className="mx-auto max-w-3xl px-4 pb-8 pt-3 nav:pt-8">
       <PageTitle className="mb-5 hidden nav:block">Chats</PageTitle>
       <AuthLoading>
         <ChatsSkeleton />

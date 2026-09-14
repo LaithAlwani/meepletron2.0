@@ -139,7 +139,7 @@ export default async function HowToPlayPage({
 
   return (
     <>
-      <div className="mx-auto max-w-3xl px-4 py-8">
+      <div className="mx-auto max-w-3xl px-4 pb-8 pt-3 nav:pt-8">
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
@@ -221,7 +221,7 @@ export default async function HowToPlayPage({
 
       {/* Rules refresher */}
       {reminders.length > 0 && (
-        <section className="mt-10">
+        <section className="mt-7 nav:mt-10">
           <h2 className="font-display text-xl font-extrabold">Rules refresher</h2>
           <p className="mt-1 text-sm text-muted">
             The easy-to-forget bits, straight from the rulebook.
@@ -241,7 +241,7 @@ export default async function HowToPlayPage({
 
       {/* Common questions */}
       {faqs.length > 0 && (
-        <section className="mt-10">
+        <section className="mt-7 nav:mt-10">
           <h2 className="font-display text-xl font-extrabold">
             Common questions
           </h2>

@@ -26,7 +26,7 @@ export default function TopListPage({
   );
 
   return (
-    <div className="mx-auto max-w-3xl px-4 py-8">
+    <div className="mx-auto max-w-3xl px-4 pb-8 pt-3 nav:pt-8">
       {data === undefined ? (
         <div className="space-y-3">
           <Skeleton className="h-9 w-64" />

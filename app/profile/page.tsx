@@ -81,7 +81,7 @@ const FEATURES: { icon: LucideIcon; title: string; body: string }[] = [
 
 function SignedOutTeaser() {
   return (
-    <div className="mx-auto max-w-2xl px-4 py-10">
+    <div className="mx-auto max-w-2xl px-4 pb-10 pt-3 nav:pt-10">
       {/* Faux profile header — a peek at the real thing */}
       <div className="flex items-center gap-5 sm:gap-8">
         <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-full bg-surface-2 text-subtle sm:h-24 sm:w-24">

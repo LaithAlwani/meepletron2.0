@@ -58,7 +58,7 @@ export default function PlayPage({
 
   if (play === undefined) {
     return (
-      <div className="mx-auto max-w-3xl px-4 py-8">
+      <div className="mx-auto max-w-3xl px-4 pb-8 pt-3 nav:pt-8">
         <Skeleton className="h-9 w-40" />
         <Skeleton className="mt-4 h-48 w-full" />
       </div>
@@ -66,7 +66,7 @@ export default function PlayPage({
   }
   if (play === null) {
     return (
-      <div className="mx-auto max-w-3xl px-4 py-8">
+      <div className="mx-auto max-w-3xl px-4 pb-8 pt-3 nav:pt-8">
         <div className="rounded-2xl border border-dashed border-border p-10 text-center text-muted">
           <Lock className="mx-auto h-8 w-8 text-subtle" />
           <p className="mt-3 font-medium">This play is private or doesn&apos;t exist.</p>
@@ -121,7 +121,7 @@ export default function PlayPage({
   };
 
   return (
-    <div className="mx-auto max-w-3xl px-4 py-8">
+    <div className="mx-auto max-w-3xl px-4 pb-8 pt-3 nav:pt-8">
       {/* Header */}
       <div className="min-w-0">
         <div className="flex items-center gap-2">

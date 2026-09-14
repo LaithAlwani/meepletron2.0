@@ -41,8 +41,10 @@ const NO_SPIN =
 export default function TopGamesPage() {
   const [createOpen, setCreateOpen] = useState(false);
   return (
-    <div className="mx-auto max-w-3xl px-4 py-8">
-      <div className="mb-6 flex items-center justify-between gap-4">
+    <div className="mx-auto max-w-3xl px-4 pb-8 pt-3 nav:pt-8">
+      {/* Desktop only: on mobile the title is in the top bar and creating a
+          list is the floating button below, so this row has nothing to show. */}
+      <div className="mb-6 hidden items-center justify-between gap-4 nav:flex">
         <PageTitle className="hidden nav:block">Top Games</PageTitle>
         {/* Creating + managing your own lists lives on your profile; here we
             browse the community. The create shortcut stays for convenience. */}

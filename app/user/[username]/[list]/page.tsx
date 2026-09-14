@@ -68,7 +68,7 @@ export default function CollectionListPage({
   const title = TITLES[list] ?? "Collection";
 
   return (
-    <div className="mx-auto max-w-3xl px-4 py-8">
+    <div className="mx-auto max-w-3xl px-4 pb-8 pt-3 nav:pt-8">
       <div className="mb-5 flex items-center justify-between gap-3">
         <div className="hidden items-center gap-3 nav:flex">
           <BackButton
