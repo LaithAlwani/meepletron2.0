@@ -148,7 +148,7 @@ export default async function HowToPlayPage({
       {/* Breadcrumb back to the game */}
       <nav
         aria-label="Breadcrumb"
-        className="flex items-center gap-1.5 text-sm text-muted"
+        className="hidden items-center gap-1.5 text-sm text-muted nav:flex"
       >
         <Link href="/boardgames" className="hover:text-foreground">
           Library

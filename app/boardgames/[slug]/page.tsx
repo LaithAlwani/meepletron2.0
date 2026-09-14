@@ -259,7 +259,7 @@ export default function GameDetailPage({
       <section className="border-b border-border-muted">
         <div className="mx-auto max-w-3xl px-4 pb-6 pt-5">
           <nav
-            className="mb-5 flex items-center gap-1.5 text-sm text-muted"
+            className="mb-5 hidden items-center gap-1.5 text-sm text-muted nav:flex"
             aria-label="Breadcrumb"
           >
             <Link href="/boardgames" className="transition-colors hover:text-foreground">
