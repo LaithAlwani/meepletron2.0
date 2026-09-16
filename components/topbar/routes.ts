@@ -17,7 +17,6 @@ export type TopBarRoute = { title: string; back: string | null };
 const EXCLUDED = [
   /^\/$/, // signed-out landing
   /^\/auth$/,
-  /^\/who-goes-first$/,
   /^\/boardgames\/[^/]+\/chat/, // the chat shell has its own game navbar
   /^\/admin/, // the admin console has its own layout
 ];
@@ -31,6 +30,7 @@ const FIXED: Record<string, TopBarRoute> = {
   "/profile": { title: "Profile", back: null },
 
   "/boardgames/all": { title: "All games", back: "/boardgames" },
+  "/who-goes-first": { title: "Who Goes First?", back: "/boardgames" },
   "/plays/people": { title: "Friends", back: "/plays" },
   "/notifications": { title: "Notifications", back: "/boardgames" },
   "/settings": { title: "Settings", back: "/profile" },

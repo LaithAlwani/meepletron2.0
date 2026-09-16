@@ -11,6 +11,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ChevronLeft } from "lucide-react";
 import { NotificationsBell } from "@/components/notifications/NotificationsBell";
+import { NavSearch } from "@/components/NavSearch";
 import { useBackNav } from "@/components/ui/BackButton";
 import { resolveTopBar } from "./routes";
 import { cn } from "@/lib/cn";
@@ -116,10 +117,10 @@ export function MobileTopBar() {
       )}
       style={{ paddingTop: "env(safe-area-inset-top)" }}
     >
-      <div className="flex h-13 items-center gap-1 px-1.5">
+      <div className="relative flex h-13 items-center gap-1 px-1.5">
         {route.back === null ? (
           // Bottom-nav destinations have nowhere to go back to; the empty slot
-          // keeps the title optically centred against the bell.
+          // keeps the title optically centred against the right cluster.
           <span aria-hidden className="h-11 w-11 shrink-0" />
         ) : (
           <button
@@ -131,6 +132,8 @@ export function MobileTopBar() {
             <ChevronLeft className="h-6.5 w-6.5" strokeWidth={2.75} />
           </button>
         )}
+        {/* Balances the two-icon right cluster so the title stays centred. */}
+        <span aria-hidden className="h-11 w-11 shrink-0" />
 
         {active?.href ? (
           <Link href={active.href} className={titleClass}>
@@ -140,8 +143,11 @@ export function MobileTopBar() {
           <h1 className={titleClass}>{label}</h1>
         )}
 
-        {/* A fixed slot, so the title stays centred whether or not the bell
-            renders (it returns nothing when signed out). */}
+        {/* Search + notifications. Fixed-width slots so the title stays centred
+            whether or not the bell renders (it's empty when signed out). */}
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center">
+          <NavSearch overlay />
+        </div>
         <div className="flex h-11 w-11 shrink-0 items-center justify-center">
           <NotificationsBell variant="bar" />
         </div>

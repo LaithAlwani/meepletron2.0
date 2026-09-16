@@ -13,7 +13,5 @@ export function SiteHeader() {
   if (pathname === "/" && !isAuthenticated) return null;
   // The chat page has its own game-specific navbar.
   if (/^\/boardgames\/[^/]+\/chat/.test(pathname)) return null;
-  // The "who goes first" tool is a full-screen touch tool.
-  if (pathname === "/who-goes-first") return null;
   return <Header />;
 }

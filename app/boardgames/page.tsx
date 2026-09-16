@@ -1,15 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { usePaginatedQuery, useQuery } from "convex/react";
-import { Search, SlidersHorizontal, ArrowRight } from "lucide-react";
+import { SlidersHorizontal, ArrowRight } from "lucide-react";
 import { api } from "@/convex/_generated/api";
 import { useTopBarTitle } from "@/components/topbar/MobileTopBar";
 import { GameCard } from "@/components/boardgames/GameCard";
-import { PreviewCard } from "@/components/boardgames/PreviewCard";
 import { CardRail } from "@/components/boardgames/CardRail";
-import { useBggSearch } from "@/components/boardgames/useBggSearch";
 import { FilterDrawer } from "@/components/boardgames/FilterDrawer";
 import { useLibraryFilters } from "@/components/boardgames/useLibraryFilters";
 import { SortControl } from "@/components/boardgames/SortControl";
@@ -19,9 +18,12 @@ import { useScrollRestore } from "@/components/lib/useScrollRestore";
 
 const cellClass = "w-40 shrink-0 snap-start sm:w-44";
 
-export default function BoardgamesPage() {
-  const { term, setTerm, debounced, searching, filters, setFilters, sort, setSort, clear, args, activeCount } =
-    useLibraryFilters();
+function LibraryInner() {
+  // The nav search deep-links here as /boardgames?q=… — the term seeds the
+  // results row; "View all" carries it into the full grid.
+  const q = useSearchParams().get("q") ?? undefined;
+  const { searching, filters, setFilters, sort, setSort, clear, args, activeCount } =
+    useLibraryFilters(undefined, undefined, q);
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   // Restore page scroll when returning from a game's detail page.
@@ -37,24 +39,15 @@ export default function BoardgamesPage() {
   useEffect(() => {
     restoreIfReady(results.length);
   }, [results.length, restoreIfReady]);
-  // Skip the exact count while searching — it's a full-catalogue scan, and the
-  // search path already shows a live result count.
-  const total = useQuery(api.games.libraryCount, searching ? "skip" : args);
-  // The count lives in the desktop heading; on mobile it rides the top bar.
-  useTopBarTitle("Library", { count: total });
+  // Count of everything matching the current query/filters — sits beside the
+  // row heading and tells you whether "View all" is worth a tap.
+  const total = useQuery(api.games.libraryCount, args);
+  useTopBarTitle("Library");
 
   const loadingFirst = status === "LoadingFirstPage";
-
-  // When the local library turns up thin (< 10 matches), reach out to
-  // BoardGameGeek for more — same "not in our library yet" cards as /all.
-  const thin = !loadingFirst && results.length < 10;
-  const catalogBggIds = new Set(
-    results.map((g) => g.bggId).filter((x): x is string => !!x),
-  );
-  const { results: bggResults, pending: bggPending } = useBggSearch(
-    searching && thin ? debounced : "",
-    catalogBggIds,
-  );
+  const allHref = q
+    ? `/boardgames/all?q=${encodeURIComponent(q)}`
+    : "/boardgames/all";
 
   return (
     <div
@@ -64,63 +57,43 @@ export default function BoardgamesPage() {
         if ((e.target as HTMLElement).closest("a")) save(results.length);
       }}
     >
-      {/* Header — the title gets its own line; the search + sort + filter sit on
-          the next line, aligned to the right on desktop. */}
+      {/* Header — title on its own line; sort + filter on the next, right-aligned
+          on desktop. (Search lives in the top nav.) */}
       <div className="mb-4 sm:mb-5">
         <div>
-          <p className="mb-1 hidden text-[11px] font-bold uppercase tracking-[0.18em] text-accent sm:block">
+          <p className="mb-1 hidden text-[11px] font-bold uppercase tracking-[0.18em] text-accent nav:block">
             The library
           </p>
           <h1 className="font-display hidden nav:block text-2xl font-extrabold tracking-tight text-foreground sm:text-4xl">
             Board games
-            {total !== undefined && (
-              <span className="ml-2.5 align-middle text-base font-bold text-subtle">
-                {total}
-              </span>
-            )}
           </h1>
         </div>
 
-        {/* Next line: search + sort + filter, right-aligned on desktop. */}
-        <div className="flex flex-col gap-2 nav:mt-4 sm:flex-row sm:items-center sm:justify-end">
-          <div className="relative w-full sm:w-64">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-subtle" />
-            <input
-              type="search"
-              value={term}
-              onChange={(e) => setTerm(e.target.value)}
-              placeholder="Search title, designer, publisher…"
-              className="w-full rounded-xl border border-border bg-surface py-2.5 pl-10 pr-3 text-sm outline-none transition-shadow focus:border-accent/50 focus:ring-2 focus:ring-ring/40"
-            />
-          </div>
-          <div className="flex items-center justify-end gap-2">
-            <ChatReadyToggle
-              active={filters.chatOnly}
-              onToggle={() =>
-                setFilters({ ...filters, chatOnly: !filters.chatOnly })
-              }
-            />
-            {!searching && (
-              <SortControl
-                value={sort}
-                onChange={setSort}
-                className="flex-1 sm:w-40 sm:flex-none"
-              />
+        <div className="mt-2 flex items-center justify-end gap-2 nav:mt-4">
+          <ChatReadyToggle
+            active={filters.chatOnly}
+            onToggle={() =>
+              setFilters({ ...filters, chatOnly: !filters.chatOnly })
+            }
+          />
+          <SortControl
+            value={sort}
+            onChange={setSort}
+            className="flex-1 sm:w-40 sm:flex-none"
+          />
+          <button
+            onClick={() => setDrawerOpen(true)}
+            aria-label="Filters"
+            title="Filters"
+            className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-border bg-surface text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
+          >
+            <SlidersHorizontal className="h-4.5 w-4.5" />
+            {activeCount > 0 && (
+              <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-accent px-1 text-[11px] font-bold text-accent-foreground">
+                {activeCount}
+              </span>
             )}
-            <button
-              onClick={() => setDrawerOpen(true)}
-              aria-label="Filters"
-              title="Filters"
-              className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-border bg-surface text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
-            >
-              <SlidersHorizontal className="h-4.5 w-4.5" />
-              {activeCount > 0 && (
-                <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-accent px-1 text-[11px] font-bold text-accent-foreground">
-                  {activeCount}
-                </span>
-              )}
-            </button>
-          </div>
+          </button>
         </div>
       </div>
 
@@ -133,14 +106,19 @@ export default function BoardgamesPage() {
         </button>
       )}
 
-      {/* Board games rail */}
+      {/* Board games rail — the search results (or a browse sample) */}
       <section className="mb-7 nav:mb-10">
         <div className="mb-3 flex items-end justify-between">
           <h2 className="font-display text-lg font-bold tracking-tight">
-            {activeCount > 0 || term ? "Matches" : "Browse"}
+            {searching || activeCount > 0 ? "Results" : "Browse"}
+            {total !== undefined && (
+              <span className="ml-2 align-middle text-base font-bold text-subtle">
+                {total}
+              </span>
+            )}
           </h2>
           <Link
-            href="/boardgames/all"
+            href={allHref}
             className="inline-flex items-center gap-1 pb-1 text-sm font-semibold text-accent hover:underline"
           >
             View all
@@ -157,25 +135,18 @@ export default function BoardgamesPage() {
               />
             ))}
           </div>
-        ) : results.length === 0 && bggResults.length === 0 ? (
-          bggPending ? (
-            <div className="flex items-center gap-3 py-10 text-center text-muted">
-              <span className="h-5 w-5 animate-spin rounded-full border-2 border-accent border-t-transparent" />
-              <p className="text-sm">Searching BoardGameGeek…</p>
-            </div>
-          ) : (
-            <div className="rounded-2xl border border-dashed border-border p-10 text-center text-muted">
-              <p className="font-medium">No games match.</p>
-              {activeCount > 0 && (
-                <button
-                  onClick={clear}
-                  className="mt-1 text-sm text-accent hover:underline"
-                >
-                  Clear filters
-                </button>
-              )}
-            </div>
-          )
+        ) : results.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-border p-10 text-center text-muted">
+            <p className="font-medium">No games match.</p>
+            {activeCount > 0 && (
+              <button
+                onClick={clear}
+                className="mt-1 text-sm text-accent hover:underline"
+              >
+                Clear filters
+              </button>
+            )}
+          </div>
         ) : (
           <CardRail>
             {results.slice(0, 20).map((game, i) => (
@@ -183,18 +154,12 @@ export default function BoardgamesPage() {
                 <GameCard game={game} index={i} />
               </li>
             ))}
-            {thin &&
-              bggResults.map((hit, i) => (
-                <li key={hit.bggId} className={cellClass}>
-                  <PreviewCard hit={hit} index={results.length + i} />
-                </li>
-              ))}
           </CardRail>
         )}
       </section>
 
-      {/* Your collection */}
-      <CollectionSection />
+      {/* Your collection — hidden while searching, to keep the focus on results. */}
+      {!searching && <CollectionSection />}
 
       <FilterDrawer
         open={drawerOpen}
@@ -205,5 +170,14 @@ export default function BoardgamesPage() {
         onClear={clear}
       />
     </div>
+  );
+}
+
+export default function BoardgamesPage() {
+  // useSearchParams() must sit under a Suspense boundary.
+  return (
+    <Suspense fallback={null}>
+      <LibraryInner />
+    </Suspense>
   );
 }

@@ -62,6 +62,9 @@ export function countActiveFilters(f: LibraryFilterState): number {
 export function useLibraryFilters(
   storageKey: string = DEFAULT_KEY,
   defaultSort: GameSortKey = DEFAULT_SORT,
+  // A search term from the URL (?q=…). When present it seeds the term and wins
+  // over whatever was persisted — the nav search deep-links straight to results.
+  initialTerm?: string,
 ) {
   const KEY = storageKey;
   const [term, setTerm] = useState("");
@@ -79,24 +82,24 @@ export function useLibraryFilters(
         const raw = sessionStorage.getItem(KEY);
         if (raw) {
           const s = JSON.parse(raw) as {
-            term?: string;
             filters?: Partial<LibraryFilterState>;
             sort?: string;
           };
           if (s.filters) setFilters({ ...EMPTY_FILTERS, ...s.filters });
           if (s.sort && isGameSort(s.sort)) setSort(s.sort);
-          if (typeof s.term === "string") {
-            setTerm(s.term);
-            setDebounced(s.term.trim());
-          }
         }
       } catch {
         /* ignore malformed state */
       }
+      // The search term is URL-driven (?q=…) and never persisted, so a stale
+      // term can't linger on a page that has no search box to clear it.
+      const seed = initialTerm?.trim() ?? "";
+      setTerm(seed);
+      setDebounced(seed);
       setHydrated(true);
     });
     return () => cancelAnimationFrame(id);
-  }, [KEY]);
+  }, [KEY, initialTerm]);
 
   // Debounce the search term feeding the query.
   useEffect(() => {
@@ -104,15 +107,16 @@ export function useLibraryFilters(
     return () => clearTimeout(t);
   }, [term]);
 
-  // Persist term + filters + sort after hydration.
+  // Persist filters + sort after hydration (the term stays out of storage — it
+  // lives in the URL).
   useEffect(() => {
     if (!hydrated) return;
     try {
-      sessionStorage.setItem(KEY, JSON.stringify({ term, filters, sort }));
+      sessionStorage.setItem(KEY, JSON.stringify({ filters, sort }));
     } catch {
       /* storage unavailable */
     }
-  }, [KEY, term, filters, sort, hydrated]);
+  }, [KEY, filters, sort, hydrated]);
 
   const args = useMemo(() => toLibraryArgs(debounced, filters), [debounced, filters]);
   const activeCount = countActiveFilters(filters);

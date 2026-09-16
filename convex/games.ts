@@ -490,7 +490,10 @@ function needsLibraryScan(f: LibraryFilters): boolean {
   return (
     (f.categories?.length ?? 0) > 0 ||
     (f.mechanics?.length ?? 0) > 0 ||
-    !!f.chatOnly
+    !!f.chatOnly ||
+    // A search term goes through the scan path too, so the chosen sort applies
+    // to the matches (the full-text index would force relevance order instead).
+    (f.term ?? "").trim().length >= 2
   );
 }
 
@@ -511,26 +514,14 @@ export const libraryGames = query({
       ? (sortArg as GameSortKey)
       : DEFAULT_SORT;
 
+    // No term / genre / mechanic / chat filter → the fast index-ordered path.
     if (!needsLibraryScan(f)) {
-      const trimmed = (f.term ?? "").trim();
-      const searching = trimmed.length >= 2;
       const needsFilter =
         f.players != null || f.time != null || !!f.hasExpansions;
 
-      // While searching, order by text relevance; otherwise by the chosen sort.
-      const base = searching
-        ? ctx.db
-            .query("games")
-            .withSearchIndex("search_text", (s) =>
-              s
-                .search("searchText", trimmed)
-                .eq("isExpansion", false)
-                .eq("isStub", false),
-            )
-        : libraryBase(ctx, sort);
-
       // players / time / expansions apply during pagination, so we read only
       // enough rows to fill the page instead of the whole catalogue.
+      const base = libraryBase(ctx, sort);
       const q = needsFilter
         ? base.filter((e) => {
             const conds = [];
@@ -558,20 +549,9 @@ export const libraryGames = query({
         : base;
 
       const result = await q.paginate(paginationOpts);
-
-      // The full-text index is typo-tolerant; keep only rows containing every
-      // typed term (mirrors searchPaginated's relevance rule).
-      let page = result.page;
-      if (searching) {
-        const terms = trimmed.toLowerCase().split(/\s+/).filter(Boolean);
-        page = page.filter((g) => {
-          const hay = (g.searchText ?? g.title).toLowerCase();
-          return terms.every((t) => hay.includes(t));
-        });
-      }
       return {
         ...result,
-        page: await Promise.all(page.map((g) => withCardMedia(ctx, g))),
+        page: await Promise.all(result.page.map((g) => withCardMedia(ctx, g))),
       };
     }
 

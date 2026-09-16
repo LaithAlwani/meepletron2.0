@@ -32,13 +32,11 @@ import { ResourcesSideNav, LayersIcon } from "@/components/chat/ResourcesSideNav
 import { GuestBanner } from "@/components/chat/GuestBanner";
 import { ThinkingIndicator } from "@/components/chat/ThinkingIndicator";
 import { BackgroundCover } from "@/components/boardgames/BackgroundCover";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, ChevronLeft } from "lucide-react";
 import { Die } from "@/components/ui/icons";
 import { useBackNav } from "@/components/ui/BackButton";
 
 const SITE_URL = process.env.NEXT_PUBLIC_CONVEX_SITE_URL!;
-
-const BackIcon = <ArrowLeft className="h-[18px] w-[18px]" />;
 
 const SKELETON_ROWS: { side: "l" | "r"; w: string }[] = [
   { side: "l", w: "w-64" },
@@ -374,13 +372,23 @@ function ChatView({ gameId, slug }: { gameId: Id<"games">; slug: string }) {
         {/* Game-specific navbar */}
         <header className="shrink-0 border-b border-border bg-background/80 backdrop-blur">
           <div className="mx-auto flex max-w-3xl items-center gap-2 px-4 py-2.5">
+            {/* Back — matches the site: an icon-only ChevronLeft on mobile (like
+                the top bar), a labelled ArrowLeft on desktop (like detail pages). */}
             <button
               type="button"
               onClick={goBack}
               aria-label="Go back"
-              className="rounded-lg p-2 text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-foreground transition-colors active:bg-surface-2 nav:hidden"
             >
-              {BackIcon}
+              <ChevronLeft className="h-6.5 w-6.5" strokeWidth={2.75} />
+            </button>
+            <button
+              type="button"
+              onClick={goBack}
+              className="hidden shrink-0 items-center gap-1 text-sm font-medium text-muted transition-colors hover:text-foreground nav:inline-flex"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              Back
             </button>
             <Link
               href={`/boardgames/${slug}`}

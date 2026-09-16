@@ -12,6 +12,7 @@ import {
 import { LayoutGrid, MessageCircle, Trophy, LogIn } from "lucide-react";
 import { api } from "@/convex/_generated/api";
 import { UserMenu } from "@/components/UserMenu";
+import { NavSearch } from "@/components/NavSearch";
 import { NotificationsBell } from "@/components/notifications/NotificationsBell";
 import { AvatarImg } from "@/components/ui/Avatar";
 import { cn } from "@/lib/cn";
@@ -93,6 +94,7 @@ export function Header() {
         </nav>
         {/* Desktop only — on mobile these live in the bottom nav's "More" sheet. */}
         <div className="ml-auto hidden items-center gap-1.5 sm:flex">
+          <NavSearch />
           <AuthLoading>
             <div className="h-9 w-9 animate-pulse rounded-full bg-surface-2" />
           </AuthLoading>

@@ -49,6 +49,7 @@ import type * as lib_embedding from "../lib/embedding.js";
 import type * as lib_extraction from "../lib/extraction.js";
 import type * as lib_feed from "../lib/feed.js";
 import type * as lib_gameCover from "../lib/gameCover.js";
+import type * as lib_gameFilters from "../lib/gameFilters.js";
 import type * as lib_gameSearch from "../lib/gameSearch.js";
 import type * as lib_gameSort from "../lib/gameSort.js";
 import type * as lib_media from "../lib/media.js";
@@ -126,6 +127,7 @@ declare const fullApi: ApiFromModules<{
   "lib/extraction": typeof lib_extraction;
   "lib/feed": typeof lib_feed;
   "lib/gameCover": typeof lib_gameCover;
+  "lib/gameFilters": typeof lib_gameFilters;
   "lib/gameSearch": typeof lib_gameSearch;
   "lib/gameSort": typeof lib_gameSort;
   "lib/media": typeof lib_media;
