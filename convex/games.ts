@@ -1141,6 +1141,21 @@ const metadataFields = {
   bgg: v.optional(bggStatsValidator),
 };
 
+/** Nudge the denormalized catalogue count on a base-game add/remove so the
+ *  library header stays live between reconciling recomputes. No-op until the
+ *  count doc exists (recomputeSimilarGames seeds + reconciles it). */
+async function adjustBaseGameCount(
+  ctx: MutationCtx,
+  delta: number,
+): Promise<void> {
+  const stats = await ctx.db.query("catalogueStats").first();
+  if (!stats) return;
+  await ctx.db.patch("catalogueStats", stats._id, {
+    baseGameCount: Math.max(0, stats.baseGameCount + delta),
+    updatedAt: Date.now(),
+  });
+}
+
 export const createGame = mutation({
   args: {
     title: v.string(),
@@ -1189,6 +1204,8 @@ export const createGame = mutation({
       ...sortKeys({ title, year: args.year, bgg: args.bgg }),
       contentUpdatedAt: Date.now(),
     });
+    // A new non-expansion game joins the library — keep the cached total live.
+    if (!args.isExpansion) await adjustBaseGameCount(ctx, 1);
     // Adopt any collection rows already pointing at this BGG id.
     if (args.bggId) {
       await ctx.scheduler.runAfter(0, internal.bggSync.relinkGameToBggRows, {
@@ -1240,6 +1257,12 @@ export const updateGame = mutation({
     );
     patch.contentUpdatedAt = Date.now();
     await ctx.db.patch("games", gameId, patch);
+
+    // A stub promoted to a real (non-expansion) game joins the library — bump
+    // the cached total so it stays live between reconciling recomputes.
+    if (game.isStub && !(rest.isExpansion ?? game.isExpansion)) {
+      await adjustBaseGameCount(ctx, 1);
+    }
 
     // Newly-set BGG id: adopt the collection rows that were waiting for it.
     if (rest.bggId && rest.bggId !== game.bggId) {
@@ -1586,6 +1609,8 @@ export const deleteGame = mutation({
     await requireAdmin(ctx);
     const game = await ctx.db.get("games", gameId);
     if (!game) return;
+    // A real (non-expansion) game leaving the library — keep the total live.
+    if (!game.isStub && !game.isExpansion) await adjustBaseGameCount(ctx, -1);
     await purgeGame(ctx, game);
   },
 });
