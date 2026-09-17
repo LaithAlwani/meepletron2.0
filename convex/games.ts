@@ -568,10 +568,28 @@ export const libraryGames = query({
   },
 });
 
-/** Exact count for the current library filters (drives the header total). */
+/** Count for the current library filters (drives the header total). */
 export const libraryCount = query({
   args: libraryFilterArgs,
   handler: async (ctx, f) => {
+    // The unfiltered total is the common case, changes slowly, and is otherwise
+    // a 2,000-doc scan that re-runs on every game write for every viewer. Read
+    // the denormalized count (refreshed daily by recomputeSimilarGames) instead;
+    // its read-set is one small doc, so it barely ever re-executes. Any active
+    // filter still needs the exact scan.
+    const unfiltered =
+      !f.term?.trim() &&
+      f.players == null &&
+      f.time == null &&
+      !f.hasExpansions &&
+      !f.chatOnly &&
+      !f.categories?.length &&
+      !f.mechanics?.length;
+    if (unfiltered) {
+      const stats = await ctx.db.query("catalogueStats").first();
+      if (stats) return stats.baseGameCount;
+      // Not populated yet (before the first cron run) — fall back to the scan.
+    }
     const filtered = await filteredLibrary(ctx, f);
     return filtered.length;
   },
@@ -928,6 +946,23 @@ export const recomputeSimilarGames = internalMutation({
         q.eq("isStub", false).eq("isExpansion", false),
       )
       .take(2000);
+
+    // Denormalize the catalogue total off the back of this scan, so the library
+    // header (games.libraryCount) reads one small doc instead of re-scanning
+    // every game on every view + every game write.
+    const stats = await ctx.db.query("catalogueStats").first();
+    if (stats) {
+      await ctx.db.patch("catalogueStats", stats._id, {
+        baseGameCount: games.length,
+        updatedAt: Date.now(),
+      });
+    } else {
+      await ctx.db.insert("catalogueStats", {
+        baseGameCount: games.length,
+        updatedAt: Date.now(),
+      });
+    }
+
     const feats = games.map(toSimFeat);
     let updated = 0;
     for (let i = 0; i < games.length; i++) {

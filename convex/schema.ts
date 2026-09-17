@@ -499,6 +499,15 @@ export default defineSchema({
     hydeEnabled: v.optional(v.boolean()),
   }),
 
+  // Denormalized catalogue totals (single row), refreshed by the daily
+  // recomputeSimilarGames cron. Lets the library header read the total from one
+  // small doc instead of scanning every game on each view — and, crucially,
+  // without a 2,000-doc reactive subscription that re-reads on every game write.
+  catalogueStats: defineTable({
+    baseGameCount: v.number(), // non-stub, non-expansion games (the library set)
+    updatedAt: v.number(),
+  }),
+
   usageLog: defineTable({
     purpose: v.union(
       v.literal("chat-answer"),
