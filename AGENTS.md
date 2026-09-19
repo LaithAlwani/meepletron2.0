@@ -17,3 +17,10 @@ Convex agent skills for common tasks can be installed by running
 `npx convex ai-files install`.
 
 <!-- convex-ai-end -->
+
+## Deployment
+
+Vercel's build command runs `convex deploy` alongside `next build` — it's set
+in the Vercel project, not in `package.json`, so the repo doesn't show it. A
+new Convex function therefore ships with the frontend that calls it; there's
+no separate deploy step to remember.
