@@ -11,6 +11,7 @@ import { GameCard } from "@/components/boardgames/GameCard";
 import { CardRail } from "@/components/boardgames/CardRail";
 import { FilterDrawer } from "@/components/boardgames/FilterDrawer";
 import { useLibraryFilters } from "@/components/boardgames/useLibraryFilters";
+import { SearchTermChip } from "@/components/boardgames/SearchTermChip";
 import { SortControl } from "@/components/boardgames/SortControl";
 import { ChatReadyToggle } from "@/components/boardgames/ChatReadyToggle";
 import { CollectionSection } from "@/components/collection/CollectionSection";
@@ -22,7 +23,7 @@ function LibraryInner() {
   // The nav search deep-links here as /boardgames?q=… — the term seeds the
   // results row; "View all" carries it into the full grid.
   const q = useSearchParams().get("q") ?? undefined;
-  const { searching, filters, setFilters, sort, setSort, clear, args, activeCount } =
+  const { term, searching, filters, setFilters, sort, setSort, clear, args, activeCount } =
     useLibraryFilters(undefined, undefined, q);
   const [drawerOpen, setDrawerOpen] = useState(false);
 
@@ -97,13 +98,20 @@ function LibraryInner() {
         </div>
       </div>
 
-      {activeCount > 0 && (
-        <button
-          onClick={clear}
-          className="mb-4 text-sm font-semibold text-accent hover:underline"
-        >
-          Clear all filters
-        </button>
+      {/* What's narrowing the page, and how to undo it. The term only lives in
+          the URL, so without the chip it filters invisibly. */}
+      {(term || activeCount > 0) && (
+        <div className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-2">
+          <SearchTermChip term={term} />
+          {activeCount > 0 && (
+            <button
+              onClick={clear}
+              className="text-sm font-semibold text-accent hover:underline"
+            >
+              Clear all filters
+            </button>
+          )}
+        </div>
       )}
 
       {/* Board games rail — the search results (or a browse sample) */}
@@ -138,10 +146,17 @@ function LibraryInner() {
         ) : results.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-border p-10 text-center text-muted">
             <p className="font-medium">No games match.</p>
+            {/* This row is the local catalogue only — games we don't have yet
+                come from BoardGameGeek, which the full results page shows. */}
+            {searching && (
+              <Link href={allHref} className="mt-1 inline-block text-sm text-accent hover:underline">
+                Search BoardGameGeek for “{term}”
+              </Link>
+            )}
             {activeCount > 0 && (
               <button
                 onClick={clear}
-                className="mt-1 text-sm text-accent hover:underline"
+                className="mt-1 block w-full text-sm text-accent hover:underline"
               >
                 Clear filters
               </button>

@@ -11,6 +11,7 @@ import { PreviewCard, PreviewRow } from "@/components/boardgames/PreviewCard";
 import { useBggSearch } from "@/components/boardgames/useBggSearch";
 import { FilterDrawer } from "@/components/boardgames/FilterDrawer";
 import { useLibraryFilters } from "@/components/boardgames/useLibraryFilters";
+import { SearchTermChip } from "@/components/boardgames/SearchTermChip";
 import { SortControl } from "@/components/boardgames/SortControl";
 import { ChatReadyToggle } from "@/components/boardgames/ChatReadyToggle";
 import { BackButton } from "@/components/ui/BackButton";
@@ -159,13 +160,20 @@ function AllBoardgamesInner() {
         </div>
       </div>
 
-      {activeCount > 0 && (
-        <button
-          onClick={clear}
-          className="mb-4 text-sm font-semibold text-accent hover:underline"
-        >
-          Clear all filters
-        </button>
+      {/* What's narrowing the page, and how to undo it. The term only lives in
+          the URL, so without the chip it filters invisibly. */}
+      {(term || activeCount > 0) && (
+        <div className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-2">
+          <SearchTermChip term={term} />
+          {activeCount > 0 && (
+            <button
+              onClick={clear}
+              className="text-sm font-semibold text-accent hover:underline"
+            >
+              Clear all filters
+            </button>
+          )}
+        </div>
       )}
 
       {/* Content */}

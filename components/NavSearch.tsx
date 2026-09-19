@@ -2,7 +2,7 @@
 
 import { useEffect, useId, useRef, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { Search, X, ArrowRight, Star, Download } from "lucide-react";
 import { Die } from "@/components/ui/icons";
 import {
@@ -25,6 +25,9 @@ import { cn } from "@/lib/cn";
  */
 export function NavSearch({ overlay = false }: { overlay?: boolean }) {
   const router = useRouter();
+  // `usePathname` (unlike `useSearchParams`) doesn't opt the whole app out of
+  // static rendering, and this component sits in the root layout.
+  const pathname = usePathname() ?? "/boardgames";
   const [open, setOpen] = useState(false);
   const [term, setTerm] = useState("");
   // -1 = nothing picked, so Enter falls through to "see all results".
@@ -52,6 +55,23 @@ export function NavSearch({ overlay = false }: { overlay?: boolean }) {
     return () => document.removeEventListener("pointerdown", onPointerDown);
   }, [open]);
 
+  /**
+   * Open seeded with the term already filtering the page. A results page has no
+   * search box of its own, so the box is the only place that term can be read
+   * or edited — opening empty made it look like nothing was being searched.
+   */
+  function openSearch() {
+    let seed = "";
+    try {
+      seed = new URLSearchParams(window.location.search).get("q")?.trim() ?? "";
+    } catch {
+      /* no query to read */
+    }
+    setTerm(seed);
+    setHighlight(-1);
+    setOpen(true);
+  }
+
   function close() {
     setOpen(false);
     setTerm("");
@@ -62,7 +82,13 @@ export function NavSearch({ overlay = false }: { overlay?: boolean }) {
   function seeAll() {
     const q = term.trim();
     close();
-    router.push(q ? `/boardgames/all?q=${encodeURIComponent(q)}` : "/boardgames");
+    if (q) {
+      router.push(`/boardgames/all?q=${encodeURIComponent(q)}`);
+      return;
+    }
+    // Submitted empty — drop the ?q= narrowing the page we're on rather than
+    // leaving the old term in the URL.
+    router.push(pathname.startsWith("/boardgames") ? pathname : "/boardgames");
   }
 
   function go(href: string) {
@@ -132,7 +158,7 @@ export function NavSearch({ overlay = false }: { overlay?: boolean }) {
     return (
       <button
         type="button"
-        onClick={() => setOpen(true)}
+        onClick={openSearch}
         aria-label="Search games"
         title="Search games"
         className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
