@@ -22,7 +22,7 @@ const gridClass = "grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4";
 function AllBoardgamesInner() {
   // The nav search deep-links here as /boardgames/all?q=…
   const q = useSearchParams().get("q") ?? undefined;
-  const { debounced, searching, filters, setFilters, sort, setSort, clear, args, activeCount } =
+  const { term, searching, filters, setFilters, sort, setSort, clear, args, activeCount } =
     useLibraryFilters(undefined, undefined, q);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [view, setView] = useState<View>("grid");
@@ -62,8 +62,8 @@ function AllBoardgamesInner() {
 
   const logSearch = useMutation(api.search.logSearch);
   useEffect(() => {
-    if (searching) void logSearch({ term: debounced });
-  }, [debounced, searching, logSearch]);
+    if (searching) void logSearch({ term });
+  }, [term, searching, logSearch]);
 
   // Wider "not in our library yet" search from BoardGameGeek (deduped). Skipped
   // when the chat-ready filter is on: BGG hits have no rulebook, so they can
@@ -72,7 +72,7 @@ function AllBoardgamesInner() {
     results.map((g) => g.bggId).filter((x): x is string => !!x),
   );
   const { results: bggResults, pending: bggPending } = useBggSearch(
-    searching && !filters.chatOnly ? debounced : "",
+    searching && !filters.chatOnly ? term : "",
     catalogBggIds,
   );
 
@@ -184,7 +184,7 @@ function AllBoardgamesInner() {
         ) : (
           <div className="flex flex-col items-center gap-2 py-20 text-center">
             <p className="font-semibold">
-              {searching ? `No results for “${debounced}”` : "No games match these filters"}
+              {searching ? `No results for “${term}”` : "No games match these filters"}
             </p>
             {activeCount > 0 && (
               <button onClick={clear} className="text-sm text-accent hover:underline">

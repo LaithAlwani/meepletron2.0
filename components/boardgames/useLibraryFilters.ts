@@ -53,22 +53,25 @@ export function countActiveFilters(f: LibraryFilterState): number {
 }
 
 /**
- * Shared search-term + filter state for a game list, persisted to sessionStorage
- * so navigating away and back (or "View all") keeps your context — which also
- * lets scroll restoration reconstruct the exact same list. Pass a `storageKey`
- * for an independent list (e.g. one collection status) and a `defaultSort` to
- * override the library default. Exposes a debounced Convex-args object.
+ * Shared search-term + filter state for a game list. The term comes from the
+ * URL (?q=…); the filters are persisted to sessionStorage, so navigating away
+ * and back (or "View all") keeps your context — which also lets scroll
+ * restoration reconstruct the exact same list. Pass a `storageKey` for an
+ * independent list (e.g. one collection status) and a `defaultSort` to override
+ * the library default. Exposes a ready-made Convex-args object.
  */
 export function useLibraryFilters(
   storageKey: string = DEFAULT_KEY,
   defaultSort: GameSortKey = DEFAULT_SORT,
-  // A search term from the URL (?q=…). When present it seeds the term and wins
-  // over whatever was persisted — the nav search deep-links straight to results.
-  initialTerm?: string,
+  // The search term, from the URL (?q=…) — the nav search deep-links straight
+  // to results. Read through on every render rather than copied into state:
+  // these pages have no search box of their own, and a term held in state
+  // outlives the navigation that changed it, so the previous search's results
+  // stay on screen.
+  urlTerm?: string,
 ) {
   const KEY = storageKey;
-  const [term, setTerm] = useState("");
-  const [debounced, setDebounced] = useState("");
+  const term = urlTerm?.trim() ?? "";
   const [filters, setFilters] = useState<LibraryFilterState>(EMPTY_FILTERS);
   const [sort, setSort] = useState<GameSortKey>(defaultSort);
   const [hydrated, setHydrated] = useState(false);
@@ -91,21 +94,10 @@ export function useLibraryFilters(
       } catch {
         /* ignore malformed state */
       }
-      // The search term is URL-driven (?q=…) and never persisted, so a stale
-      // term can't linger on a page that has no search box to clear it.
-      const seed = initialTerm?.trim() ?? "";
-      setTerm(seed);
-      setDebounced(seed);
       setHydrated(true);
     });
     return () => cancelAnimationFrame(id);
-  }, [KEY, initialTerm]);
-
-  // Debounce the search term feeding the query.
-  useEffect(() => {
-    const t = setTimeout(() => setDebounced(term.trim()), 400);
-    return () => clearTimeout(t);
-  }, [term]);
+  }, [KEY]);
 
   // Persist filters + sort after hydration (the term stays out of storage — it
   // lives in the URL).
@@ -118,14 +110,12 @@ export function useLibraryFilters(
     }
   }, [KEY, filters, sort, hydrated]);
 
-  const args = useMemo(() => toLibraryArgs(debounced, filters), [debounced, filters]);
+  const args = useMemo(() => toLibraryArgs(term, filters), [term, filters]);
   const activeCount = countActiveFilters(filters);
-  const searching = debounced.length >= 2;
+  const searching = term.length >= 2;
 
   return {
     term,
-    setTerm,
-    debounced,
     searching,
     filters,
     setFilters,

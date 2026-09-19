@@ -178,6 +178,65 @@ export const searchPaginated = query({
 });
 
 /**
+ * Compact title matches for the nav search dropdown — a handful of rows with
+ * just enough to render a suggestion (thumbnail + the players/time/year line).
+ * Deliberately separate from `searchPaginated`: this runs on every (debounced)
+ * keystroke, so it reads one short page and skips the heavy card projection.
+ */
+export const suggest = query({
+  args: { term: v.string(), limit: v.optional(v.number()) },
+  handler: async (ctx, { term, limit }) => {
+    const trimmed = term.trim();
+    if (trimmed.length < 2) return [];
+    const max = Math.max(1, Math.min(limit ?? 8, 20));
+    const hits = await ctx.db
+      .query("games")
+      .withSearchIndex("search_text", (q) =>
+        q.search("searchText", trimmed).eq("isExpansion", false).eq("isStub", false),
+      )
+      .take(max * 3);
+
+    // The full-text index is typo-tolerant, which for short queries drags in
+    // unrelated games ("wall" → "ball"). Keep only rows that actually contain
+    // every typed term (same guard as `searchPaginated`).
+    const terms = trimmed.toLowerCase().split(/\s+/).filter(Boolean);
+    const needle = trimmed.toLowerCase();
+    const ranked = hits
+      .filter((g) => {
+        const hay = (g.searchText ?? g.title).toLowerCase();
+        return terms.every((t) => hay.includes(t));
+      })
+      // A title hit beats a designer/publisher/category hit, and a title that
+      // *starts* with what was typed beats one that merely contains it.
+      .map((g) => {
+        const title = g.title.toLowerCase();
+        return { g, rank: title.startsWith(needle) ? 0 : title.includes(needle) ? 1 : 2 };
+      })
+      .sort((a, b) => a.rank - b.rank)
+      .slice(0, max);
+
+    return await Promise.all(
+      ranked.map(async ({ g }) => {
+        const { thumbnailUrl } = await coverUrls(ctx, g);
+        return {
+          _id: g._id,
+          slug: g.slug,
+          title: g.title,
+          year: g.year ?? null,
+          minPlayers: g.minPlayers ?? null,
+          maxPlayers: g.maxPlayers ?? null,
+          minPlayTime: g.minPlayTime ?? null,
+          maxPlayTime: g.maxPlayTime ?? null,
+          rating: g.bggRating ?? null,
+          bggId: g.bggId ?? null,
+          thumbUrl: thumbnailUrl,
+        };
+      }),
+    );
+  },
+});
+
+/**
  * Fuzzy-resolve a free-text game name to base-game candidates for the assistant,
  * best match first. Tolerant of spacing, punctuation and typos ("lord's of water
  * deep" → "Lords of Waterdeep", "blook" → Blood Rage / Blokus) so a loosely-typed

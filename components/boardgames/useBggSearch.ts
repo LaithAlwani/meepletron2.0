@@ -35,6 +35,17 @@ export function bggDetail(h: BggHit): string {
 }
 
 /**
+ * Where a BGG hit routes to: the import loader, which fetches + saves the game
+ * and lands on its real detail page. The title/cover ride along so the loader
+ * can show the game while it works.
+ */
+export function bggImportHref(hit: BggHit): string {
+  const params = new URLSearchParams({ title: hit.name });
+  if (hit.thumbUrl) params.set("cover", hit.thumbUrl);
+  return `/boardgames/import/${hit.bggId}?${params.toString()}`;
+}
+
+/**
  * Debounced "not in our library yet" search against BoardGameGeek. Returns hits
  * for the current term only (stale terms yield []), optionally excluding bgg ids
  * already shown from the local catalogue. `pending` is true while a search for

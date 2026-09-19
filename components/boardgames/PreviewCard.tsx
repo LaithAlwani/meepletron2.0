@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Users, Clock, Star } from "lucide-react";
 import { formatPlayTime } from "@/lib/format";
 import { Die } from "@/components/ui/icons";
-import type { BggHit } from "./useBggSearch";
+import { bggImportHref, type BggHit } from "./useBggSearch";
 
 /**
  * A game we don't have locally yet, rendered to look exactly like a catalogue
@@ -10,12 +10,6 @@ import type { BggHit } from "./useBggSearch";
  * lands on the real detail page. Deliberately indistinguishable from a library
  * game (no collection controls — there's no local id until it's saved).
  */
-function importHref(hit: BggHit) {
-  const params = new URLSearchParams({ title: hit.name });
-  if (hit.thumbUrl) params.set("cover", hit.thumbUrl);
-  return `/boardgames/import/${hit.bggId}?${params.toString()}`;
-}
-
 export function PreviewCard({ hit, index = 0 }: { hit: BggHit; index?: number }) {
   const players =
     hit.minPlayers && hit.maxPlayers
@@ -25,7 +19,7 @@ export function PreviewCard({ hit, index = 0 }: { hit: BggHit; index?: number })
       : null;
   const time = formatPlayTime(hit.minPlayTime ?? undefined, hit.maxPlayTime ?? undefined);
   const cover = hit.thumbUrl;
-  const href = importHref(hit);
+  const href = bggImportHref(hit);
 
   return (
     <div
@@ -108,7 +102,7 @@ export function PreviewRow({ hit }: { hit: BggHit }) {
     hit.year,
   ].filter(Boolean);
   const cover = hit.thumbUrl;
-  const href = importHref(hit);
+  const href = bggImportHref(hit);
 
   return (
     <div className="flex items-center gap-3 py-3">
