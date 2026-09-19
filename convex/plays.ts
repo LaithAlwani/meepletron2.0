@@ -17,6 +17,7 @@ import {
   coopOutcomeValidator,
   playVisibilityValidator,
   playTeamValidator,
+  playExpansionValidator,
 } from "./lib/playTypes";
 import { syncPlayPost, deletePlayPost } from "./lib/feed";
 import { thumbUrl, coverUrls } from "./lib/gameCover";
@@ -37,6 +38,7 @@ import { imageUrl } from "./lib/media";
  */
 
 const PLAYERS_MAX = 30;
+const EXPANSIONS_MAX = 40;
 const STATS_SCAN = 1000; // bounded rows a stats query reads
 const SWEEP_BATCH = 200; // rows a purge pass deletes before rescheduling
 const PEOPLE_SCAN = 1000; // bounded plays scanned when editing a saved person
@@ -160,6 +162,8 @@ export async function playCard(
       placement: p.placement ?? null,
     })),
     winners: winnerNamesOf(resolved),
+    // Expansion titles only — the card just needs to say which were on the table.
+    expansions: (play.expansions ?? []).map((e) => e.title),
     postId: post?._id ?? null,
     reactionCount: post?.reactionCount ?? 0,
     commentCount: post?.commentCount ?? 0,
@@ -255,6 +259,7 @@ const playBodyValidator = {
   coopScore: v.optional(v.number()),
   teams: v.optional(v.array(playTeamValidator)),
   players: v.array(playerInputValidator),
+  expansions: v.optional(v.array(playExpansionValidator)),
   photoKeys: v.optional(v.array(v.string())),
   visibility: playVisibilityValidator,
 };
@@ -265,6 +270,70 @@ export function keepPhotoKeys(keys?: string[]): string[] | undefined {
   if (!keys || keys.length === 0) return undefined;
   const kept = keys.slice(0, 12);
   return kept.length ? kept : undefined;
+}
+
+/**
+ * Settle what game a play is actually against, and which expansions were used.
+ *
+ * **An expansion is never the logged game.** The wizard already logs against
+ * the base game, but a play can arrive from a deep link, an older client or a
+ * BGG import pointing straight at an expansion — so if `gameId` is one, fold it
+ * into its parent and record it among the expansions used instead. A play of
+ * "Gloomhaven: Forgotten Circles" is a Gloomhaven play with that expansion on
+ * the table, which is what makes per-game stats and streaks add up.
+ */
+export async function resolveGameAndExpansions(
+  ctx: MutationCtx,
+  args: {
+    gameId?: Id<"games">;
+    bggId?: string;
+    title: string;
+    expansions?: Infer<typeof playExpansionValidator>[];
+  },
+): Promise<{
+  gameId?: Id<"games">;
+  bggId?: string;
+  title: string;
+  expansions?: Infer<typeof playExpansionValidator>[];
+}> {
+  let { gameId, bggId, title } = args;
+  const used = [...(args.expansions ?? [])];
+
+  const game = gameId ? await ctx.db.get("games", gameId) : null;
+  if (game?.isExpansion && game.parentId) {
+    const parent = await ctx.db.get("games", game.parentId);
+    if (parent) {
+      gameId = parent._id;
+      bggId = parent.bggId;
+      title = parent.title;
+      used.unshift({
+        gameId: game._id,
+        bggId: game.bggId,
+        title: game.title,
+      });
+    }
+  }
+
+  // Trim, drop blanks, de-dupe (a folded-in parent can repeat a checked box),
+  // and cap — the list lives inline on the play row.
+  const seen = new Set<string>();
+  const expansions = used
+    .map((e) => ({ ...e, title: e.title.trim() }))
+    .filter((e) => {
+      if (!e.title) return false;
+      const key = e.gameId ?? `t:${e.title.toLowerCase()}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .slice(0, EXPANSIONS_MAX);
+
+  return {
+    gameId,
+    bggId,
+    title: title.trim(),
+    expansions: expansions.length ? expansions : undefined,
+  };
 }
 
 /**
@@ -459,13 +528,15 @@ export const logPlay = mutation({
       players,
     );
     const photoKeys = keepPhotoKeys(args.photoKeys);
+    // An expansion is never the logged game — this folds one into its base game.
+    const subject = await resolveGameAndExpansions(ctx, args);
     const now = Date.now();
 
     const playId = await ctx.db.insert("plays", {
       userId: user._id,
-      gameId: args.gameId,
-      bggId: args.bggId,
-      title: args.title.trim() || "Untitled game",
+      gameId: subject.gameId,
+      bggId: subject.bggId,
+      title: subject.title || "Untitled game",
       date: args.date,
       lengthMinutes: args.lengthMinutes,
       location: args.location?.trim() || undefined,
@@ -476,6 +547,7 @@ export const logPlay = mutation({
       coopScore: args.format === "cooperative" ? args.coopScore : undefined,
       teams: derived.teams,
       players: derived.players,
+      expansions: subject.expansions,
       photoKeys,
       visibility: args.visibility,
       source: "manual",
@@ -486,7 +558,7 @@ export const logPlay = mutation({
     // The owner is always a participant of a play they logged.
     await writeParticipants(
       ctx,
-      { _id: playId, userId: user._id, gameId: args.gameId, date: args.date, visibility: args.visibility },
+      { _id: playId, userId: user._id, gameId: subject.gameId, date: args.date, visibility: args.visibility },
       [{ userId: user._id }, ...participants],
     );
     // A public play appears in the feed as a post.
@@ -499,7 +571,7 @@ export const logPlay = mutation({
     await scheduleTagEmails(ctx, {
       ownerName: user.name ?? user.username ?? "Someone",
       playId,
-      playTitle: args.title.trim() || "a game",
+      playTitle: subject.title || "a game",
       notify,
     });
     // In-app notification for tagged account players.
@@ -534,6 +606,8 @@ export const updatePlay = mutation({
       players,
     );
     const photoKeys = keepPhotoKeys(args.photoKeys);
+    // An expansion is never the logged game — this folds one into its base game.
+    const subject = await resolveGameAndExpansions(ctx, args);
     // Delete photos removed in the edit (by R2 key).
     const removed = (play.photoKeys ?? []).filter(
       (k) => !(photoKeys ?? []).includes(k),
@@ -545,9 +619,9 @@ export const updatePlay = mutation({
     }
 
     await ctx.db.patch("plays", playId, {
-      gameId: args.gameId,
-      bggId: args.bggId,
-      title: args.title.trim() || play.title,
+      gameId: subject.gameId,
+      bggId: subject.bggId,
+      title: subject.title || play.title,
       date: args.date,
       lengthMinutes: args.lengthMinutes,
       location: args.location?.trim() || undefined,
@@ -558,6 +632,7 @@ export const updatePlay = mutation({
       coopScore: args.format === "cooperative" ? args.coopScore : undefined,
       teams: derived.teams,
       players: derived.players,
+      expansions: subject.expansions,
       photoKeys,
       photoIds: photoKeys && photoKeys.length ? undefined : play.photoIds,
       visibility: args.visibility,
@@ -569,7 +644,7 @@ export const updatePlay = mutation({
     await clearParticipants(ctx, playId);
     await writeParticipants(
       ctx,
-      { _id: playId, userId: user._id, gameId: args.gameId, date: args.date, visibility: args.visibility },
+      { _id: playId, userId: user._id, gameId: subject.gameId, date: args.date, visibility: args.visibility },
       [{ userId: user._id }, ...participants],
     );
     // Add/remove the feed post to match the (possibly changed) visibility.
@@ -582,7 +657,7 @@ export const updatePlay = mutation({
     await scheduleTagEmails(ctx, {
       ownerName: user.name ?? user.username ?? "Someone",
       playId,
-      playTitle: args.title.trim() || play.title,
+      playTitle: subject.title || play.title,
       notify,
     });
     // Notify only account players added in this edit (not the ones already on it).
@@ -812,9 +887,18 @@ export const getPlay = query({
           q.eq("userId", viewer._id).eq("postId", post._id),
         )
         .unique()) != null;
+    // Expansions used, with a slug each so the detail page can link them.
+    const expansions = await Promise.all(
+      (play.expansions ?? []).map(async (e) => {
+        const doc = e.gameId ? await ctx.db.get("games", e.gameId) : null;
+        // Keep the ids: an edit round-trips this straight back into the wizard.
+        return { ...e, slug: doc?.slug ?? null };
+      }),
+    );
     return {
       ...play,
       players,
+      expansions,
       isOwner,
       gameSlug: cover?.slug ?? null,
       coverUrl: cover?.coverUrl ?? null,

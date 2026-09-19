@@ -12,6 +12,7 @@ import {
   Pencil,
   Clock,
   MapPin,
+  Puzzle,
   Users,
   Heart,
   MessageCircle,
@@ -314,6 +315,34 @@ export default function PlayPage({
           {play.coopScore != null && (
             <span className="ml-2 tabular-nums">· {play.coopScore} pts</span>
           )}
+        </div>
+      )}
+
+      {/* Expansions used — the play itself is always the base game. */}
+      {play.expansions.length > 0 && (
+        <div className="mt-5 rounded-2xl border border-border bg-surface p-4">
+          <p className="mb-2 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.12em] text-subtle">
+            <Puzzle className="h-3.5 w-3.5" />
+            Expansions used
+          </p>
+          <ul className="flex flex-wrap gap-1.5">
+            {play.expansions.map((e, i) => (
+              <li key={e.gameId ?? `${e.title}-${i}`}>
+                {e.slug ? (
+                  <Link
+                    href={`/boardgames/${e.slug}`}
+                    className="inline-block rounded-full bg-surface-2 px-2.5 py-1 text-sm font-medium transition-colors hover:text-accent"
+                  >
+                    {e.title}
+                  </Link>
+                ) : (
+                  <span className="inline-block rounded-full bg-surface-2 px-2.5 py-1 text-sm font-medium text-muted">
+                    {e.title}
+                  </span>
+                )}
+              </li>
+            ))}
+          </ul>
         </div>
       )}
 

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Trophy, Lock, Clock, Dices } from "lucide-react";
+import { Trophy, Lock, Clock, Dices, Puzzle } from "lucide-react";
 import { Thumb } from "@/components/top-games/Thumb";
 import { formatPlayTime } from "@/lib/format";
 import { cn } from "@/lib/cn";
@@ -114,7 +114,20 @@ export type PlayCardData = {
   playerCount: number;
   players: { name: string; avatarUrl: string | null; username?: string | null }[];
   winners: string[];
+  /** Titles of the expansions used, if any. */
+  expansions?: string[];
 };
+
+/**
+ * "with Forgotten Circles" / "with 3 expansions" — a play is always logged
+ * against its base game, so this is the only place the card says an expansion
+ * was on the table. One name reads better than a count; past that, count.
+ */
+export function expansionSummary(titles: string[] | undefined): string | null {
+  if (!titles || titles.length === 0) return null;
+  if (titles.length === 1) return `with ${titles[0]}`;
+  return `with ${titles.length} expansions`;
+}
 
 export function PlayCard({ play }: { play: PlayCardData }) {
   const cover = play.photoUrl ?? play.coverUrl;
@@ -158,6 +171,12 @@ export function PlayCard({ play }: { play: PlayCardData }) {
             {FORMAT_LABEL[play.format] ?? play.format}
           </span>
         </div>
+        {expansionSummary(play.expansions) && (
+          <p className="mt-0.5 flex items-center gap-1 text-xs text-muted">
+            <Puzzle className="h-3 w-3 shrink-0" />
+            <span className="truncate">{expansionSummary(play.expansions)}</span>
+          </p>
+        )}
         {play.winners.length > 0 && (
           <p className="mt-0.5 inline-flex items-center gap-1 truncate text-xs font-semibold text-accent-2">
             <Trophy className="h-3 w-3 shrink-0" />

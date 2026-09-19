@@ -9,6 +9,7 @@ import {
   MessageCircle,
   Trophy,
   Dices,
+  Puzzle,
   Lock,
   MoreVertical,
   Pencil,
@@ -19,7 +20,12 @@ import {
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { Thumb } from "@/components/top-games/Thumb";
-import { FORMAT_LABEL, playDate, AvatarStack } from "@/components/plays/PlayCard";
+import {
+  FORMAT_LABEL,
+  playDate,
+  AvatarStack,
+  expansionSummary,
+} from "@/components/plays/PlayCard";
 import { PhotoCarousel } from "@/components/plays/PhotoCarousel";
 import { CommentsDrawer } from "@/components/plays/CommentsDrawer";
 import {
@@ -141,6 +147,12 @@ export function PlayPostCard({ play }: { play: PlayPostData }) {
                 {FORMAT_LABEL[play.format] ?? play.format}
               </span>
             </div>
+            {expansionSummary(play.expansions) && (
+              <p className="mt-0.5 flex items-center gap-1 text-xs text-muted">
+                <Puzzle className="h-3 w-3 shrink-0" />
+                <span className="truncate">{expansionSummary(play.expansions)}</span>
+              </p>
+            )}
             {play.winners.length > 0 && (
               <p className="mt-0.5 inline-flex items-center gap-1 truncate text-xs font-semibold text-accent-2">
                 <Trophy className="h-3 w-3 shrink-0" />

@@ -250,6 +250,19 @@ export default function GameDetailPage({
   const chatHref = game.parent
     ? `/boardgames/${game.parent.slug}/chat?module=${game._id}`
     : `/boardgames/${game.slug}/chat`;
+  // An expansion is never the logged game: logging from one records a play of
+  // the base game, with this expansion already ticked on the wizard's list.
+  const playGame = game.parent
+    ? {
+        gameId: game.parent._id,
+        bggId: game.parent.bggId ?? undefined,
+        title: game.parent.title,
+        coverUrl: game.parent.imageUrl ?? game.parent.thumbnailUrl ?? null,
+      }
+    : { gameId, bggId: game.bggId ?? undefined, title: game.title, coverUrl: cover };
+  const playExpansions = game.parent
+    ? [{ gameId, bggId: game.bggId ?? undefined, title: game.title }]
+    : undefined;
 
   return (
     <>
@@ -557,12 +570,8 @@ export default function GameDetailPage({
       <LogPlayWizard
         open={logOpen}
         onClose={() => setLogOpen(false)}
-        initialGame={{
-          gameId,
-          bggId: game.bggId ?? undefined,
-          title: game.title,
-          coverUrl: cover,
-        }}
+        initialGame={playGame}
+        initialExpansions={playExpansions}
       />
     </>
   );

@@ -21,6 +21,7 @@ import {
   MAX_ATTEMPTS,
 } from "./lib/bggFetch";
 import { seal } from "./lib/bggCrypto";
+import { resolveGameAndExpansions } from "./plays";
 import {
   parseCollectionXml,
   parsePlaysXml,
@@ -1456,6 +1457,13 @@ export const upsertPlays = internalMutation({
     const titles: string[] = [];
     for (const play of plays) {
       const gameId = await linkPlayGame(ctx, play.bggId, play.title);
+      // An expansion is never the logged game: BGG happily records a play
+      // against one, so fold it into its base game and note the expansion.
+      const subject = await resolveGameAndExpansions(ctx, {
+        gameId,
+        bggId: play.bggId,
+        title: play.title,
+      });
 
       const players = (play.players ?? []).map((p) => {
         const scoreNum = p.score != null ? Number(p.score) : NaN;
@@ -1495,9 +1503,10 @@ export const upsertPlays = internalMutation({
       const now = Date.now();
       const body = {
         userId: job.userId,
-        gameId,
-        bggId: play.bggId,
-        title: play.title,
+        gameId: subject.gameId,
+        bggId: subject.bggId,
+        title: subject.title || play.title,
+        expansions: subject.expansions,
         date: play.date,
         lengthMinutes: play.lengthMinutes,
         location: play.location,
@@ -1522,7 +1531,7 @@ export const upsertPlays = internalMutation({
         await ctx.db.insert("playParticipants", {
           playId,
           ownerId: job.userId,
-          gameId,
+          gameId: subject.gameId,
           date: play.date,
           visibility: "private",
           userId: job.userId,

@@ -52,6 +52,19 @@ export const playPlayerValidator = v.object({
   isNew: v.optional(v.boolean()), // first time this player played the game
 });
 
+/**
+ * An expansion used during a play. A play is always logged against the base
+ * game — an expansion is never the logged game — so the ones that were on the
+ * table are recorded here. Bounded (a base game rarely has more than a few
+ * dozen), so it stays embedded on the row like `players`; `title` is
+ * denormalized so the row still reads correctly if the game is later deleted.
+ */
+export const playExpansionValidator = v.object({
+  gameId: v.optional(v.id("games")),
+  bggId: v.optional(v.string()),
+  title: v.string(),
+});
+
 /** A team in a team-based (or one-vs-all) play. */
 export const playTeamValidator = v.object({
   name: v.string(),
@@ -77,6 +90,8 @@ export const playRowValidator = v.object({
   coopScore: v.optional(v.number()),
   teams: v.optional(v.array(playTeamValidator)),
   players: v.array(playPlayerValidator),
+  // Expansions used during this play (the base game is `gameId`/`title`).
+  expansions: v.optional(v.array(playExpansionValidator)),
   // `photoKeys` = R2 object keys (new, served from our CDN); `photoIds` = legacy
   // Convex blob ids (fallback until backfilled). A play uses one or the other.
   photoKeys: v.optional(v.array(v.string())),

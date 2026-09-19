@@ -45,6 +45,13 @@ export type WizardInitialGame = {
   coverUrl?: string | null;
 };
 
+/** An expansion that was on the table. Never the logged game itself. */
+export type PlayExpansion = {
+  gameId?: Id<"games">;
+  bggId?: string;
+  title: string;
+};
+
 /**
  * A prior play used to seed the wizard. With `playId` set it's an **edit** (all
  * fields prefilled; saving updates that play); without it, it's a **rematch** —
@@ -59,6 +66,7 @@ export type WizardInitialPlay = {
   coopScore?: number | null;
   teamNames?: string[];
   teamWinner?: number;
+  expansions?: PlayExpansion[];
   date?: string;
   lengthMinutes?: number | null;
   location?: string | null;
@@ -103,6 +111,12 @@ export function buildInitialPlay(
     format: play.format as WizardInitialPlay["format"],
     scoreMode: play.scoreMode as WizardInitialPlay["scoreMode"],
     teamNames,
+    // A rematch keeps the same setup, so the expansions carry over too.
+    expansions: play.expansions?.map((e) => ({
+      gameId: e.gameId,
+      bggId: e.bggId,
+      title: e.title,
+    })),
     players: play.players.map((p) => ({
       name: p.name,
       userId: p.userId,
@@ -168,13 +182,27 @@ function todayStr(): string {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
 
+/**
+ * The wizard's pages. Expansions sit right after the game + when/format page,
+ * while the table is still being set up and before anyone is scored.
+ */
+const STEP = {
+  game: 0,
+  when: 1,
+  expansions: 2,
+  players: 3,
+  scores: 4,
+  share: 5,
+} as const;
+const LAST_STEP = STEP.share;
+
 let KEY = 0;
 const nextKey = () => `p${++KEY}`;
 
 // Persist the from-scratch "Log a play" flow so an accidental dismiss (swipe,
 // backdrop, or the mobile keyboard/scroll) never loses progress — restored
 // until the user saves or explicitly discards.
-const DRAFT_KEY = "logplay-draft-v1";
+const DRAFT_KEY = "logplay-draft-v2";
 
 type StoredDraft = {
   step: number;
@@ -191,6 +219,7 @@ type StoredDraft = {
   teamNames: string[];
   teamWinner: number;
   players: PlayerForm[];
+  expansions: PlayExpansion[];
   visibility: "private" | "public";
 };
 
@@ -220,11 +249,15 @@ export function LogPlayWizard({
   open,
   onClose,
   initialGame,
+  initialExpansions,
   initialPlay,
 }: {
   open: boolean;
   onClose: () => void;
   initialGame?: WizardInitialGame;
+  /** Pre-checked expansions — e.g. opening the wizard from an expansion's page,
+   *  which logs the play against the base game with that expansion ticked. */
+  initialExpansions?: PlayExpansion[];
   initialPlay?: WizardInitialPlay;
 }) {
   const router = useRouter();
@@ -240,9 +273,16 @@ export function LogPlayWizard({
   const ip = initialPlay;
   const initTeamNames =
     ip?.teamNames && ip.teamNames.length >= 2 ? ip.teamNames : ["Team 1", "Team 2"];
-  // Edit reviews from the top (step 1); rematch jumps to the roster (step 2).
-  const initStep = ip ? (isEdit ? 1 : 2) : initialGame ? 1 : 0;
-  const minStep = ip || initialGame ? 1 : 0;
+  // Edit reviews from the top; a rematch jumps straight to the roster (its
+  // game, format and expansions all carry over from the play it repeats).
+  const initStep = ip
+    ? isEdit
+      ? STEP.when
+      : STEP.players
+    : initialGame
+      ? STEP.when
+      : STEP.game;
+  const minStep = ip || initialGame ? STEP.when : STEP.game;
   const makePlayers = (): PlayerForm[] =>
     ip
       ? ip.players.map((p) => ({
@@ -311,6 +351,9 @@ export function LogPlayWizard({
   const [players, setPlayers] = useState<PlayerForm[]>(
     () => draft?.players ?? makePlayers(),
   );
+  const [expansions, setExpansions] = useState<PlayExpansion[]>(
+    draft?.expansions ?? ip?.expansions ?? initialExpansions ?? [],
+  );
   const [photoKeys, setPhotoKeys] = useState<string[]>(
     isEdit ? (ip?.photoKeys ?? []) : [],
   );
@@ -357,6 +400,7 @@ export function LogPlayWizard({
       teamNames,
       teamWinner,
       players,
+      expansions,
       visibility,
     };
     try {
@@ -380,6 +424,7 @@ export function LogPlayWizard({
     teamNames,
     teamWinner,
     players,
+    expansions,
     visibility,
   ]);
 
@@ -392,6 +437,24 @@ export function LogPlayWizard({
   }
 
   const isTeams = format === "teams" || format === "onevsall";
+
+  // The base game's expansions, for the checklist page. `undefined` while the
+  // query is in flight — only a *resolved* empty list skips the step, so a slow
+  // query can't silently drop the page.
+  const expansionOptions = useQuery(
+    api.games.expansionsOf,
+    open && game?.gameId ? { gameId: game.gameId } : "skip",
+  );
+  const skipExpansions =
+    !game?.gameId || (expansionOptions !== undefined && expansionOptions.length === 0);
+  const visibleSteps = skipExpansions
+    ? [STEP.game, STEP.when, STEP.players, STEP.scores, STEP.share]
+    : [STEP.game, STEP.when, STEP.expansions, STEP.players, STEP.scores, STEP.share];
+
+  const goNext = () =>
+    setStep((c) => (c + 1 === STEP.expansions && skipExpansions ? c + 2 : c + 1));
+  const goBack = () =>
+    setStep((c) => (c - 1 === STEP.expansions && skipExpansions ? c - 2 : c - 1));
 
   function reset() {
     setStep(initStep);
@@ -410,6 +473,7 @@ export function LogPlayWizard({
     setTeamNames(initTeamNames);
     setTeamWinner(ip?.teamWinner ?? 0);
     setPlayers(makePlayers());
+    setExpansions(ip?.expansions ?? initialExpansions ?? []);
     setPhotoKeys(isEdit ? (ip?.photoKeys ?? []) : []);
     setPhotoPreviews(isEdit ? (ip?.photoUrls ?? []) : []);
     setVisibility(ip?.visibility ?? "private");
@@ -496,6 +560,7 @@ export function LogPlayWizard({
           teamIndex: isTeams ? (p.teamIndex ?? 0) : undefined,
           isNew: p.isNew,
         })),
+        expansions: expansions.length ? expansions : undefined,
         photoKeys,
         visibility,
       };
@@ -517,11 +582,7 @@ export function LogPlayWizard({
     }
   }
 
-  const canNext =
-    (step === 0 && !!game) ||
-    (step === 1 && !!game) ||
-    step === 2 ||
-    step === 3;
+  const canNext = step > STEP.when || !!game;
 
   return (
     <Sheet open={open} onClose={close} mobileMaxH="max-h-[92dvh]">
@@ -530,7 +591,7 @@ export function LogPlayWizard({
           <div className="flex items-center gap-2">
             {step > minStep && (
               <button
-                onClick={() => setStep((s) => s - 1)}
+                onClick={goBack}
                 aria-label="Back"
                 className="flex h-8 w-8 items-center justify-center rounded-lg text-muted hover:bg-surface-2 hover:text-foreground"
               >
@@ -562,7 +623,7 @@ export function LogPlayWizard({
           </div>
         </div>
         <div className="flex gap-1 px-4 pt-3">
-          {[0, 1, 2, 3, 4].map((i) => (
+          {visibleSteps.map((i) => (
             <span
               key={i}
               className={cn(
@@ -574,16 +635,18 @@ export function LogPlayWizard({
         </div>
 
         <div className="themed-scroll flex-1 space-y-4 overflow-y-auto px-4 py-4">
-          {step === 0 && (
+          {step === STEP.game && (
             <GamePicker
               onPick={(g) => {
                 setGame(g);
-                setStep(1);
+                // A different game means a different expansion list.
+                setExpansions([]);
+                setStep(STEP.when);
               }}
             />
           )}
 
-          {step === 1 && game && (
+          {step === STEP.when && game && (
             <FormatStep
               game={game}
               date={date}
@@ -601,7 +664,15 @@ export function LogPlayWizard({
             />
           )}
 
-          {step === 2 && (
+          {step === STEP.expansions && (
+            <ExpansionsStep
+              options={expansionOptions}
+              selected={expansions}
+              setSelected={setExpansions}
+            />
+          )}
+
+          {step === STEP.players && (
             <PlayersStep
               players={players}
               setPlayers={setPlayers}
@@ -613,7 +684,7 @@ export function LogPlayWizard({
             />
           )}
 
-          {step === 3 && (
+          {step === STEP.scores && (
             <ScoresStep
               format={format}
               scoreMode={scoreMode}
@@ -630,7 +701,7 @@ export function LogPlayWizard({
             />
           )}
 
-          {step === 4 && (
+          {step === STEP.share && (
             <ShareStep
               previews={photoPreviews}
               uploading={uploading}
@@ -643,9 +714,9 @@ export function LogPlayWizard({
         </div>
 
         <div className="border-t border-border px-4 py-3">
-          {step < 4 ? (
+          {step < LAST_STEP ? (
             <button
-              onClick={() => setStep((s) => s + 1)}
+              onClick={goNext}
               disabled={!canNext}
               className={buttonClasses("primary", "md", "w-full")}
             >
@@ -858,7 +929,123 @@ function FormatStep(props: {
   );
 }
 
-/* ---- Step 3: players + teams ---- */
+/* ---- Step 3: expansions used ---- */
+type ExpansionOption = {
+  _id: Id<"games">;
+  title: string;
+  bggId: string | null;
+  year: string | null;
+  thumbUrl: string | null;
+};
+
+/**
+ * A checklist of the base game's expansions. The play itself is always logged
+ * against the base game — an expansion is never the logged game — so this is
+ * where "we played Gloomhaven with Forgotten Circles" gets recorded.
+ */
+function ExpansionsStep({
+  options,
+  selected,
+  setSelected,
+}: {
+  options: ExpansionOption[] | undefined;
+  selected: PlayExpansion[];
+  setSelected: (v: PlayExpansion[]) => void;
+}) {
+  // Checked state keys on the game id, falling back to the title for an
+  // expansion carried over from a play whose game row is gone.
+  const checked = new Set(
+    selected.map((e) => e.gameId ?? `t:${e.title.toLowerCase()}`),
+  );
+
+  function toggle(o: ExpansionOption) {
+    if (checked.has(o._id)) {
+      setSelected(selected.filter((e) => e.gameId !== o._id));
+    } else {
+      setSelected([
+        ...selected,
+        { gameId: o._id, bggId: o.bggId ?? undefined, title: o.title },
+      ]);
+    }
+  }
+
+  if (options === undefined) {
+    return (
+      <div className="flex items-center justify-center gap-2 py-16 text-sm text-subtle">
+        <Loader2 className="h-4 w-4 animate-spin" />
+        Loading expansions…
+      </div>
+    );
+  }
+
+  if (options.length === 0) {
+    return (
+      <div className="rounded-2xl border border-dashed border-border p-8 text-center text-sm text-muted">
+        We don&rsquo;t have any expansions for this game yet.
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <div className="mb-2 flex items-end justify-between gap-2">
+        <label className={LABEL}>Any expansions in this play?</label>
+        {selected.length > 0 && (
+          <button
+            onClick={() => setSelected([])}
+            className="mb-1.5 text-xs font-semibold text-accent hover:underline"
+          >
+            Clear
+          </button>
+        )}
+      </div>
+      <p className="mb-3 text-xs text-subtle">
+        Optional — the play is logged against the base game either way.
+      </p>
+      <ul className="space-y-1">
+        {options.map((o) => {
+          const on = checked.has(o._id);
+          return (
+            <li key={o._id}>
+              <button
+                type="button"
+                role="checkbox"
+                aria-checked={on}
+                onClick={() => toggle(o)}
+                className={cn(
+                  "flex w-full items-center gap-2.5 rounded-xl border p-1.5 pr-3 text-left transition-colors",
+                  on
+                    ? "border-accent/50 bg-accent/8"
+                    : "border-transparent hover:bg-surface-2",
+                )}
+              >
+                <Thumb url={o.thumbUrl} className="h-9 w-9" />
+                <span className="min-w-0 flex-1 truncate text-sm font-medium">
+                  {o.title}
+                  {o.year ? (
+                    <span className="ml-1 text-xs text-subtle">{o.year}</span>
+                  ) : null}
+                </span>
+                <span
+                  className={cn(
+                    "flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition-colors",
+                    on
+                      ? "border-accent bg-accent text-accent-foreground"
+                      : "border-border",
+                  )}
+                >
+                  {on && <Check className="h-3.5 w-3.5" strokeWidth={3} />}
+                </span>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
+/* ---- Step 4: players + teams ---- */
 function PlayersStep(props: {
   players: PlayerForm[];
   setPlayers: React.Dispatch<React.SetStateAction<PlayerForm[]>>;
@@ -1118,7 +1305,7 @@ function PlayersStep(props: {
   );
 }
 
-/* ---- Step 4: scores ---- */
+/* ---- Step 5: scores ---- */
 function ScoresStep(props: {
   format: PlayFormat;
   scoreMode: ScoreMode;
@@ -1260,7 +1447,7 @@ function ScoresStep(props: {
   );
 }
 
-/* ---- Step 5: photos + share ---- */
+/* ---- Step 6: photos + share ---- */
 function ShareStep(props: {
   previews: string[];
   uploading: boolean;

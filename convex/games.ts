@@ -1073,6 +1073,38 @@ export const getById = query({
 });
 
 /**
+ * A base game's expansions, for the log-play wizard's checklist. Pass any game
+ * in the family — an expansion resolves to its parent first, since a play is
+ * always logged against the base game.
+ */
+export const expansionsOf = query({
+  args: { gameId: v.id("games") },
+  handler: async (ctx, { gameId }) => {
+    const game = await ctx.db.get("games", gameId);
+    if (!game) return [];
+    const baseId = game.isExpansion && game.parentId ? game.parentId : game._id;
+    const rows = await ctx.db
+      .query("games")
+      .withIndex("by_parent", (q) => q.eq("parentId", baseId))
+      .take(100);
+    rows.sort((a, b) =>
+      (a.sortTitle ?? a.title.toLowerCase()).localeCompare(
+        b.sortTitle ?? b.title.toLowerCase(),
+      ),
+    );
+    return await Promise.all(
+      rows.map(async (e) => ({
+        _id: e._id,
+        title: e.title,
+        bggId: e.bggId ?? null,
+        year: e.year ?? null,
+        thumbUrl: (await coverUrls(ctx, e)).thumbnailUrl,
+      })),
+    );
+  },
+});
+
+/**
  * A game detail by slug (SEO-friendly URLs), falling back to id so old
  * `/boardgames/<id>` links keep resolving.
  */
