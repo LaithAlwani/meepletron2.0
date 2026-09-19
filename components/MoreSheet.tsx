@@ -5,7 +5,6 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useQuery } from "convex/react";
 import {
-  Trophy,
   Scissors,
   Hand,
   Shield,
@@ -39,7 +38,6 @@ export function MoreSheet({
   const initial = (me?.name || me?.email || "?").charAt(0).toUpperCase();
 
   const items: { href: string; label: string; icon: LucideIcon }[] = [
-    { href: "/top-games", label: "Top Games", icon: Trophy },
     { href: "/tuckbox", label: "Tuckbox", icon: Scissors },
     { href: "/who-goes-first", label: "Who goes first", icon: Hand },
     { href: "/about", label: "About", icon: Info },

@@ -18,6 +18,11 @@ type SheetProps = {
   /** Fixed height of the mobile sheet, e.g. `h-[75vh]`. Overrides `mobileMaxH`
    *  so the sheet stays that tall even when its content is short. */
   mobileHeight?: string;
+  /** Mobile: while open, let the on-screen keyboard *overlay* the sheet instead
+   *  of resizing the page (which pushes the footer up over the content). The
+   *  sheet stays put and the keyboard simply covers its bottom; the scrollable
+   *  body still brings a focused input into view. Opt-in while we trial it. */
+  keyboardOverlay?: boolean;
   /** The drawer's own header + scrollable body + footer, unchanged. */
   children: React.ReactNode;
 };
@@ -38,9 +43,28 @@ export function Sheet({
   desktopWidth = "sm:w-104",
   mobileMaxH = "max-h-[92dvh]",
   mobileHeight,
+  keyboardOverlay = false,
   children,
 }: SheetProps) {
   const isDesktop = useMediaQuery("(min-width: 640px)");
+
+  // While a keyboard-overlay sheet is open on mobile, flip the viewport from
+  // `resizes-content` (the app default, which shrinks the page and rides the
+  // footer up over the keyboard) to `resizes-visual` — the keyboard then just
+  // covers the pinned sheet. Restored to the original on close.
+  useEffect(() => {
+    if (!open || isDesktop || !keyboardOverlay) return;
+    const meta = document.querySelector<HTMLMetaElement>('meta[name="viewport"]');
+    if (!meta) return;
+    const original = meta.getAttribute("content") ?? "";
+    meta.setAttribute(
+      "content",
+      /interactive-widget=/.test(original)
+        ? original.replace(/interactive-widget=[^,]*/, "interactive-widget=resizes-visual")
+        : `${original}, interactive-widget=resizes-visual`,
+    );
+    return () => meta.setAttribute("content", original);
+  }, [open, isDesktop, keyboardOverlay]);
 
   // Desktop scroll-lock + Esc (vaul owns these on mobile).
   useEffect(() => {

@@ -281,6 +281,11 @@ function SuggestionList({
               <span className="min-w-0 flex-1">
                 <span className="font-display flex items-center gap-1.5 truncate font-bold leading-snug">
                   <span className="truncate">{s.title}</span>
+                  {s.isExpansion && (
+                    <span className="shrink-0 rounded-full bg-surface-2 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-subtle">
+                      Exp
+                    </span>
+                  )}
                   {s.source === "bgg" && (
                     <Download
                       className="h-3.5 w-3.5 shrink-0 text-subtle"

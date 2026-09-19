@@ -201,14 +201,16 @@ export default defineSchema({
     // checked, so the BGG refresh cron reads only the handful that are due
     // (range on bggCheckedAt) instead of scanning the whole catalogue.
     .index("by_isStub_and_bggCheckedAt", ["isStub", "bggCheckedAt"])
-    // Sorted catalogue reads: same (isStub, isExpansion) prefix, then the sort
-    // key, so the library paginates ordered without a scan.
-    .index("by_lib_title", ["isStub", "isExpansion", "sortTitle"])
-    .index("by_lib_year", ["isStub", "isExpansion", "yearNum"])
-    .index("by_lib_rating", ["isStub", "isExpansion", "bggRating"])
-    .index("by_lib_weight", ["isStub", "isExpansion", "bggWeight"])
-    .index("by_lib_rated", ["isStub", "isExpansion", "bggRatingCount"])
-    .index("by_lib_updated", ["isStub", "isExpansion", "contentUpdatedAt"])
+    // Sorted catalogue reads: non-stub games (base + expansions) ordered by the
+    // sort key, so the library paginates ordered without a scan.
+    .index("by_lib_title", ["isStub", "sortTitle"])
+    .index("by_lib_year", ["isStub", "yearNum"])
+    .index("by_lib_rating", ["isStub", "bggRating"])
+    .index("by_lib_weight", ["isStub", "bggWeight"])
+    .index("by_lib_rated", ["isStub", "bggRatingCount"])
+    .index("by_lib_updated", ["isStub", "contentUpdatedAt"])
+    // Newest-first: non-stub games by creation time (the index's implicit tail).
+    .index("by_isStub", ["isStub"])
     .searchIndex("search_text", {
       searchField: "searchText",
       filterFields: ["isExpansion", "isStub"],

@@ -16,6 +16,8 @@ export type Suggestion = {
   thumbUrl: string | null;
   rating: number | null;
   href: string;
+  /** A library expansion (tagged in the dropdown so it isn't read as the base). */
+  isExpansion?: boolean;
 };
 
 /** How many rows the dropdown shows at most. */
@@ -105,6 +107,7 @@ export function useSearchSuggestions(term: string, max = MAX_SUGGESTIONS) {
       thumbUrl: g.thumbUrl,
       rating: g.rating,
       href: `/boardgames/${g.slug}`,
+      isExpansion: g.isExpansion,
     })),
     ...bggHits.slice(0, max - libCount).map((h) => ({
       key: `bgg:${h.bggId}`,

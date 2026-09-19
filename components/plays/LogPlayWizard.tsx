@@ -585,7 +585,7 @@ export function LogPlayWizard({
   const canNext = step > STEP.when || !!game;
 
   return (
-    <Sheet open={open} onClose={close} mobileMaxH="max-h-[92dvh]">
+    <Sheet open={open} onClose={close} mobileHeight="h-dvh" keyboardOverlay>
         {/* Header + step dots */}
         <div className="flex items-center justify-between gap-2 border-b border-border px-4 py-3">
           <div className="flex items-center gap-2">

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useQuery, Authenticated } from "convex/react";
-import { Plus, Minus } from "lucide-react";
+import { Plus, ChevronLeft, ChevronRight } from "lucide-react";
 import { api } from "@/convex/_generated/api";
 import { buttonClasses } from "@/components/ui/Button";
 import { Skeleton } from "@/components/ui/Surface";
@@ -32,9 +32,8 @@ const SIZE_OPTIONS = [
   { value: 100, label: "Top 100" },
 ];
 
-// The year stepper's chrome: a segmented "track" plus a spinner-stripping helper
-// for the number input (we drive it with steppers, so native arrows are noise).
-const TRACK = "inline-flex items-center rounded-xl border border-border bg-surface-2 p-1";
+// Strip the native number spinner — the ‹ › chevrons drive the year, so the
+// browser's own arrows would just be noise.
 const NO_SPIN =
   "[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:m-0 [&::-webkit-inner-spin-button]:appearance-none";
 
@@ -86,15 +85,17 @@ function YearStepper({
 }) {
   const step = (d: number) =>
     onChange(Math.max(1970, Math.min(2200, (year || CURRENT_YEAR) + d)));
+  const chevron =
+    "flex h-9 w-8 shrink-0 items-center justify-center rounded-lg text-subtle transition-colors hover:bg-surface-2 hover:text-foreground active:scale-95";
   return (
-    <div className={TRACK}>
+    <div className="inline-flex h-11 shrink-0 items-center rounded-xl border border-border bg-surface px-1 text-sm font-semibold text-foreground">
       <button
         type="button"
         aria-label="Previous year"
         onClick={() => step(-1)}
-        className="flex h-9 w-9 items-center justify-center rounded-lg text-muted transition-colors hover:bg-surface hover:text-foreground active:scale-95"
+        className={chevron}
       >
-        <Minus className="h-4 w-4" />
+        <ChevronLeft className="h-4.5 w-4.5" />
       </button>
       <input
         type="number"
@@ -104,7 +105,7 @@ function YearStepper({
         onChange={(e) => onChange(Number(e.target.value))}
         aria-label="Year"
         className={cn(
-          "h-9 w-14 bg-transparent text-center text-base font-bold tabular-nums text-foreground outline-none",
+          "h-9 w-12 bg-transparent text-center tabular-nums outline-none",
           NO_SPIN,
         )}
       />
@@ -112,9 +113,9 @@ function YearStepper({
         type="button"
         aria-label="Next year"
         onClick={() => step(1)}
-        className="flex h-9 w-9 items-center justify-center rounded-lg text-muted transition-colors hover:bg-surface hover:text-foreground active:scale-95"
+        className={chevron}
       >
-        <Plus className="h-4 w-4" />
+        <ChevronRight className="h-4.5 w-4.5" />
       </button>
     </div>
   );
@@ -136,19 +137,19 @@ function Community() {
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex items-center gap-2">
         <SelectMenu
           value={category}
           onChange={setCategory}
           aria-label="Category"
-          className="w-44"
+          className="min-w-0 flex-1 sm:w-48 sm:flex-none"
           options={CATEGORY_OPTIONS}
         />
         <SelectMenu
           value={sizeFilter}
           onChange={setSizeFilter}
           aria-label="List size"
-          className="w-32"
+          className="w-28 shrink-0"
           options={SIZE_OPTIONS}
         />
         <YearStepper year={year} onChange={setYear} />

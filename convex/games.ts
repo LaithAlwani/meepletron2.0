@@ -159,7 +159,7 @@ export const searchPaginated = query({
     const result = await ctx.db
       .query("games")
       .withSearchIndex("search_text", (q) =>
-        q.search("searchText", trimmed).eq("isExpansion", false).eq("isStub", false),
+        q.search("searchText", trimmed).eq("isStub", false),
       )
       .paginate(paginationOpts);
     // The full-text index is typo-tolerant, which for short queries drags in
@@ -189,16 +189,19 @@ export const suggest = query({
     const trimmed = term.trim();
     if (trimmed.length < 2) return [];
     const max = Math.max(1, Math.min(limit ?? 8, 20));
+    // Expansions are searchable too — a player looking for "Seafarers" should
+    // find it. The UI tags them so they're not mistaken for the base game.
     const hits = await ctx.db
       .query("games")
       .withSearchIndex("search_text", (q) =>
-        q.search("searchText", trimmed).eq("isExpansion", false).eq("isStub", false),
+        q.search("searchText", trimmed).eq("isStub", false),
       )
       .take(max * 3);
 
     // The full-text index is typo-tolerant, which for short queries drags in
-    // unrelated games ("wall" → "ball"). Keep only rows that actually contain
-    // every typed term (same guard as `searchPaginated`).
+    // unrelated games ("wall" → "ball"). Keep rows that contain every typed term
+    // somewhere, then rank so name matches lead and publisher/designer-only
+    // matches (e.g. other Stonemaier games for "stone age") trail.
     const terms = trimmed.toLowerCase().split(/\s+/).filter(Boolean);
     const needle = trimmed.toLowerCase();
     const ranked = hits
@@ -206,11 +209,14 @@ export const suggest = query({
         const hay = (g.searchText ?? g.title).toLowerCase();
         return terms.every((t) => hay.includes(t));
       })
-      // A title hit beats a designer/publisher/category hit, and a title that
-      // *starts* with what was typed beats one that merely contains it.
+      // A title that *starts* with what was typed beats one that merely contains
+      // it, which beats a designer/publisher/category-only hit.
       .map((g) => {
         const title = g.title.toLowerCase();
-        return { g, rank: title.startsWith(needle) ? 0 : title.includes(needle) ? 1 : 2 };
+        return {
+          g,
+          rank: title.startsWith(needle) ? 0 : title.includes(needle) ? 1 : 2,
+        };
       })
       .sort((a, b) => a.rank - b.rank)
       .slice(0, max);
@@ -230,6 +236,7 @@ export const suggest = query({
           rating: g.bggRating ?? null,
           bggId: g.bggId ?? null,
           thumbUrl: thumbnailUrl,
+          isExpansion: g.isExpansion,
         };
       }),
     );
@@ -425,16 +432,16 @@ function hasAnyValue(gameVals: string[], selected: string[] | undefined): boolea
   return selected.some((s) => set.has(s.trim().toLowerCase()));
 }
 
-/** Base games matching every active library filter, newest first. */
+/** Games (base + expansions) matching every active library filter, newest first. */
 async function filteredLibrary(
   ctx: QueryCtx,
   f: LibraryFilters,
 ): Promise<Doc<"games">[]> {
+  // Include expansions everywhere the library appears — browse, search, and the
+  // full grid alike. Only stubs (unimported placeholders) are held back.
   const base = await ctx.db
     .query("games")
-    .withIndex("by_isStub_and_isExpansion", (q) =>
-      q.eq("isStub", false).eq("isExpansion", false),
-    )
+    .withIndex("by_isStub_and_isExpansion", (q) => q.eq("isStub", false))
     .order("desc")
     .take(2000);
   const chatIds = f.chatOnly ? await chatEnabledBaseIds(ctx) : null;
@@ -445,6 +452,9 @@ async function filteredLibrary(
     if (!hasAnyValue(g.categories, f.categories)) return false;
     if (!hasAnyValue(g.gameMechanics, f.mechanics)) return false;
     if (terms.length) {
+      // Match anywhere in the blob (title + designers + publishers + …) so a
+      // designer/publisher can still surface a game; the caller ranks name
+      // matches ahead of these related ones.
       const hay = (g.searchText ?? g.title).toLowerCase();
       if (!terms.every((t) => hay.includes(t))) return false;
     }
@@ -452,61 +462,22 @@ async function filteredLibrary(
   });
 }
 
-/**
- * The non-stub base-game query for the fast (paginated) library path, ordered by
- * the chosen sort. Each branch uses a dedicated (isStub, isExpansion, <key>)
- * index so pagination reads ~one page — no scan. `rating` is the default.
- */
-function libraryBase(ctx: QueryCtx, sort: GameSortKey) {
-  const q = ctx.db.query("games");
-  switch (sort) {
-    case "updated":
-      return q
-        .withIndex("by_lib_updated", (i) =>
-          i.eq("isStub", false).eq("isExpansion", false),
-        )
-        .order("desc");
-    case "title":
-      return q
-        .withIndex("by_lib_title", (i) =>
-          i.eq("isStub", false).eq("isExpansion", false),
-        )
-        .order("asc");
-    case "year":
-      return q
-        .withIndex("by_lib_year", (i) =>
-          i.eq("isStub", false).eq("isExpansion", false),
-        )
-        .order("desc");
-    case "weight":
-      return q
-        .withIndex("by_lib_weight", (i) =>
-          i.eq("isStub", false).eq("isExpansion", false),
-        )
-        .order("desc");
-    case "rated":
-      return q
-        .withIndex("by_lib_rated", (i) =>
-          i.eq("isStub", false).eq("isExpansion", false),
-        )
-        .order("desc");
-    case "newest":
-      return q
-        .withIndex("by_isStub_and_isExpansion", (i) =>
-          i.eq("isStub", false).eq("isExpansion", false),
-        )
-        .order("desc");
-    case "rating":
-    default:
-      return q
-        .withIndex("by_lib_rating", (i) =>
-          i.eq("isStub", false).eq("isExpansion", false),
-        )
-        .order("desc");
-  }
+/** Games whose own title matches every term lead; publisher/designer-only
+ *  matches (the "related" ones) keep their order but trail. Stable. */
+function rankByNameMatch(
+  games: Doc<"games">[],
+  term: string | undefined,
+): Doc<"games">[] {
+  const terms = (term ?? "").trim().toLowerCase().split(/\s+/).filter(Boolean);
+  if (terms.length === 0) return games;
+  const named = (g: Doc<"games">) => {
+    const title = g.title.toLowerCase();
+    return terms.every((w) => title.includes(w));
+  };
+  return [...games.filter(named), ...games.filter((g) => !named(g))];
 }
 
-/** In-memory sort for the scan path (genre / mechanic / chat filters). */
+/** In-memory sort for the library scan (all browse/search paths). */
 function sortLibrary(
   games: Doc<"games">[],
   sort: GameSortKey,
@@ -544,23 +515,61 @@ function sortLibrary(
   return arr;
 }
 
-/** Does this filter set need the full-catalogue JS scan (array-contains / chat)? */
+/**
+ * The non-stub library query (base games + expansions) for the fast paginated
+ * browse path, ordered by the chosen sort. Each branch uses a dedicated
+ * (isStub, <key>) index so pagination reads ~one page — no scan.
+ */
+function libraryBase(ctx: QueryCtx, sort: GameSortKey) {
+  const q = ctx.db.query("games");
+  switch (sort) {
+    case "updated":
+      return q
+        .withIndex("by_lib_updated", (i) => i.eq("isStub", false))
+        .order("desc");
+    case "title":
+      return q
+        .withIndex("by_lib_title", (i) => i.eq("isStub", false))
+        .order("asc");
+    case "year":
+      return q
+        .withIndex("by_lib_year", (i) => i.eq("isStub", false))
+        .order("desc");
+    case "weight":
+      return q
+        .withIndex("by_lib_weight", (i) => i.eq("isStub", false))
+        .order("desc");
+    case "rated":
+      return q
+        .withIndex("by_lib_rated", (i) => i.eq("isStub", false))
+        .order("desc");
+    case "newest":
+      return q
+        .withIndex("by_isStub", (i) => i.eq("isStub", false))
+        .order("desc");
+    case "rating":
+    default:
+      return q
+        .withIndex("by_lib_rating", (i) => i.eq("isStub", false))
+        .order("desc");
+  }
+}
+
+/** Filters that can't be index-served (array-contains genre/mechanic, the chat
+ *  join, or a full-text search) and so need the bounded in-memory scan instead. */
 function needsLibraryScan(f: LibraryFilters): boolean {
   return (
     (f.categories?.length ?? 0) > 0 ||
     (f.mechanics?.length ?? 0) > 0 ||
     !!f.chatOnly ||
-    // A search term goes through the scan path too, so the chosen sort applies
-    // to the matches (the full-text index would force relevance order instead).
     (f.term ?? "").trim().length >= 2
   );
 }
 
 /**
- * Paginated library browse. For the common case (players / time / expansions /
- * search only) this is **index-backed** and reads roughly one page of docs. Genre
- * / mechanic / chat-ready filters are array-contains / joins that Convex can't
- * index, so those fall back to the full-catalogue scan (offset cursor).
+ * Paginated library browse + search (base games + expansions). Plain browse
+ * (players / time / expansions filters, any sort) is index-backed and reads ~one
+ * page; genre / mechanic / chat / search fall back to a bounded in-memory scan.
  */
 export const libraryGames = query({
   args: {
@@ -573,13 +582,10 @@ export const libraryGames = query({
       ? (sortArg as GameSortKey)
       : DEFAULT_SORT;
 
-    // No term / genre / mechanic / chat filter → the fast index-ordered path.
+    // Plain browse → the fast index-ordered path (reads ~one page).
     if (!needsLibraryScan(f)) {
       const needsFilter =
         f.players != null || f.time != null || !!f.hasExpansions;
-
-      // players / time / expansions apply during pagination, so we read only
-      // enough rows to fill the page instead of the whole catalogue.
       const base = libraryBase(ctx, sort);
       const q = needsFilter
         ? base.filter((e) => {
@@ -606,7 +612,6 @@ export const libraryGames = query({
             return e.and(...conds);
           })
         : base;
-
       const result = await q.paginate(paginationOpts);
       return {
         ...result,
@@ -614,8 +619,13 @@ export const libraryGames = query({
       };
     }
 
-    // Scan path — genre / mechanic / chat-ready filters.
-    const filtered = sortLibrary(await filteredLibrary(ctx, f), sort);
+    // Genre / mechanic / chat / search → bounded in-memory scan (offset cursor).
+    // When searching, name matches lead and publisher/designer-only matches
+    // trail, each group kept in the chosen sort order.
+    const filtered = rankByNameMatch(
+      sortLibrary(await filteredLibrary(ctx, f), sort),
+      f.term,
+    );
     const offset = Number(paginationOpts.cursor ?? "0") || 0;
     const end = offset + paginationOpts.numItems;
     const slice = filtered.slice(offset, end);
