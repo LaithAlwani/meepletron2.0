@@ -23,10 +23,8 @@ import { useAuthToken, useAuthActions } from "@convex-dev/auth/react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { dayLabel } from "@/lib/format";
-import {
-  MessageBubble,
-  stripIconBrackets,
-} from "@/components/chat/MessageBubble";
+import { MessageBubble } from "@/components/chat/MessageBubble";
+import { stripIconBrackets } from "@/components/chat/GroundedMarkdown";
 import { ChatInput } from "@/components/chat/ChatInput";
 import { ResourcesSideNav, LayersIcon } from "@/components/chat/ResourcesSideNav";
 import { GuestBanner } from "@/components/chat/GuestBanner";

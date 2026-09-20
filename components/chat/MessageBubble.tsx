@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import ReactMarkdown from "react-markdown";
+import { GroundedMarkdown } from "@/components/chat/GroundedMarkdown";
 import { Copy, Check, ThumbsUp, ThumbsDown } from "lucide-react";
 import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
@@ -227,58 +227,6 @@ function Sources({
   );
 }
 
-// Lowercase words that legitimately follow a citation ("[1] and [2]", "[3] or")
-// — these don't signal a quantity, so a bracket before one is still a citation.
-const CITATION_FOLLOWERS = new Set([
-  "and",
-  "or",
-  "but",
-  "so",
-  "then",
-  "as",
-  "for",
-  "to",
-  "of",
-  "in",
-  "on",
-  "at",
-  "by",
-  "with",
-  "the",
-  "a",
-  "an",
-]);
-
-/**
- * Rewrites inline `[n]` citation markers into markdown links (`[n](#cite-n)`)
- * so they can be rendered as interactive references — but only for markers that
- * actually have a matching source, so stray brackets are left untouched.
- *
- * Guard: a bracketed number that hugs a following content word is a quantity,
- * not a citation (e.g. the model wrote "[3] coins" for "3 coins"). Render it as
- * a plain number so it isn't confused with a source pill.
- */
-export function linkifyCitations(content: string, validNs: Set<number>): string {
-  return content.replace(/\[(\d+)\]/g, (whole, digits, offset: number, str: string) => {
-    const next = str.slice(offset + whole.length).match(/^\s*([a-z]+)/);
-    if (next && !CITATION_FOLLOWERS.has(next[1])) return digits;
-    return validNs.has(Number(digits)) ? `[${digits}](#cite-${digits})` : whole;
-  });
-}
-
-/**
- * Iconography tokens are ALL-CAPS stand-ins the ingestion inserts for the
- * rulebook's symbols, e.g. `[WOOD]`, `[VP]`, `[GAME BOARD]`, `[3 VP]`. Drop the
- * brackets off ONLY those so they read naturally. Because the pattern requires
- * an uppercase letter and allows only caps/digits/spaces, it can never match a
- * numeric citation (`[1]`, `[1](#cite-1)`) or a normal/markdown link.
- */
-export function stripIconBrackets(content: string): string {
-  return content.replace(/\[([A-Z0-9][A-Z0-9 ]*)\]/g, (whole, inner: string) =>
-    /[A-Z]/.test(inner) ? inner : whole,
-  );
-}
-
 /* ---------- bubble ---------- */
 
 export function MessageBubble({ message }: { message: Doc<"messages"> }) {
@@ -308,50 +256,18 @@ export function MessageBubble({ message }: { message: Doc<"messages"> }) {
     if (validNs.has(n)) citedNs.add(n);
   }
   const citedAnnotations = annotations.filter((a) => citedNs.has(a.n));
-  // When "Show source citations" is off, render plain text (no clickable [n]
-  // buttons) and hide the passages block below.
-  const markdown = stripIconBrackets(
-    showSources && annotations.length > 0
-      ? linkifyCitations(message.content, validNs)
-      : message.content,
-  );
 
   return (
     <div className="msg-in group flex flex-col items-start">
       <div className="max-w-[90%] rounded-2xl rounded-bl-sm border border-border bg-surface px-4 py-3">
-        <div className="prose-chat text-sm leading-relaxed">
-          <ReactMarkdown
-            components={{
-              a({ href, children }) {
-                const m = /^#cite-(\d+)$/.exec(href ?? "");
-                if (m) {
-                  const n = Number(m[1]);
-                  return (
-                    <button
-                      type="button"
-                      onClick={() => setOpenN(n)}
-                      aria-label={`Show source ${n}`}
-                      className={`mx-0.5 inline-flex h-[1.4em] min-w-[1.4em] items-center justify-center rounded-full px-1 align-super text-[0.65em] font-bold leading-none transition-colors ${
-                        openN === n
-                          ? "bg-accent text-accent-foreground"
-                          : "bg-accent/15 text-accent hover:bg-accent/30"
-                      }`}
-                    >
-                      {n}
-                    </button>
-                  );
-                }
-                return (
-                  <a href={href} target="_blank" rel="noreferrer">
-                    {children}
-                  </a>
-                );
-              },
-            }}
-          >
-            {markdown}
-          </ReactMarkdown>
-        </div>
+        {/* "Show source citations" off → plain [n] text, no clickable pills. */}
+        <GroundedMarkdown
+          content={message.content}
+          validNs={validNs}
+          linkCitations={showSources && annotations.length > 0}
+          onOpenSource={setOpenN}
+          activeSource={openN}
+        />
 
         {showSources && citedAnnotations.length > 0 && (
           <Sources
