@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePaginatedQuery, useMutation } from "convex/react";
 import { Images, Dices, Plus } from "lucide-react";
@@ -10,6 +10,7 @@ import { Fab } from "@/components/ui/Fab";
 import { buttonClasses } from "@/components/ui/Button";
 import { LogPlayWizard } from "@/components/plays/LogPlayWizard";
 import { useScrollRestore } from "@/components/lib/useScrollRestore";
+import { useInfiniteScroll } from "@/components/lib/useInfiniteScroll";
 
 const PAGE = 20;
 
@@ -55,17 +56,10 @@ export function PlaysGrid({
     restoreIfReady(results.length);
   }, [results.length, restoreIfReady]);
 
-  const sentinel = useRef<HTMLDivElement | null>(null);
-  useEffect(() => {
-    const el = sentinel.current;
-    if (!el || status !== "CanLoadMore") return;
-    const io = new IntersectionObserver(
-      (entries) => entries[0]?.isIntersecting && loadMore(PAGE),
-      { rootMargin: "800px" },
-    );
-    io.observe(el);
-    return () => io.disconnect();
-  }, [status, loadMore]);
+  const sentinel = useInfiniteScroll(() => loadMore(PAGE), {
+    canLoadMore: status === "CanLoadMore",
+    rootMargin: "800px",
+  });
 
   if (status === "LoadingFirstPage") {
     return (

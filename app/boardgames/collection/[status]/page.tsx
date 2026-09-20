@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useEffect, useRef, useState } from "react";
+import { use, useEffect, useState } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import {
@@ -20,6 +20,7 @@ import {
   toLibraryArgs,
 } from "@/components/boardgames/useLibraryFilters";
 import { useScrollRestore } from "@/components/lib/useScrollRestore";
+import { useInfiniteScroll } from "@/components/lib/useInfiniteScroll";
 import { buttonClasses } from "@/components/ui/Button";
 import { BackButton } from "@/components/ui/BackButton";
 import { statusBySlug, type CollStatus } from "@/components/collection/status";
@@ -97,19 +98,9 @@ function ListBody({ status }: { status: CollStatus }) {
     restoreIfReady(results.length);
   }, [results.length, restoreIfReady]);
 
-  const sentinelRef = useRef<HTMLDivElement | null>(null);
-  useEffect(() => {
-    const el = sentinelRef.current;
-    if (!el || qStatus !== "CanLoadMore") return;
-    const io = new IntersectionObserver(
-      (entries) => {
-        if (entries[0]?.isIntersecting) loadMore(24);
-      },
-      { rootMargin: "600px" },
-    );
-    io.observe(el);
-    return () => io.disconnect();
-  }, [qStatus, loadMore]);
+  const sentinelRef = useInfiniteScroll(() => loadMore(24), {
+    canLoadMore: qStatus === "CanLoadMore",
+  });
 
   const narrowed = activeCount > 0;
 

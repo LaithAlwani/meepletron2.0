@@ -7,6 +7,7 @@ import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { useConfirm } from "@/components/ui/Confirm";
 import { useToast } from "@/components/ui/Toast";
+import { useInfiniteScroll } from "@/components/lib/useInfiniteScroll";
 import { friendlyError } from "@/lib/friendlyError";
 
 type IngestStatus = "done" | "pending" | "none";
@@ -140,20 +141,11 @@ export default function AdminGamesPage() {
   }, [q, typeFilter, statusFilter]);
 
   // Auto-load more rows as the sentinel scrolls into view.
-  const sentinelRef = useRef<HTMLDivElement | null>(null);
   const canLoadMore = visible < filtered.length;
-  useEffect(() => {
-    const el = sentinelRef.current;
-    if (!el || !canLoadMore) return;
-    const io = new IntersectionObserver(
-      (entries) => {
-        if (entries[0]?.isIntersecting) setVisible((v) => v + PAGE);
-      },
-      { rootMargin: "400px" },
-    );
-    io.observe(el);
-    return () => io.disconnect();
-  }, [canLoadMore, filtered.length]);
+  const sentinelRef = useInfiniteScroll(() => setVisible((v) => v + PAGE), {
+    canLoadMore,
+    rootMargin: "400px",
+  });
 
   const shown = filtered.slice(0, visible);
 

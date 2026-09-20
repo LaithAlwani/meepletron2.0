@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useEffect, useRef, useState } from "react";
+import { use, useEffect, useState } from "react";
 import Link from "next/link";
 import { useQuery, usePaginatedQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
@@ -9,6 +9,7 @@ import { BackButton } from "@/components/ui/BackButton";
 import { Die } from "@/components/ui/icons";
 import { SortControl } from "@/components/boardgames/SortControl";
 import { useScrollRestore } from "@/components/lib/useScrollRestore";
+import { useInfiniteScroll } from "@/components/lib/useInfiniteScroll";
 import { DEFAULT_SORT, type GameSortKey } from "@/convex/lib/gameSort";
 
 const TITLES: Record<string, string> = {
@@ -54,16 +55,9 @@ export default function CollectionListPage({
     restoreIfReady(results.length);
   }, [results.length, restoreIfReady]);
 
-  const sentinel = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const el = sentinel.current;
-    if (!el) return;
-    const obs = new IntersectionObserver((entries) => {
-      if (entries[0].isIntersecting && status === "CanLoadMore") loadMore(48);
-    });
-    obs.observe(el);
-    return () => obs.disconnect();
-  }, [status, loadMore]);
+  const sentinel = useInfiniteScroll(() => loadMore(48), {
+    canLoadMore: status === "CanLoadMore",
+  });
 
   const title = TITLES[list] ?? "Collection";
 

@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { api } from "@/convex/_generated/api";
 import { relativeTime } from "@/lib/format";
+import { useInfiniteScroll } from "@/components/lib/useInfiniteScroll";
 import { cn } from "@/lib/cn";
 
 type NotifItem = FunctionReturnType<
@@ -95,17 +96,10 @@ export function NotificationsList({ onNavigate }: { onNavigate?: () => void }) {
     {},
     { initialNumItems: 15 },
   );
-  const sentinel = useRef<HTMLDivElement | null>(null);
-  useEffect(() => {
-    const el = sentinel.current;
-    if (!el || status !== "CanLoadMore") return;
-    const io = new IntersectionObserver(
-      (entries) => entries[0]?.isIntersecting && loadMore(15),
-      { rootMargin: "300px" },
-    );
-    io.observe(el);
-    return () => io.disconnect();
-  }, [status, loadMore]);
+  const sentinel = useInfiniteScroll(() => loadMore(15), {
+    canLoadMore: status === "CanLoadMore",
+    rootMargin: "300px",
+  });
 
   if (status === "LoadingFirstPage") {
     return <p className="px-4 py-8 text-center text-sm text-subtle">Loading…</p>;

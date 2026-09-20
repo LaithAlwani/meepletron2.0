@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { usePaginatedQuery, useQuery, useMutation } from "convex/react";
 import { SlidersHorizontal, List, LayoutGrid } from "lucide-react";
@@ -16,6 +16,7 @@ import { SortControl } from "@/components/boardgames/SortControl";
 import { ChatReadyToggle } from "@/components/boardgames/ChatReadyToggle";
 import { BackButton } from "@/components/ui/BackButton";
 import { useScrollRestore } from "@/components/lib/useScrollRestore";
+import { useInfiniteScroll } from "@/components/lib/useInfiniteScroll";
 
 type View = "grid" | "list";
 const gridClass = "grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4";
@@ -77,19 +78,9 @@ function AllBoardgamesInner() {
     catalogBggIds,
   );
 
-  const sentinelRef = useRef<HTMLDivElement | null>(null);
-  useEffect(() => {
-    const el = sentinelRef.current;
-    if (!el || status !== "CanLoadMore") return;
-    const io = new IntersectionObserver(
-      (entries) => {
-        if (entries[0]?.isIntersecting) loadMore(24);
-      },
-      { rootMargin: "600px" },
-    );
-    io.observe(el);
-    return () => io.disconnect();
-  }, [status, loadMore]);
+  const sentinelRef = useInfiniteScroll(() => loadMore(24), {
+    canLoadMore: status === "CanLoadMore",
+  });
 
   const loadingFirst = status === "LoadingFirstPage";
 
