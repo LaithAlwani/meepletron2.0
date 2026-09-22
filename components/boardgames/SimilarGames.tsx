@@ -6,6 +6,7 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { GameCard } from "./GameCard";
+import { RAIL_CELL } from "./GameGrid";
 
 /** "You might also like" — games sharing mechanics/categories. Hidden when none. */
 export function SimilarGames({ gameId }: { gameId: Id<"games"> }) {
@@ -76,7 +77,7 @@ export function SimilarGames({ gameId }: { gameId: Id<"games"> }) {
           className="no-scrollbar -mx-4 flex snap-x scroll-px-4 items-stretch gap-3 overflow-x-auto px-4 lg:mx-0 lg:px-0"
         >
           {games.map((g, i) => (
-            <div key={g._id} className="w-40 shrink-0 snap-start sm:w-44">
+            <div key={g._id} className={RAIL_CELL}>
               <GameCard game={g} index={i} />
             </div>
           ))}

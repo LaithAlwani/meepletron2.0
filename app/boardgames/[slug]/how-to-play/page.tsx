@@ -2,7 +2,15 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { fetchQuery } from "convex/nextjs";
-import { ChevronRight, Users, Clock, Baby, Download } from "lucide-react";
+import {
+  ChevronRight,
+  Users,
+  Clock,
+  Baby,
+  Download,
+  BellRing,
+  HelpCircle,
+} from "lucide-react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { buttonClasses } from "@/components/ui/buttonStyles";
@@ -222,28 +230,37 @@ export default async function HowToPlayPage({
       {/* Rules refresher */}
       {reminders.length > 0 && (
         <section className="mt-7 nav:mt-10">
-          <h2 className="font-display text-xl font-extrabold">Rules refresher</h2>
+          <h2 className="font-display flex items-center gap-2 text-2xl font-extrabold tracking-tight">
+            <BellRing className="h-5 w-5 shrink-0 text-accent" />
+            Rules refresher
+          </h2>
           <p className="mt-1 text-sm text-muted">
             The easy-to-forget bits, straight from the rulebook.
           </p>
-          <ul className="mt-3 divide-y divide-border-muted border-y border-border-muted">
+          <div className="mt-3 divide-y divide-border-muted border-y border-border-muted">
             {reminders.map((r, i) => (
-              <li key={i} className="py-3.5">
-                <p className="font-semibold">{r.label}</p>
-                <Markdown className="mt-0.5 text-sm text-muted">
+              <details key={i} className="group">
+                <summary className="flex cursor-pointer items-center justify-between gap-3 py-3.5 font-medium marker:content-none">
+                  {r.label}
+                  <span className="shrink-0 text-subtle transition-transform group-open:rotate-45">
+                    +
+                  </span>
+                </summary>
+                <Markdown className="pb-4 text-sm text-muted">
                   {clean(r.detail)}
                 </Markdown>
-              </li>
+              </details>
             ))}
-          </ul>
+          </div>
         </section>
       )}
 
       {/* Common questions */}
       {faqs.length > 0 && (
         <section className="mt-7 nav:mt-10">
-          <h2 className="font-display text-xl font-extrabold">
-            Common questions
+          <h2 className="font-display flex items-center gap-2 text-2xl font-extrabold tracking-tight">
+            <HelpCircle className="h-5 w-5 shrink-0 text-accent" />
+            FAQ
           </h2>
           <div className="mt-3 divide-y divide-border-muted border-y border-border-muted">
             {faqs.map((f) => (

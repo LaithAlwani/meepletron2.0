@@ -9,6 +9,7 @@ import { buttonClasses } from "@/components/ui/Button";
 import { Fab } from "@/components/ui/Fab";
 import { PlayPostCard } from "@/components/plays/PlayPostCard";
 import { LogPlayWizard } from "@/components/plays/LogPlayWizard";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { useScrollRestore } from "@/components/lib/useScrollRestore";
 import { useInfiniteScroll } from "@/components/lib/useInfiniteScroll";
 
@@ -51,23 +52,30 @@ export function MyPlaysFeed() {
       {status === "LoadingFirstPage" ? (
         <PlaysSkeleton />
       ) : results.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-border p-10 text-center text-muted">
-          <p className="font-medium">No plays yet.</p>
-          <p className="mt-1 text-sm">
-            Log your first game, or import your history in{" "}
-            <Link href="/settings" className="font-semibold text-accent hover:underline">
-              Settings
-            </Link>
-            .
-          </p>
-          <button
-            onClick={() => setWizardOpen(true)}
-            className={`mt-4 ${buttonClasses("primary", "sm")}`}
-          >
-            <Plus className="h-4 w-4" />
-            Log a play
-          </button>
-        </div>
+        <EmptyState
+          title="No plays yet."
+          description={
+            <>
+              Log your first game, or import your history in{" "}
+              <Link
+                href="/settings"
+                className="font-semibold text-accent hover:underline"
+              >
+                Settings
+              </Link>
+              .
+            </>
+          }
+          action={
+            <button
+              onClick={() => setWizardOpen(true)}
+              className={buttonClasses("primary", "sm")}
+            >
+              <Plus className="h-4 w-4" />
+              Log a play
+            </button>
+          }
+        />
       ) : (
         <>
           <ul

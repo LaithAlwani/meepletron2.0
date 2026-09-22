@@ -21,7 +21,7 @@ import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { Thumb } from "@/components/top-games/Thumb";
 import {
-  FORMAT_LABEL,
+  FormatPill,
   playDate,
   AvatarStack,
   expansionSummary,
@@ -143,9 +143,7 @@ export function PlayPostCard({ play }: { play: PlayPostData }) {
                 <AvatarStack players={play.players} ringClass="ring-surface" />
               )}
               <span>{playDate(play.date)}</span>
-              <span className="rounded-full bg-surface-2 px-1.5 py-px text-[10px] font-bold uppercase tracking-wide">
-                {FORMAT_LABEL[play.format] ?? play.format}
-              </span>
+              <FormatPill format={play.format} />
             </div>
             {expansionSummary(play.expansions) && (
               <p className="mt-0.5 flex items-center gap-1 text-xs text-muted">

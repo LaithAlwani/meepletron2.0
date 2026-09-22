@@ -9,6 +9,7 @@ import { Skeleton } from "@/components/ui/Surface";
 import { Fab } from "@/components/ui/Fab";
 import { buttonClasses } from "@/components/ui/Button";
 import { LogPlayWizard } from "@/components/plays/LogPlayWizard";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { useScrollRestore } from "@/components/lib/useScrollRestore";
 import { useInfiniteScroll } from "@/components/lib/useInfiniteScroll";
 
@@ -74,20 +75,20 @@ export function PlaysGrid({
   if (results.length === 0) {
     return (
       <>
-        <div className="rounded-2xl border border-dashed border-border p-10 text-center text-muted">
-          <p className="font-medium">
-            {isSelf ? "No plays logged yet." : "No public plays yet."}
-          </p>
-          {isSelf && (
-            <button
-              onClick={() => setWizardOpen(true)}
-              className={`mt-4 ${buttonClasses("primary", "sm")}`}
-            >
-              <Plus className="h-4 w-4" />
-              Log a play
-            </button>
-          )}
-        </div>
+        <EmptyState
+          title={isSelf ? "No plays logged yet." : "No public plays yet."}
+          action={
+            isSelf ? (
+              <button
+                onClick={() => setWizardOpen(true)}
+                className={buttonClasses("primary", "sm")}
+              >
+                <Plus className="h-4 w-4" />
+                Log a play
+              </button>
+            ) : undefined
+          }
+        />
         {isSelf && (
           <>
             <Fab

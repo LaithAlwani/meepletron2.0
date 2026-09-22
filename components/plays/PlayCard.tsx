@@ -89,6 +89,15 @@ export const FORMAT_LABEL: Record<string, string> = {
   onevsall: "One vs all",
 };
 
+/** The little uppercase play-format pill shown in play card metadata rows. */
+export function FormatPill({ format }: { format: string }) {
+  return (
+    <span className="rounded-full bg-surface-2 px-1.5 py-px text-[10px] font-bold uppercase tracking-wide text-muted">
+      {FORMAT_LABEL[format] ?? format}
+    </span>
+  );
+}
+
 /** Turn a "YYYY-MM-DD" play date into a friendly label. */
 export function playDate(date: string): string {
   const d = new Date(`${date}T00:00:00`);
@@ -162,14 +171,7 @@ export function PlayCard({ play }: { play: PlayCardData }) {
               {time}
             </span>
           )}
-          <span
-            className={cn(
-              "rounded-full px-1.5 py-px text-[10px] font-bold uppercase tracking-wide",
-              "bg-surface-2 text-muted",
-            )}
-          >
-            {FORMAT_LABEL[play.format] ?? play.format}
-          </span>
+          <FormatPill format={play.format} />
         </div>
         {expansionSummary(play.expansions) && (
           <p className="mt-0.5 flex items-center gap-1 text-xs text-muted">

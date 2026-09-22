@@ -6,9 +6,7 @@ import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { Markdown } from "@/components/ui/Markdown";
-
-const heading =
-  "mb-3 text-[11px] font-bold uppercase tracking-[0.16em] text-subtle";
+import { SectionHeading } from "@/components/ui/Surface";
 
 function ShowMore({
   count,
@@ -40,7 +38,7 @@ export function ComponentsList({ gameId }: { gameId: Id<"games"> }) {
 
   return (
     <section className="animate-in mb-8">
-      <h2 className={heading}>In the box ({data.count})</h2>
+      <SectionHeading className="mb-3">In the box ({data.count})</SectionHeading>
       <ul className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
         {shown.map((c, i) => (
           <li
@@ -76,10 +74,10 @@ export function RemindersList({ gameId }: { gameId: Id<"games"> }) {
 
   return (
     <section className="animate-in mb-8">
-      <h2 className={`${heading} mb-1 flex items-center gap-1.5`}>
+      <SectionHeading className="mb-1 flex items-center gap-1.5">
         <BellRing className="h-3.5 w-3.5 text-accent" />
         Rules refresher
-      </h2>
+      </SectionHeading>
       <p className="mb-3 text-xs text-muted">
         The easy-to-forget bits, straight from the rulebook.
       </p>

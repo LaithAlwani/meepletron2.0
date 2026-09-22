@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useQuery, usePaginatedQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Skeleton } from "@/components/ui/Surface";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { BackButton } from "@/components/ui/BackButton";
 import { Die } from "@/components/ui/icons";
 import { SortControl } from "@/components/boardgames/SortControl";
@@ -83,13 +84,9 @@ export default function CollectionListPage({
       </div>
 
       {!valid || meta === null ? (
-        <p className="rounded-2xl border border-dashed border-border p-10 text-center text-muted">
-          {valid ? "No such user." : "Unknown list."}
-        </p>
+        <EmptyState title={valid ? "No such user." : "Unknown list."} />
       ) : meta && !meta.shared ? (
-        <p className="rounded-2xl border border-dashed border-border p-10 text-center text-muted">
-          This player hasn&apos;t shared this list.
-        </p>
+        <EmptyState title="This player hasn't shared this list." />
       ) : status === "LoadingFirstPage" || meta === undefined ? (
         <div className="grid grid-cols-3 gap-3 sm:grid-cols-6">
           {Array.from({ length: 12 }).map((_, i) => (

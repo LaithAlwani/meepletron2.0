@@ -3,6 +3,7 @@
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
 import { useQuery } from "convex/react";
+import { useLenis } from "lenis/react";
 import {
   MessageCircle,
   BookOpen,
@@ -198,9 +199,11 @@ export default function GameDetailPage({
   const me = useQuery(api.users.me);
   const isAdmin = me?.role === "admin";
 
+  const lenis = useLenis();
   useEffect(() => {
-    window.scrollTo(0, 0);
-  }, [handle]);
+    if (lenis) lenis.scrollTo(0, { immediate: true });
+    else window.scrollTo(0, 0);
+  }, [handle, lenis]);
   const [zoomed, setZoomed] = useState(false);
 
   useEffect(() => {

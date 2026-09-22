@@ -11,13 +11,11 @@ import type { LucideIcon } from "lucide-react";
 import { api } from "@/convex/_generated/api";
 import { GameCard } from "@/components/boardgames/GameCard";
 import { CardRail } from "@/components/boardgames/CardRail";
+import { RAIL_CELL, RailSkeletonCells } from "@/components/boardgames/GameGrid";
 import {
   COLLECTION_STATUSES,
   type CollStatus,
 } from "@/components/collection/status";
-
-// Same fixed-width rail cell the library rows use.
-const cellClass = "w-40 shrink-0 snap-start sm:w-44";
 
 /** "Your Collection" — one horizontal rail per list, shown below the library. */
 export function CollectionSection() {
@@ -92,14 +90,7 @@ function RailSkeleton() {
       {Array.from({ length: 2 }).map((_, r) => (
         <div key={r}>
           <div className="mb-3 h-4 w-28 animate-pulse rounded bg-surface-2" />
-          <div className="flex gap-4 overflow-hidden">
-            {Array.from({ length: 5 }).map((_, i) => (
-              <div
-                key={i}
-                className={`${cellClass} aspect-4/3 animate-pulse rounded-2xl bg-surface-2`}
-              />
-            ))}
-          </div>
+          <RailSkeletonCells count={5} />
         </div>
       ))}
     </div>
@@ -158,18 +149,11 @@ function CollectionRow({ status, total }: { status: CollStatus; total: number })
         showAll={remaining > 0}
       />
       {qStatus === "LoadingFirstPage" && results.length === 0 ? (
-        <div className="flex gap-4 overflow-hidden">
-          {Array.from({ length: 5 }).map((_, i) => (
-            <div
-              key={i}
-              className={`${cellClass} aspect-4/3 animate-pulse rounded-2xl bg-surface-2`}
-            />
-          ))}
-        </div>
+        <RailSkeletonCells count={5} />
       ) : (
         <CardRail>
           {results.map((game, i) => (
-            <li key={game._id} className={cellClass}>
+            <li key={game._id} className={RAIL_CELL}>
               <GameCard game={game} index={i} />
             </li>
           ))}

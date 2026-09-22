@@ -4,20 +4,19 @@ import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { usePaginatedQuery, useQuery } from "convex/react";
-import { SlidersHorizontal, ArrowRight } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { api } from "@/convex/_generated/api";
 import { useTopBarTitle } from "@/components/topbar/MobileTopBar";
 import { GameCard } from "@/components/boardgames/GameCard";
 import { CardRail } from "@/components/boardgames/CardRail";
 import { FilterDrawer } from "@/components/boardgames/FilterDrawer";
 import { useLibraryFilters } from "@/components/boardgames/useLibraryFilters";
-import { SearchTermChip } from "@/components/boardgames/SearchTermChip";
-import { SortControl } from "@/components/boardgames/SortControl";
-import { ChatReadyToggle } from "@/components/boardgames/ChatReadyToggle";
+import { LibraryControls } from "@/components/boardgames/LibraryControls";
+import { ActiveFilterBar } from "@/components/boardgames/ActiveFilterBar";
+import { RAIL_CELL, RailSkeletonCells } from "@/components/boardgames/GameGrid";
 import { CollectionSection } from "@/components/collection/CollectionSection";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { useScrollRestore } from "@/components/lib/useScrollRestore";
-
-const cellClass = "w-40 shrink-0 snap-start sm:w-44";
 
 function LibraryInner() {
   // The nav search deep-links here as /boardgames?q=… — the term seeds the
@@ -70,49 +69,17 @@ function LibraryInner() {
           </h1>
         </div>
 
-        <div className="mt-2 flex items-center justify-end gap-2 nav:mt-4">
-          <ChatReadyToggle
-            active={filters.chatOnly}
-            onToggle={() =>
-              setFilters({ ...filters, chatOnly: !filters.chatOnly })
-            }
-          />
-          <SortControl
-            value={sort}
-            onChange={setSort}
-            className="flex-1 sm:w-40 sm:flex-none"
-          />
-          <button
-            onClick={() => setDrawerOpen(true)}
-            aria-label="Filters"
-            title="Filters"
-            className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-border bg-surface text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
-          >
-            <SlidersHorizontal className="h-4.5 w-4.5" />
-            {activeCount > 0 && (
-              <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-accent px-1 text-[11px] font-bold text-accent-foreground">
-                {activeCount}
-              </span>
-            )}
-          </button>
-        </div>
+        <LibraryControls
+          filters={filters}
+          setFilters={setFilters}
+          sort={sort}
+          setSort={setSort}
+          activeCount={activeCount}
+          onOpenFilters={() => setDrawerOpen(true)}
+        />
       </div>
 
-      {/* What's narrowing the page, and how to undo it. The term only lives in
-          the URL, so without the chip it filters invisibly. */}
-      {(term || activeCount > 0) && (
-        <div className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-2">
-          <SearchTermChip term={term} />
-          {activeCount > 0 && (
-            <button
-              onClick={clear}
-              className="text-sm font-semibold text-accent hover:underline"
-            >
-              Clear all filters
-            </button>
-          )}
-        </div>
-      )}
+      <ActiveFilterBar term={term} activeCount={activeCount} onClear={clear} />
 
       {/* Board games rail — the search results (or a browse sample) */}
       <section className="mb-7 nav:mb-10">
@@ -135,37 +102,39 @@ function LibraryInner() {
         </div>
 
         {loadingFirst ? (
-          <div className="flex gap-4 overflow-hidden">
-            {Array.from({ length: 6 }).map((_, i) => (
-              <div
-                key={i}
-                className={`${cellClass} aspect-4/3 animate-pulse rounded-2xl bg-surface-2`}
-              />
-            ))}
-          </div>
+          <RailSkeletonCells count={6} />
         ) : results.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-border p-10 text-center text-muted">
-            <p className="font-medium">No games match.</p>
-            {/* This row is the local catalogue only — games we don't have yet
-                come from BoardGameGeek, which the full results page shows. */}
-            {searching && (
-              <Link href={allHref} className="mt-1 inline-block text-sm text-accent hover:underline">
-                Search BoardGameGeek for “{term}”
-              </Link>
-            )}
-            {activeCount > 0 && (
-              <button
-                onClick={clear}
-                className="mt-1 block w-full text-sm text-accent hover:underline"
-              >
-                Clear filters
-              </button>
-            )}
-          </div>
+          // Local catalogue only — games we don't have yet come from BoardGameGeek,
+          // which the full results page shows.
+          <EmptyState
+            title="No games match."
+            action={
+              searching || activeCount > 0 ? (
+                <>
+                  {searching && (
+                    <Link
+                      href={allHref}
+                      className="inline-block text-sm text-accent hover:underline"
+                    >
+                      Search BoardGameGeek for “{term}”
+                    </Link>
+                  )}
+                  {activeCount > 0 && (
+                    <button
+                      onClick={clear}
+                      className="block w-full text-sm text-accent hover:underline"
+                    >
+                      Clear filters
+                    </button>
+                  )}
+                </>
+              ) : undefined
+            }
+          />
         ) : (
           <CardRail>
             {results.slice(0, 20).map((game, i) => (
-              <li key={game._id} className={cellClass}>
+              <li key={game._id} className={RAIL_CELL}>
                 <GameCard game={game} index={i} />
               </li>
             ))}

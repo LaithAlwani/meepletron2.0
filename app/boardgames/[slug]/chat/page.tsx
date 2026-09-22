@@ -435,6 +435,7 @@ function ChatView({ gameId, slug }: { gameId: Id<"games">; slug: string }) {
           <div
             ref={scrollRef}
             onScroll={handleScroll}
+            data-lenis-prevent
             className="chat-scroll flex-1 space-y-4 overflow-y-auto py-4"
           >
           {msgStatus === "LoadingMore" && (

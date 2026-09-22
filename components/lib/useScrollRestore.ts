@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { useLenis } from "lenis/react";
 
 type Saved = { count: number; y: number };
 
@@ -22,6 +23,10 @@ type Saved = { count: number; y: number };
 export function useScrollRestore(key: string, defaultCount: number) {
   const K = `scroll-restore:${key}`;
   const doneRef = useRef(false);
+  // When Lenis drives the document scroll, `window.scrollTo` fights its rAF loop —
+  // restore through Lenis instead. `undefined` (reduced motion / no provider)
+  // falls back to the native scroll.
+  const lenis = useLenis();
 
   // Read the saved snapshot once, at init (never during a later render).
   const [{ initialNumItems, saved }] = useState<{
@@ -52,7 +57,10 @@ export function useScrollRestore(key: string, defaultCount: number) {
     if (doneRef.current || !saved) return;
     if (loadedCount >= saved.count) {
       // Next frame, so the restored rows have been laid out.
-      requestAnimationFrame(() => window.scrollTo(0, saved.y));
+      requestAnimationFrame(() => {
+        if (lenis) lenis.scrollTo(saved.y, { immediate: true });
+        else window.scrollTo(0, saved.y);
+      });
       doneRef.current = true;
       try {
         sessionStorage.removeItem(K);

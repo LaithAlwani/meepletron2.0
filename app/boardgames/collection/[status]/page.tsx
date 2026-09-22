@@ -9,11 +9,11 @@ import {
   Unauthenticated,
   AuthLoading,
 } from "convex/react";
-import { SlidersHorizontal } from "lucide-react";
 import { api } from "@/convex/_generated/api";
 import { GameCard } from "@/components/boardgames/GameCard";
-import { SortControl } from "@/components/boardgames/SortControl";
-import { ChatReadyToggle } from "@/components/boardgames/ChatReadyToggle";
+import { LibraryControls } from "@/components/boardgames/LibraryControls";
+import { ActiveFilterBar } from "@/components/boardgames/ActiveFilterBar";
+import { CARD_GRID, GameGridSkeleton } from "@/components/boardgames/GameGrid";
 import { FilterDrawer } from "@/components/boardgames/FilterDrawer";
 import {
   useLibraryFilters,
@@ -22,10 +22,9 @@ import {
 import { useScrollRestore } from "@/components/lib/useScrollRestore";
 import { useInfiniteScroll } from "@/components/lib/useInfiniteScroll";
 import { buttonClasses } from "@/components/ui/Button";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { BackButton } from "@/components/ui/BackButton";
 import { statusBySlug, type CollStatus } from "@/components/collection/status";
-
-const gridClass = "grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4";
 
 export default function CollectionListPage({
   params,
@@ -49,7 +48,7 @@ export default function CollectionListPage({
       </div>
 
       <AuthLoading>
-        <GridSkeleton />
+        <GameGridSkeleton />
       </AuthLoading>
       <Unauthenticated>
         <div className="rounded-2xl border border-border bg-surface p-6 text-center">
@@ -62,16 +61,6 @@ export default function CollectionListPage({
       <Authenticated>
         <ListBody status={status} />
       </Authenticated>
-    </div>
-  );
-}
-
-function GridSkeleton() {
-  return (
-    <div className={gridClass}>
-      {Array.from({ length: 8 }).map((_, i) => (
-        <div key={i} className="aspect-4/3 animate-pulse rounded-2xl bg-surface-2" />
-      ))}
     </div>
   );
 }
@@ -106,22 +95,18 @@ function ListBody({ status }: { status: CollStatus }) {
 
   const content =
     qStatus === "LoadingFirstPage" ? (
-      <GridSkeleton />
+      <GameGridSkeleton />
     ) : results.length === 0 ? (
-      <div className="rounded-2xl border border-dashed border-border p-10 text-center text-muted">
-        <p className="font-medium">
-          {narrowed ? "No games match." : "Nothing here yet."}
-        </p>
-        <p className="mt-1 text-sm">
-          {narrowed ? "Try clearing your filters." : status.empty}
-        </p>
-      </div>
+      <EmptyState
+        title={narrowed ? "No games match." : "Nothing here yet."}
+        description={narrowed ? "Try clearing your filters." : status.empty}
+      />
     ) : (
       <>
         {/* Save scroll + loaded count when a card link is clicked, so Back lands
             where they were. */}
         <div
-          className={gridClass}
+          className={CARD_GRID}
           onClickCapture={(e) => {
             if ((e.target as HTMLElement).closest("a")) save(results.length);
           }}
@@ -140,41 +125,17 @@ function ListBody({ status }: { status: CollStatus }) {
   return (
     <>
       {/* Sort + filters — search lives in the top nav. */}
-      <div className="mb-4 flex items-center justify-end gap-2">
-        <ChatReadyToggle
-          active={filters.chatOnly}
-          onToggle={() =>
-            setFilters({ ...filters, chatOnly: !filters.chatOnly })
-          }
-        />
-        <SortControl
-          value={sort}
-          onChange={setSort}
-          className="flex-1 sm:w-40 sm:flex-none"
-        />
-        <button
-          onClick={() => setDrawerOpen(true)}
-          aria-label="Filters"
-          title="Filters"
-          className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-border bg-surface text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
-        >
-          <SlidersHorizontal className="h-4.5 w-4.5" />
-          {activeCount > 0 && (
-            <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-accent px-1 text-[11px] font-bold text-accent-foreground">
-              {activeCount}
-            </span>
-          )}
-        </button>
-      </div>
+      <LibraryControls
+        filters={filters}
+        setFilters={setFilters}
+        sort={sort}
+        setSort={setSort}
+        activeCount={activeCount}
+        onOpenFilters={() => setDrawerOpen(true)}
+        className="mb-4"
+      />
 
-      {activeCount > 0 && (
-        <button
-          onClick={clear}
-          className="mb-4 text-sm font-semibold text-accent hover:underline"
-        >
-          Clear all filters
-        </button>
-      )}
+      <ActiveFilterBar term="" activeCount={activeCount} onClear={clear} />
 
       {content}
 

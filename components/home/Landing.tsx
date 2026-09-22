@@ -1,4 +1,3 @@
-import type { CSSProperties } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import {
@@ -11,14 +10,8 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { buttonClasses } from "@/components/ui/Button";
-
-// Game pieces drifting behind the hero (desktop only, subtle).
-const PIECES: { emoji: string; className: string; style: CSSProperties }[] = [
-  { emoji: "🎲", className: "left-[7%] top-[14%] text-5xl", style: { ["--r"]: "-12deg", ["--float-dur"]: "6s", animationDelay: "0s" } as CSSProperties },
-  { emoji: "🧩", className: "right-[9%] top-[20%] text-4xl", style: { ["--r"]: "10deg", ["--float-dur"]: "7s", animationDelay: "0.6s" } as CSSProperties },
-  { emoji: "♟️", className: "left-[12%] bottom-[24%] text-4xl", style: { ["--r"]: "6deg", ["--float-dur"]: "5.5s", animationDelay: "1.1s" } as CSSProperties },
-  { emoji: "🃏", className: "right-[12%] bottom-[28%] text-5xl", style: { ["--r"]: "-8deg", ["--float-dur"]: "6.5s", animationDelay: "0.3s" } as CSSProperties },
-];
+import { Reveal, Stagger, StaggerItem } from "@/components/motion/Reveal";
+import { HeroBackdrop } from "@/components/home/HeroBackdrop";
 
 const FEATURES: { icon: LucideIcon; title: string; body: string }[] = [
   {
@@ -57,27 +50,7 @@ const FEATURES: { icon: LucideIcon; title: string; body: string }[] = [
 export function Landing() {
   return (
     <div className="relative overflow-hidden">
-      {/* Aurora + floating pieces backdrop */}
-      <div aria-hidden className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
-        <div
-          className="aurora absolute -left-24 top-[-10%] h-80 w-80 rounded-full bg-accent/20 blur-3xl"
-          style={{ ["--aurora-dur"]: "20s" } as CSSProperties}
-        />
-        <div
-          className="aurora absolute -right-24 top-1/4 h-96 w-96 rounded-full bg-accent/15 blur-3xl"
-          style={{ ["--aurora-dur"]: "26s", animationDelay: "3s" } as CSSProperties}
-        />
-        {PIECES.map((p, i) => (
-          <span
-            key={i}
-            aria-hidden
-            className={`float pointer-events-none absolute hidden select-none opacity-20 blur-[1px] sm:block ${p.className}`}
-            style={p.style}
-          >
-            {p.emoji}
-          </span>
-        ))}
-      </div>
+      <HeroBackdrop />
 
       {/* Hero */}
       <section className="mx-auto max-w-3xl px-4 pb-10 pt-16 text-center sm:pt-24">
@@ -119,11 +92,12 @@ export function Landing() {
 
       {/* Features */}
       <section className="mx-auto max-w-4xl px-4 pb-20">
-        <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <Stagger as="ul" className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {FEATURES.map((f) => {
             const Icon = f.icon;
             return (
-              <li
+              <StaggerItem
+                as="li"
                 key={f.title}
                 className="rounded-2xl border border-border-muted bg-surface/80 p-5 backdrop-blur"
               >
@@ -132,13 +106,13 @@ export function Landing() {
                 </div>
                 <p className="font-display font-bold">{f.title}</p>
                 <p className="mt-1 text-sm text-muted">{f.body}</p>
-              </li>
+              </StaggerItem>
             );
           })}
-        </ul>
+        </Stagger>
 
         {/* Closing CTA */}
-        <div className="mt-8 rounded-2xl border border-accent/30 bg-accent/8 p-6 text-center sm:p-8">
+        <Reveal className="mt-8 rounded-2xl border border-accent/30 bg-accent/8 p-6 text-center sm:p-8">
           <p className="font-display text-xl font-extrabold sm:text-2xl">
             Start your collection of game nights
           </p>
@@ -150,7 +124,7 @@ export function Landing() {
               Create free account
             </Link>
           </div>
-        </div>
+        </Reveal>
       </section>
     </div>
   );

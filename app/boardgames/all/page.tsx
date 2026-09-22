@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { usePaginatedQuery, useQuery, useMutation } from "convex/react";
-import { SlidersHorizontal, List, LayoutGrid } from "lucide-react";
+import { List, LayoutGrid } from "lucide-react";
 import { api } from "@/convex/_generated/api";
 import { GameCard } from "@/components/boardgames/GameCard";
 import { GameListItem } from "@/components/boardgames/GameListItem";
@@ -11,15 +11,14 @@ import { PreviewCard, PreviewRow } from "@/components/boardgames/PreviewCard";
 import { useBggSearch } from "@/components/boardgames/useBggSearch";
 import { FilterDrawer } from "@/components/boardgames/FilterDrawer";
 import { useLibraryFilters } from "@/components/boardgames/useLibraryFilters";
-import { SearchTermChip } from "@/components/boardgames/SearchTermChip";
-import { SortControl } from "@/components/boardgames/SortControl";
-import { ChatReadyToggle } from "@/components/boardgames/ChatReadyToggle";
+import { LibraryControls } from "@/components/boardgames/LibraryControls";
+import { ActiveFilterBar } from "@/components/boardgames/ActiveFilterBar";
+import { CARD_GRID, GameGridSkeleton } from "@/components/boardgames/GameGrid";
 import { BackButton } from "@/components/ui/BackButton";
 import { useScrollRestore } from "@/components/lib/useScrollRestore";
 import { useInfiniteScroll } from "@/components/lib/useInfiniteScroll";
 
 type View = "grid" | "list";
-const gridClass = "grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4";
 
 function AllBoardgamesInner() {
   // The nav search deep-links here as /boardgames/all?q=…
@@ -109,71 +108,37 @@ function AllBoardgamesInner() {
           </h1>
         </div>
 
-        {/* Next line: sort + filters, right-aligned on desktop. Search lives in
-            the top nav and deep-links here with ?q=. */}
-        <div className="mt-2 flex items-center justify-end gap-2 nav:mt-4">
-          <ChatReadyToggle
-            active={filters.chatOnly}
-            onToggle={() =>
-              setFilters({ ...filters, chatOnly: !filters.chatOnly })
-            }
-          />
-          <SortControl
-            value={sort}
-            onChange={setSort}
-            className="flex-1 sm:w-40 sm:flex-none"
-          />
-          <button
-            onClick={() => setDrawerOpen(true)}
-            aria-label="Filters"
-            title="Filters"
-            className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-border bg-surface text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
-          >
-            <SlidersHorizontal className="h-4.5 w-4.5" />
-            {activeCount > 0 && (
-              <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-accent px-1 text-[11px] font-bold text-accent-foreground">
-                {activeCount}
-              </span>
-            )}
-          </button>
-          <button
-            onClick={toggleView}
-            aria-label={view === "grid" ? "Switch to list view" : "Switch to grid view"}
-            title={view === "grid" ? "List view" : "Grid view"}
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-border bg-surface text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
-          >
-            {view === "grid" ? (
-              <List className="h-4.5 w-4.5" />
-            ) : (
-              <LayoutGrid className="h-4.5 w-4.5" />
-            )}
-          </button>
-        </div>
+        {/* Sort + filters, right-aligned on desktop; the grid/list toggle rides
+            along as the trailing control. Search lives in the top nav (?q=). */}
+        <LibraryControls
+          filters={filters}
+          setFilters={setFilters}
+          sort={sort}
+          setSort={setSort}
+          activeCount={activeCount}
+          onOpenFilters={() => setDrawerOpen(true)}
+          trailing={
+            <button
+              onClick={toggleView}
+              aria-label={view === "grid" ? "Switch to list view" : "Switch to grid view"}
+              title={view === "grid" ? "List view" : "Grid view"}
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-border bg-surface text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
+            >
+              {view === "grid" ? (
+                <List className="h-4.5 w-4.5" />
+              ) : (
+                <LayoutGrid className="h-4.5 w-4.5" />
+              )}
+            </button>
+          }
+        />
       </div>
 
-      {/* What's narrowing the page, and how to undo it. The term only lives in
-          the URL, so without the chip it filters invisibly. */}
-      {(term || activeCount > 0) && (
-        <div className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-2">
-          <SearchTermChip term={term} />
-          {activeCount > 0 && (
-            <button
-              onClick={clear}
-              className="text-sm font-semibold text-accent hover:underline"
-            >
-              Clear all filters
-            </button>
-          )}
-        </div>
-      )}
+      <ActiveFilterBar term={term} activeCount={activeCount} onClear={clear} />
 
       {/* Content */}
       {loadingFirst ? (
-        <div className={gridClass}>
-          {Array.from({ length: 8 }).map((_, i) => (
-            <div key={i} className="aspect-4/3 animate-pulse rounded-2xl bg-surface-2" />
-          ))}
-        </div>
+        <GameGridSkeleton count={8} />
       ) : results.length === 0 && bggResults.length === 0 ? (
         bggPending ? (
           <div className="flex flex-col items-center gap-3 py-20 text-center">
@@ -212,7 +177,7 @@ function AllBoardgamesInner() {
             </div>
           ) : (
             <div
-              className={gridClass}
+              className={CARD_GRID}
               onClickCapture={(e) => {
                 if ((e.target as HTMLElement).closest("a")) save(results.length);
               }}
