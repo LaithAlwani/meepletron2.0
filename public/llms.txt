@@ -1,0 +1,12 @@
+# Meepletron
+
+> Meepletron is an AI board game rules expert. Ask any board game rules question and get an answer pulled from that game's actual rulebook — quoting the exact rule with the page it came from, not a guess from a general AI model. It also includes a board game library, a plays feed, personal stats, ranked Top Games lists, and table tools.
+
+## How the AI answers
+Answers are retrieved from the specific game's official rulebook (retrieval-augmented) and quote the relevant passage with a page citation. Meepletron does not answer board game rules from general model knowledge — every answer is grounded in that game's rulebook so it can be verified.
+
+## Key pages
+- [Board game library](https://www.meepletron.com/boardgames): Browse games and open any game's rules, reference, and AI rulebook chat.
+- [How to play (per game)](https://www.meepletron.com/boardgames): Each game has a "how to play" page with a rules refresher and FAQ answered from the official rulebook, with citations (e.g. /boardgames/{game-slug}/how-to-play).
+- [Top Games lists](https://www.meepletron.com/top-games): Community and personal ranked top-N board game lists.
+- [About](https://www.meepletron.com/about): What Meepletron is and why it exists.

@@ -38,6 +38,13 @@ const getGameSlugs = unstable_cache(
   { revalidate: ONE_DAY },
 );
 
+// Public Top Games lists — same daily-cache pattern as the game slugs.
+const getTopLists = unstable_cache(
+  () => fetchQuery(api.topGames.sitemapLists, {}),
+  ["sitemap-top-lists"],
+  { revalidate: ONE_DAY },
+);
+
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const staticRoutes: MetadataRoute.Sitemap = ROUTES.map((r) => ({
     url: `${SITE_URL}${r.path}`,
@@ -70,5 +77,19 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     // If Convex is unreachable at build/request time, still emit the static map.
   }
 
-  return [...staticRoutes, ...gameRoutes];
+  // Public Top Games lists — shareable ranked lists worth indexing.
+  let listRoutes: MetadataRoute.Sitemap = [];
+  try {
+    const lists = await getTopLists();
+    listRoutes = lists.map((l) => ({
+      url: `${SITE_URL}/top-games/${l.id}`,
+      lastModified: new Date(l.updatedAt),
+      changeFrequency: "weekly" as const,
+      priority: 0.6,
+    }));
+  } catch {
+    // Non-fatal — omit list URLs if Convex is unreachable.
+  }
+
+  return [...staticRoutes, ...gameRoutes, ...listRoutes];
 }

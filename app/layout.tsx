@@ -57,6 +57,64 @@ export const metadata: Metadata = {
     icon: "/icons/icon-192x192.webp",
     apple: "/icons/icon-192x192.webp",
   },
+  // Site-wide social-card defaults. Pages inherit these unless they set their
+  // own; the default card image comes from app/opengraph-image.tsx.
+  openGraph: {
+    type: "website",
+    siteName: "Meepletron",
+    title: "Meepletron — Ask your board game rules",
+    description:
+      "An AI that answers board game rules questions from the actual rulebook, cited by page.",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Meepletron — Ask your board game rules",
+    description:
+      "An AI that answers board game rules questions from the actual rulebook, cited by page.",
+  },
+};
+
+// Site-level structured data: what Meepletron is (Organization + WebSite + the
+// AI rules-assistant WebApplication). Emitted once, site-wide, so Google and
+// LLMs get a clear "what is this product" signal on every page.
+const SITE_JSON_LD = {
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "Organization",
+      "@id": `${SITE_URL}/#organization`,
+      name: "Meepletron",
+      url: SITE_URL,
+      logo: `${SITE_URL}/icons/icon-192x192.webp`,
+    },
+    {
+      "@type": "WebSite",
+      "@id": `${SITE_URL}/#website`,
+      name: "Meepletron",
+      url: SITE_URL,
+      publisher: { "@id": `${SITE_URL}/#organization` },
+      potentialAction: {
+        "@type": "SearchAction",
+        target: {
+          "@type": "EntryPoint",
+          urlTemplate: `${SITE_URL}/boardgames?q={search_term_string}`,
+        },
+        "query-input": "required name=search_term_string",
+      },
+    },
+    {
+      "@type": "WebApplication",
+      "@id": `${SITE_URL}/#app`,
+      name: "Meepletron",
+      url: SITE_URL,
+      applicationCategory: "GameApplication",
+      operatingSystem: "Web",
+      description:
+        "An AI board game rules expert that answers rules questions from the game's actual rulebook, quoting the exact rule with the page it came from.",
+      offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
+      publisher: { "@id": `${SITE_URL}/#organization` },
+    },
+  ],
 };
 
 export const viewport: Viewport = {
@@ -89,6 +147,10 @@ export default function RootLayout({
       <body className="flex min-h-full flex-col font-sans">
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
         <script dangerouslySetInnerHTML={{ __html: installCaptureScript }} />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(SITE_JSON_LD) }}
+        />
         <Providers>
           <PreferencesEffects />
           <NavigationTracker />

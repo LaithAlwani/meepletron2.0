@@ -566,6 +566,20 @@ export const getList = query({
   },
 });
 
+/** Public lists for the sitemap — id + updatedAt only, cheap to read in bulk. */
+export const sitemapLists = query({
+  args: {},
+  handler: async (ctx) => {
+    const lists = await ctx.db
+      .query("topGamesLists")
+      .withIndex("by_visibility_category_year", (q) =>
+        q.eq("visibility", "public"),
+      )
+      .take(10000);
+    return lists.map((l) => ({ id: l._id, updatedAt: l.updatedAt }));
+  },
+});
+
 /** A user's public profile: their public finalized lists. Null if no such user. */
 export const publicProfile = query({
   args: { username: v.string() },

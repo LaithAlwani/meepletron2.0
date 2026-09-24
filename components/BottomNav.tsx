@@ -43,6 +43,26 @@ export function BottomNav() {
       />
       <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-surface/95 pb-[env(safe-area-inset-bottom)] backdrop-blur nav:hidden">
         <ul className="mx-auto flex max-w-md items-stretch">
+          {TABS.map((t) => {
+            const active =
+              pathname === t.href || pathname.startsWith(t.href + "/");
+            const Icon = t.icon;
+            return (
+              <li key={t.href} className="flex-1">
+                <Link
+                  href={t.href}
+                  aria-current={active ? "page" : undefined}
+                  className={cn(
+                    "flex h-13 flex-col items-center justify-center gap-0.5 text-[10px] font-semibold transition-colors",
+                    active ? "text-accent" : "text-subtle hover:text-muted",
+                  )}
+                >
+                  <Icon className="h-4.5 w-4.5" strokeWidth={active ? 2.4 : 2} />
+                  {t.label}
+                </Link>
+              </li>
+            );
+          })}
           <li className="flex-1">
             <Link
               href="/profile"
@@ -75,26 +95,6 @@ export function BottomNav() {
               Profile
             </Link>
           </li>
-          {TABS.map((t) => {
-            const active =
-              pathname === t.href || pathname.startsWith(t.href + "/");
-            const Icon = t.icon;
-            return (
-              <li key={t.href} className="flex-1">
-                <Link
-                  href={t.href}
-                  aria-current={active ? "page" : undefined}
-                  className={cn(
-                    "flex h-13 flex-col items-center justify-center gap-0.5 text-[10px] font-semibold transition-colors",
-                    active ? "text-accent" : "text-subtle hover:text-muted",
-                  )}
-                >
-                  <Icon className="h-4.5 w-4.5" strokeWidth={active ? 2.4 : 2} />
-                  {t.label}
-                </Link>
-              </li>
-            );
-          })}
           <li className="flex-1">
             <button
               onClick={() => setMoreOpen(true)}
