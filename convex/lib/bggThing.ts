@@ -194,6 +194,41 @@ export function parseItemType(block: string): string | undefined {
 }
 
 /**
+ * The expansions a base game has. The mirror of {@link parseExpansionParents}:
+ * BGG uses one `boardgameexpansion` link type for both directions and
+ * distinguishes them with `inbound`. On a base game's /thing response the
+ * expansions are the links *without* `inbound="true"`.
+ *
+ * Related-but-different link types (`boardgameintegration`,
+ * `boardgamecompilation`) are separate relationships and are not matched here.
+ *
+ * Note that BGG's list is exhaustive, not curated: a popular game lists every
+ * promo and fan item alongside the handful of real expansions, so callers are
+ * expected to filter before creating anything.
+ */
+export function parseExpansionLinks(
+  block: string,
+): { bggId: string; name: string }[] {
+  const out: { bggId: string; name: string }[] = [];
+  const seen = new Set<string>();
+  const re = /<link type="boardgameexpansion"[^>]*>/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(block))) {
+    const tag = m[0];
+    if (/\binbound="true"/.test(tag)) continue; // that direction is the parent
+    const id = tag.match(/\bid="(\d+)"/)?.[1];
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    const name = tag.match(/\bvalue="([^"]*)"/)?.[1];
+    out.push({
+      bggId: id,
+      name: name ? decodeEntities(name).trim() : `BGG ${id}`,
+    });
+  }
+  return out;
+}
+
+/**
  * The base game(s) an expansion expands. On an expansion's /thing response the
  * base games are the `boardgameexpansion` links marked `inbound="true"` (an
  * outbound link on a base game points the other way, at its expansions). Usually

@@ -42,12 +42,13 @@ if (!process.env.CRONS_DISABLED) {
     {},
   );
 
-  // Refresh the stalest games' BGG stats. BGG ratings barely move, so a slow
-  // cadence is fine (every 3 days) — the index range scan in dueForRefresh keeps
-  // each run cheap.
-  crons.interval(
+  // Refresh the stalest games' BGG stats, and reconcile their expansion lists.
+  // Daily rather than every 72h: the batched /thing calls make a 300-game run
+  // ~15 requests, and only a daily cadence keeps a ~2,000-game catalogue inside
+  // the 7-day freshness window it claims.
+  crons.daily(
     "refresh stale bgg stats",
-    { hours: 72 },
+    { hourUTC: 2, minuteUTC: 0 },
     internal.bgg.refreshStale,
     {},
   );

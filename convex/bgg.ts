@@ -8,7 +8,12 @@ import {
 import { internal } from "./_generated/api";
 import { bggStatsValidator } from "./lib/bggStats";
 import { bggSortKeys } from "./lib/gameSort";
-import { parseItem, parseFullItem, decodeEntities } from "./lib/bggThing";
+import {
+  parseItem,
+  parseFullItem,
+  parseExpansionLinks,
+  decodeEntities,
+} from "./lib/bggThing";
 
 const BGG_USER_AGENT = "Meepletron/1.0 (board game rules assistant)";
 
@@ -148,67 +153,74 @@ export const markChecked = internalMutation({
 
 const REFRESH_TTL_MS = 7 * 24 * 60 * 60 * 1000; // ratings barely move — weekly is plenty
 
-export const refreshTarget = internalQuery({
-  args: { gameId: v.id("games") },
-  handler: async (ctx, { gameId }) => {
-    const g = await ctx.db.get("games", gameId);
-    if (!g) return null;
-    return { bggId: g.bggId ?? null, fetchedAt: g.bgg?.fetchedAt ?? null };
-  },
-});
+/**
+ * How many games one cron run refreshes. BGG's /thing takes comma-separated
+ * ids, so this is fetched as ceil(REFRESH_BATCH / THING_CHUNK) requests rather
+ * than one per game — which is what lets the number be this size.
+ *
+ * Sized against the TTL: ~2,000 curated games refreshed weekly needs ~290 a
+ * day, so 300 daily keeps every game inside its 7-day window. That's 15
+ * requests per run, about 45 seconds of staggered traffic. The old 20-per-run
+ * (every 72h) covered ~7 games a day and could never catch up.
+ */
+const REFRESH_BATCH = 300;
+/** Ids per /thing call. BGG accepts a comma-separated list; keep it modest. */
+const THING_CHUNK = 20;
+/** Gap between requests within a run, so a batch isn't a burst. */
+const REFRESH_STAGGER_MS = 3000;
 
 /**
- * TTL-gated refresh of one game's BGG stats.
+ * Expansions below this many BGG ratings aren't recorded.
  *
- * Internal on purpose. This used to be a public action called from the game
- * detail page, which meant anyone could drive unlimited Convex invocations and
- * BGG fetches through it with an arbitrary gameId. It's now reachable only via
- * the hourly `refreshStale` cron below.
- *
- * A failed fetch leaves the cached stats untouched — the DB is always the read
- * source — but still stamps `bggCheckedAt` so the game backs off.
+ * BGG's expansion list is exhaustive, not curated: a popular game lists every
+ * promo card and fan item next to its real expansions. Recording all of them
+ * would bury the handful people play — and because `bggSync.enrichStubs`
+ * self-drains, every one created would also pull its own BGG fetch. The rating
+ * count is the cheapest signal that separates the two, and it arrives in the
+ * same batched call that qualifies them.
  */
-export const refreshOne = internalAction({
-  args: { gameId: v.id("games") },
-  handler: async (ctx, { gameId }): Promise<void> => {
-    const token = process.env.BGG_API_TOKEN;
-    if (!token) return;
-    const target = await ctx.runQuery(internal.bgg.refreshTarget, { gameId });
-    if (!target || !target.bggId) return;
-    if (target.fetchedAt && Date.now() - target.fetchedAt < REFRESH_TTL_MS) {
-      return;
-    }
-    try {
-      const res = await fetch(
-        `https://boardgamegeek.com/xmlapi2/thing?id=${target.bggId}&stats=1`,
-        {
-          headers: {
-            "User-Agent": "Meepletron/1.0 (board game rules assistant)",
-            Authorization: `Bearer ${token}`,
-          },
-        },
-      );
-      const xml = res.ok ? await res.text() : "";
-      const block = xml.match(/<item [\s\S]*?<\/item>/)?.[0];
-      if (!block) {
-        await ctx.runMutation(internal.bgg.markChecked, { gameId });
-        return;
-      }
-      await ctx.runMutation(internal.bgg.setBggStats, {
-        gameId,
-        bgg: { ...parseItem(block), fetchedAt: Date.now() },
-      });
-    } catch {
-      // Leave the cached stats as-is, but don't retry this game every hour.
-      await ctx.runMutation(internal.bgg.markChecked, { gameId });
-    }
-  },
-});
+const MIN_EXPANSION_RATINGS = 30;
+/** Ceiling on how many links we'll qualify for one game (Carcassonne has 200+). */
+const MAX_EXPANSION_LINKS = 100;
 
-/** How many games one cron run refreshes. The ceiling on BGG traffic per hour. */
-const REFRESH_BATCH = 20;
-/** Gap between fetches within a run, so a batch isn't a burst. */
-const REFRESH_STAGGER_MS = 3000;
+/** Stable fingerprint of a BGG expansion-id set, order-independent. */
+function expansionsFingerprint(ids: string[]): string {
+  return [...ids].sort().join(",");
+}
+
+/** Split a list into fixed-size chunks. */
+function chunk<T>(xs: T[], size: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < xs.length; i += size) out.push(xs.slice(i, i + size));
+  return out;
+}
+
+/** Every `<item>` block in a /thing response, keyed by BGG id. */
+function itemsById(xml: string): Map<string, string> {
+  const out = new Map<string, string>();
+  for (const m of xml.matchAll(/<item\b[^>]*\bid="(\d+)"[\s\S]*?<\/item>/g)) {
+    out.set(m[1], m[0]);
+  }
+  return out;
+}
+
+/** One authenticated /thing call for up to THING_CHUNK ids. */
+async function fetchThing(ids: string[], stats: boolean): Promise<string> {
+  const token = process.env.BGG_API_TOKEN;
+  if (!token) return "";
+  const res = await fetch(
+    `https://boardgamegeek.com/xmlapi2/thing?id=${ids.join(",")}${
+      stats ? "&stats=1" : ""
+    }`,
+    {
+      headers: {
+        "User-Agent": BGG_USER_AGENT,
+        Authorization: `Bearer ${token}`,
+      },
+    },
+  );
+  return res.ok ? await res.text() : "";
+}
 
 /**
  * Games most overdue for a stats refresh, oldest-checked first.
@@ -227,15 +239,19 @@ export const dueForRefresh = internalQuery({
     const cutoff = Date.now() - REFRESH_TTL_MS;
     // Range scan on the refresh index: only non-stub games whose last check is
     // older than the TTL (never-checked games have `bggCheckedAt: undefined`,
-    // which sorts first, so they're picked up too), stalest-first. We read a
-    // small multiple of the batch to skip any curated games without a bggId,
-    // instead of scanning the whole catalogue.
+    // which sorts first, so they're picked up too), stalest-first.
+    //
+    // The headroom over `limit` is there to skip curated games with no bggId.
+    // It's deliberately small: these are full game documents (descriptions and
+    // all), so at the current batch size a 5x multiple would read ~1,500 docs —
+    // megabytes per run, against a transaction that has a size ceiling. Falling
+    // slightly short just leaves the rest for tomorrow's run.
     const due = await ctx.db
       .query("games")
       .withIndex("by_isStub_and_bggCheckedAt", (q) =>
         q.eq("isStub", false).lt("bggCheckedAt", cutoff),
       )
-      .take(limit * 5);
+      .take(Math.min(limit * 2, 800));
 
     return due
       .filter((g) => !!g.bggId)
@@ -255,13 +271,121 @@ export const refreshStale = internalAction({
     const gameIds = await ctx.runQuery(internal.bgg.dueForRefresh, {
       limit: REFRESH_BATCH,
     });
-    for (const [i, gameId] of gameIds.entries()) {
+    // One request per chunk rather than per game: 100 games is 5 calls.
+    for (const [i, group] of chunk(gameIds, THING_CHUNK).entries()) {
       await ctx.scheduler.runAfter(
         i * REFRESH_STAGGER_MS,
-        internal.bgg.refreshOne,
-        { gameId },
+        internal.bgg.refreshChunk,
+        { gameIds: group },
       );
     }
+  },
+});
+
+/**
+ * Refresh one chunk of games from a single batched /thing call, and queue
+ * expansion reconciliation for any base game whose BGG expansion list changed.
+ *
+ * A game missing from the response still gets stamped via `markChecked`, so a
+ * permanently unresolvable id can't occupy a slot in every run.
+ */
+export const refreshChunk = internalAction({
+  args: { gameIds: v.array(v.id("games")) },
+  handler: async (ctx, { gameIds }): Promise<void> => {
+    const targets = await ctx.runQuery(internal.games.bggIdsFor, { gameIds });
+    if (targets.length === 0) return;
+
+    let items: Map<string, string>;
+    try {
+      items = itemsById(await fetchThing(targets.map((t) => t.bggId), true));
+    } catch {
+      for (const t of targets) {
+        await ctx.runMutation(internal.bgg.markChecked, { gameId: t.gameId });
+      }
+      return;
+    }
+
+    let queued = 0;
+    for (const t of targets) {
+      const block = items.get(t.bggId);
+      if (!block) {
+        await ctx.runMutation(internal.bgg.markChecked, { gameId: t.gameId });
+        continue;
+      }
+      await ctx.runMutation(internal.bgg.setBggStats, {
+        gameId: t.gameId,
+        bgg: { ...parseItem(block), fetchedAt: Date.now() },
+      });
+
+      // Expansions hang off base games only, and the links came free with the
+      // stats we just fetched. Skip when the set is unchanged since last time.
+      if (t.isExpansion) continue;
+      const links = parseExpansionLinks(block).slice(0, MAX_EXPANSION_LINKS);
+      if (links.length === 0) continue;
+      const hash = expansionsFingerprint(links.map((l) => l.bggId));
+      if (hash === t.expansionsHash) continue;
+
+      // Its own action so qualifying (which does fetch) is paced separately and
+      // one bad game can't fail the whole chunk.
+      await ctx.scheduler.runAfter(
+        ++queued * REFRESH_STAGGER_MS,
+        internal.bgg.syncExpansions,
+        { gameId: t.gameId, links, hash },
+      );
+    }
+  },
+});
+
+/**
+ * Reconcile one base game's expansions against BGG.
+ *
+ * Discovery was free (the links rode along with the stats), but deciding which
+ * of them are real costs a fetch — so this qualifies them in batched /thing
+ * calls and keeps the ones clearing MIN_EXPANSION_RATINGS. Anything already in
+ * our library is kept regardless of rating: it's there because someone wanted
+ * it. The fingerprint is stamped either way, so an unchanged list never pays
+ * this cost twice.
+ */
+export const syncExpansions = internalAction({
+  args: {
+    gameId: v.id("games"),
+    links: v.array(v.object({ bggId: v.string(), name: v.string() })),
+    hash: v.string(),
+  },
+  handler: async (ctx, { gameId, links, hash }): Promise<void> => {
+    const knownIds: string[] = await ctx.runQuery(internal.games.knownBggIds, {
+      bggIds: links.map((l) => l.bggId),
+    });
+    const known = new Set(knownIds);
+
+    const keep: { bggId: string; title: string }[] = [];
+    const toQualify = links.filter((l) => !known.has(l.bggId));
+    for (const l of links) {
+      if (known.has(l.bggId)) keep.push({ bggId: l.bggId, title: l.name });
+    }
+
+    for (const group of chunk(toQualify, THING_CHUNK)) {
+      let items: Map<string, string>;
+      try {
+        items = itemsById(await fetchThing(group.map((g) => g.bggId), true));
+      } catch {
+        // Leave the fingerprint unset so the next pass retries this game.
+        return;
+      }
+      for (const l of group) {
+        const block = items.get(l.bggId);
+        if (!block) continue;
+        const { ratingCount } = parseItem(block);
+        if ((ratingCount ?? 0) < MIN_EXPANSION_RATINGS) continue;
+        keep.push({ bggId: l.bggId, title: l.name });
+      }
+    }
+
+    await ctx.runMutation(internal.games.linkExpansions, {
+      parentId: gameId,
+      expansions: keep,
+      hash,
+    });
   },
 });
 
@@ -436,10 +560,23 @@ export const fetchGameInfo = action({
     const itemMatch = xml.match(/<item [\s\S]*?<\/item>/);
     if (!itemMatch) throw new ConvexError("No game found for that BGG id.");
     const block = itemMatch[0];
+    // The expansion links ride along with the item we already fetched, so the
+    // admin can see what BGG lists without another round trip. Reported only —
+    // the refresh cron is what actually records them.
+    const links = parseExpansionLinks(block).slice(0, MAX_EXPANSION_LINKS);
+    const knownIds: string[] = await ctx.runQuery(internal.games.knownBggIds, {
+      bggIds: links.map((l) => l.bggId),
+    });
+    const known = new Set(knownIds);
     return {
       ...parseFullItem(block),
       bggId: id,
       bgg: { ...parseItem(block), fetchedAt: Date.now() },
+      expansions: links.map((l) => ({
+        bggId: l.bggId,
+        name: l.name,
+        inLibrary: known.has(l.bggId),
+      })),
     };
   },
 });

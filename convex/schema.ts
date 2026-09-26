@@ -151,6 +151,9 @@ export default defineSchema({
     // Denormalized "title + designers + publishers + categories + mechanics"
     // for fuzzy full-text search across all of them. Maintained on create/update.
     searchText: v.optional(v.string()),
+    // Fingerprint of the BGG expansion-id set we last reconciled for this base
+    // game. Unchanged fingerprint → the refresh skips expansion work entirely.
+    expansionsHash: v.optional(v.string()),
     // Denormalized: does this base game have ≥1 expansion? For the library filter.
     hasExpansions: v.optional(v.boolean()),
     // Denormalized "similar games" (base-game ids, best-first), recomputed by a

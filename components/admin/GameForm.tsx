@@ -115,6 +115,11 @@ export function GameForm({
   const [bggId, setBggId] = useState(initial?.bggId ?? "");
   const [bggStats, setBggStats] = useState<BggStats | undefined>(initial?.bgg);
   const [filling, setFilling] = useState(false);
+  // What BGG lists as expansions of this game. Reported by the fill, not
+  // written here — the refresh cron records the ones that qualify.
+  const [expansions, setExpansions] = useState<
+    { bggId: string; name: string; inLibrary: boolean }[] | null
+  >(null);
 
   const fetchInfo = useAction(api.bgg.fetchGameInfo);
 
@@ -139,6 +144,7 @@ export function GameForm({
       if (d.bggId) setBggId(d.bggId);
       if (d.bgg) setBggStats(d.bgg);
       if (d.imageUrl && onBggImage) await onBggImage(d.imageUrl);
+      setExpansions(d.expansions ?? []);
     } catch (err) {
       setError(friendlyError(err, "Couldn't fetch from BGG."));
     } finally {
@@ -207,6 +213,44 @@ export function GameForm({
         <p className="mt-1 text-xs text-muted">
           Fills the fields below plus rating, weight, and the player-count poll.
         </p>
+
+        {expansions && (
+          <div className="mt-3 rounded-lg border border-border bg-surface p-3">
+            <p className="text-xs font-semibold">
+              {expansions.length === 0
+                ? "BGG lists no expansions for this game."
+                : `BGG lists ${expansions.length} expansion${
+                    expansions.length === 1 ? "" : "s"
+                  } — ${
+                    expansions.filter((e) => e.inLibrary).length
+                  } already here.`}
+            </p>
+            {expansions.length > 0 && (
+              <>
+                <ul className="mt-2 flex max-h-40 flex-col gap-1 overflow-y-auto text-xs">
+                  {expansions.map((e) => (
+                    <li key={e.bggId} className="flex items-center gap-2">
+                      <span
+                        className={
+                          e.inLibrary
+                            ? "shrink-0 rounded bg-accent-2/15 px-1.5 py-px text-[10px] font-bold uppercase text-accent-2"
+                            : "shrink-0 rounded bg-surface-2 px-1.5 py-px text-[10px] font-bold uppercase text-subtle"
+                        }
+                      >
+                        {e.inLibrary ? "in library" : "new"}
+                      </span>
+                      <span className="min-w-0 truncate">{e.name}</span>
+                    </li>
+                  ))}
+                </ul>
+                <p className="mt-2 text-[11px] text-subtle">
+                  Listed only. The BGG refresh records the ones with enough
+                  ratings to be real expansions rather than promos.
+                </p>
+              </>
+            )}
+          </div>
+        )}
       </div>
 
       <Field label="Title">
