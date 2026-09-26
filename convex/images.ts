@@ -277,6 +277,22 @@ export const importGame = action({
       return { slug: existing.slug, gameId: existing._id, created: false };
     }
 
+    // Past this point the call costs a BGG fetch and a new game row, so it's
+    // rate limited. Deliberately after the already-imported check: opening a
+    // game that's already in the library is free and shouldn't spend anyone's
+    // budget. Admins are exempt (see convex/rateLimit.ts).
+    const allowed = await ctx.runMutation(internal.rateLimit.consume, {
+      scope: "import",
+    });
+    if (!allowed.ok) {
+      const minutes = Math.max(1, Math.ceil(allowed.retryAfterMs / 60_000));
+      throw new ConvexError(
+        `Too many games added just now. Try again in ${minutes} minute${
+          minutes === 1 ? "" : "s"
+        }.`,
+      );
+    }
+
     let gameId: Id<"games">;
     let created = false;
     if (existing) {

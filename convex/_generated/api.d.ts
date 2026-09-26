@@ -68,6 +68,7 @@ import type * as plays from "../plays.js";
 import type * as posts from "../posts.js";
 import type * as r2 from "../r2.js";
 import type * as rag from "../rag.js";
+import type * as rateLimit from "../rateLimit.js";
 import type * as reminders from "../reminders.js";
 import type * as rulebookRequests from "../rulebookRequests.js";
 import type * as rulebooks from "../rulebooks.js";
@@ -146,6 +147,7 @@ declare const fullApi: ApiFromModules<{
   posts: typeof posts;
   r2: typeof r2;
   rag: typeof rag;
+  rateLimit: typeof rateLimit;
   reminders: typeof reminders;
   rulebookRequests: typeof rulebookRequests;
   rulebooks: typeof rulebooks;

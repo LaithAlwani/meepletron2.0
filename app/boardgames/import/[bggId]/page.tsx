@@ -7,6 +7,7 @@ import { useAction } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { buttonClasses } from "@/components/ui/Button";
 import { Die } from "@/components/ui/icons";
+import { friendlyError } from "@/lib/friendlyError";
 
 export default function ImportGamePage({
   params,
@@ -41,9 +42,9 @@ function ImportRunner({ bggId }: { bggId: string }) {
         });
         router.replace(`/boardgames/${slug}`);
       } catch (e) {
-        setError(
-          e instanceof Error ? e.message : "Couldn't set up that game.",
-        );
+        // friendlyError keeps the rate-limit message readable instead of
+        // showing Convex's "[CONVEX A(...)] ... Server Error" wrapper.
+        setError(friendlyError(e, "Couldn't set up that game."));
       }
     })();
   }, [bggId, title, importGame, router]);

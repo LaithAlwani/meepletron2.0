@@ -643,6 +643,15 @@ export default defineSchema({
     .index("by_email", ["emailLower"])
     .index("by_play", ["playId"]),
 
+  // Fixed-window counters for rate-limited public actions (see convex/rateLimit.ts).
+  // High-churn and disposable, so it's a dedicated table rather than fields on
+  // `users`; a daily prune drops windows that have closed.
+  rateLimits: defineTable({
+    key: v.string(), // "<scope>:global" | "<scope>:user:<userId>"
+    windowStart: v.number(),
+    count: v.number(),
+  }).index("by_key", ["key"]),
+
   // The social feed. One post per shared item (play / image / toplist). Holds
   // only shared content and references plays/lists rather than duplicating them.
   posts: defineTable(postRowValidator)

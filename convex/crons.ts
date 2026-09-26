@@ -63,6 +63,15 @@ if (!process.env.CRONS_DISABLED) {
     {},
   );
 
+  // Drop rate-limit counters whose window has closed. Rows are keyed per user,
+  // so this is what stops the table growing with every guest who imports a game.
+  crons.daily(
+    "prune rate limit counters",
+    { hourUTC: 4, minuteUTC: 30 },
+    internal.rateLimit.pruneExpired,
+    {},
+  );
+
   // Recompute the denormalized "similar games" ranking + reconcile the cached
   // catalogue count. Rankings barely change day to day, so every 3 days is plenty
   // (the count stays live between runs via the +1/-1 hooks in create/update/delete
