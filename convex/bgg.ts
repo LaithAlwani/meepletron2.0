@@ -572,11 +572,21 @@ export const backfillCovers = internalAction({
  * recorded, just sooner.
  */
 export const recordExpansions = action({
-  args: { gameId: v.id("games") },
+  args: {
+    gameId: v.id("games"),
+    /** Exactly what to record — the admin's ticked boxes, not a guess. */
+    expansions: v.array(v.object({ bggId: v.string(), title: v.string() })),
+    /**
+     * Fingerprint of the *full* BGG list the picker was built from, so the
+     * nightly pass treats this list as dealt with and doesn't re-add the ones
+     * that were deliberately left unticked.
+     */
+    hash: v.string(),
+  },
   handler: async (
     ctx,
-    { gameId },
-  ): Promise<{ created: number; linked: number; considered: number }> => {
+    { gameId, expansions, hash },
+  ): Promise<{ created: number; linked: number }> => {
     await ctx.runQuery(internal.users.ensureAdmin, {});
     const targets: {
       gameId: Id<"games">;
@@ -590,21 +600,12 @@ export const recordExpansions = action({
       throw new ConvexError("Expansions don't have expansions of their own.");
     }
 
-    const xml = await fetchThing([target.bggId], true);
-    const block = itemsById(xml).get(target.bggId);
-    if (!block) throw new ConvexError("BGG didn't return that game.");
-
-    const links = parseExpansionLinks(block).slice(0, MAX_EXPANSION_LINKS);
-    if (links.length === 0) {
-      return { created: 0, linked: 0, considered: 0 };
-    }
-    const result: { created: number; linked: number } = await qualifyAndLink(
-      ctx,
-      gameId,
-      links,
-      expansionsFingerprint(links.map((l) => l.bggId)),
-    );
-    return { ...result, considered: links.length };
+    // No ratings bar here: the admin's selection *is* the filter.
+    return await ctx.runMutation(internal.games.linkExpansions, {
+      parentId: gameId,
+      expansions,
+      hash,
+    });
   },
 });
 
@@ -642,15 +643,51 @@ export const fetchGameInfo = action({
       bggIds: links.map((l) => l.bggId),
     });
     const known = new Set(knownIds);
+
+    // Rating counts for the picker. BGG's list mixes real expansions with
+    // promos, and the rating count is what tells them apart at a glance — so
+    // it's worth the extra batched calls (one per 20) on an admin action.
+    const stats = new Map<string, { ratingCount: number; year?: string }>();
+    for (const group of chunk(links, THING_CHUNK)) {
+      const items = itemsById(
+        await fetchThing(
+          group.map((g) => g.bggId),
+          true,
+        ),
+      );
+      for (const l of group) {
+        const b = items.get(l.bggId);
+        if (!b) continue;
+        stats.set(l.bggId, {
+          ratingCount: parseItem(b).ratingCount ?? 0,
+          year: parseFullItem(b).year,
+        });
+      }
+    }
+
+    const expansions = links
+      .map((l) => ({
+        bggId: l.bggId,
+        name: l.name,
+        inLibrary: known.has(l.bggId),
+        ratingCount: stats.get(l.bggId)?.ratingCount ?? 0,
+        year: stats.get(l.bggId)?.year ?? null,
+        // What the nightly pass would take on its own — the picker's default.
+        suggested:
+          known.has(l.bggId) ||
+          (stats.get(l.bggId)?.ratingCount ?? 0) >= MIN_EXPANSION_RATINGS,
+      }))
+      // Most-rated first: the real expansions rise, promos sink.
+      .sort((a, b) => b.ratingCount - a.ratingCount);
+
     return {
       ...parseFullItem(block),
       bggId: id,
       bgg: { ...parseItem(block), fetchedAt: Date.now() },
-      expansions: links.map((l) => ({
-        bggId: l.bggId,
-        name: l.name,
-        inLibrary: known.has(l.bggId),
-      })),
+      expansions,
+      // Fingerprint of the full list, handed back so a later record() can stamp
+      // the same one and stop the nightly pass re-adding unticked entries.
+      expansionsHash: expansionsFingerprint(links.map((l) => l.bggId)),
     };
   },
 });
