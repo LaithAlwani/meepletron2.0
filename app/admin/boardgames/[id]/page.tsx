@@ -61,6 +61,7 @@ export default function EditGamePage({
       <section>
         <GameForm
           initial={game}
+          gameId={gameId}
           submitLabel="Save changes"
           onSubmit={async (values) => {
             await updateGame({ gameId, ...values });

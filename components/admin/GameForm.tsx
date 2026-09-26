@@ -73,11 +73,14 @@ const inputClass =
 
 export function GameForm({
   initial,
+  gameId,
   submitLabel,
   onSubmit,
   onBggImage,
 }: {
   initial?: GameFormInitial;
+  /** Set when editing a saved game — enables recording its BGG expansions. */
+  gameId?: Id<"games">;
   submitLabel: string;
   onSubmit: (values: GameFormValues) => Promise<void>;
   // Called with BGG's cover URL when filling — the page compresses + stores it.
@@ -122,6 +125,27 @@ export function GameForm({
   >(null);
 
   const fetchInfo = useAction(api.bgg.fetchGameInfo);
+  const recordExpansions = useAction(api.bgg.recordExpansions);
+  const [recording, setRecording] = useState(false);
+  const [recorded, setRecorded] = useState<string | null>(null);
+
+  async function handleRecordExpansions() {
+    if (!gameId) return;
+    setError(null);
+    setRecording(true);
+    try {
+      const r = await recordExpansions({ gameId });
+      setRecorded(
+        r.created === 0 && r.linked === 0
+          ? `None of the ${r.considered} listed cleared the ratings bar.`
+          : `Added ${r.created}, linked ${r.linked} of ${r.considered}.`,
+      );
+    } catch (err) {
+      setError(friendlyError(err, "Couldn't record expansions."));
+    } finally {
+      setRecording(false);
+    }
+  }
 
   async function handleFill() {
     setError(null);
@@ -243,10 +267,26 @@ export function GameForm({
                     </li>
                   ))}
                 </ul>
-                <p className="mt-2 text-[11px] text-subtle">
-                  Listed only. The BGG refresh records the ones with enough
-                  ratings to be real expansions rather than promos.
-                </p>
+                {gameId ? (
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={handleRecordExpansions}
+                      disabled={recording}
+                      className="rounded-lg border border-border bg-surface px-2.5 py-1.5 text-xs font-medium transition-colors hover:bg-surface-2 disabled:opacity-50"
+                    >
+                      {recording ? "Recording…" : "Record expansions"}
+                    </button>
+                    <span className="text-[11px] text-subtle">
+                      {recorded ??
+                        "Keeps the ones with enough ratings to be real expansions rather than promos."}
+                    </span>
+                  </div>
+                ) : (
+                  <p className="mt-2 text-[11px] text-subtle">
+                    Save the game first to record its expansions.
+                  </p>
+                )}
               </>
             )}
           </div>
