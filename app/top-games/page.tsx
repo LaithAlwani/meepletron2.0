@@ -40,7 +40,7 @@ const NO_SPIN =
 export default function TopGamesPage() {
   const [createOpen, setCreateOpen] = useState(false);
   return (
-    <div className="mx-auto max-w-3xl px-4 pb-8 pt-3 nav:pt-8">
+    <div className="mx-auto max-w-5xl px-4 pb-8 pt-3 nav:pt-8">
       {/* Desktop only: on mobile the title is in the top bar and creating a
           list is the floating button below, so this row has nothing to show. */}
       <div className="mb-6 hidden items-center justify-between gap-4 nav:flex">

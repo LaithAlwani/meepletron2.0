@@ -10,21 +10,22 @@ import {
   AuthLoading,
 } from "convex/react";
 import {
-  Dices,
-  BarChart3,
-  Trophy,
+  MessageCircle,
+  LayoutGrid,
   Package,
+  Hand,
   Users,
   CircleUser,
   type LucideIcon,
 } from "lucide-react";
 import { api } from "@/convex/_generated/api";
 import { buttonClasses } from "@/components/ui/Button";
+import { SettingsPanel } from "@/components/settings/SettingsPanel";
 
 /**
- * The profile now lives at /user/[username]. Signed in, this route forwards
- * there (or to Settings if you haven't picked a username). Signed out, it shows
- * a preview of what a profile holds, to nudge sign-up.
+ * The profile lives at /user/[username]. Signed in, this route forwards there —
+ * or, if you haven't picked a username yet, shows your account/settings inline
+ * so you can set one. Signed out, it shows a sign-up nudge.
  */
 export default function ProfileRoute() {
   return (
@@ -47,41 +48,52 @@ function ProfileRedirect() {
   const me = useQuery(api.users.me);
 
   useEffect(() => {
-    if (me === undefined) return; // still loading the profile
-    router.replace(me?.username ? `/user/${me.username}` : "/settings");
+    if (me?.username) router.replace(`/user/${me.username}`);
   }, [me, router]);
 
+  if (me === undefined || me?.username) {
+    return (
+      <div className="px-4 py-16 text-center text-sm text-muted">Loading…</div>
+    );
+  }
+
+  // No username yet — show the account/settings panel so they can set one.
   return (
-    <div className="px-4 py-16 text-center text-sm text-muted">Loading…</div>
+    <div className="mx-auto max-w-5xl px-4 pb-8 pt-3 nav:pt-8">
+      <h1 className="font-display mb-6 hidden nav:block text-2xl font-extrabold tracking-tight">
+        Your account
+      </h1>
+      <SettingsPanel />
+    </div>
   );
 }
 
 const FEATURES: { icon: LucideIcon; title: string; body: string }[] = [
   {
-    icon: Dices,
-    title: "Plays",
-    body: "Log every game night — scores, winners, photos and who was at the table.",
+    icon: MessageCircle,
+    title: "Rulebook chat",
+    body: "Ask any rules question and get an answer from the actual rulebook, cited by page.",
   },
   {
-    icon: BarChart3,
-    title: "Stats",
-    body: "Win rates, most-played games and your play history at a glance.",
-  },
-  {
-    icon: Trophy,
-    title: "Top Games lists",
-    body: "Rank your all-time favourites into shareable Top Games lists.",
+    icon: LayoutGrid,
+    title: "Game library",
+    body: "Browse games and open any game's rules, reference, and rulebook chat.",
   },
   {
     icon: Package,
     title: "Collection",
-    body: "Show the games you own, your wishlist, and what's up for sale.",
+    body: "Keep the games you own, your wishlist, and what's up for sale in one place.",
+  },
+  {
+    icon: Hand,
+    title: "First player",
+    body: "Settle who starts with a tap — everyone holds a finger, one is chosen.",
   },
 ];
 
 function SignedOutTeaser() {
   return (
-    <div className="mx-auto max-w-2xl px-4 pb-10 pt-3 nav:pt-10">
+    <div className="mx-auto max-w-5xl px-4 pb-10 pt-3 nav:pt-10">
       {/* Faux profile header — a peek at the real thing */}
       <div className="flex items-center gap-5 sm:gap-8">
         <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-full bg-surface-2 text-subtle sm:h-24 sm:w-24">
@@ -92,19 +104,8 @@ function SignedOutTeaser() {
             Your profile
           </h1>
           <p className="mt-0.5 text-sm text-muted">
-            Your game nights, all in one place.
+            Your board game night, all in one place.
           </p>
-          <div className="mt-3 flex gap-6 text-sm text-muted">
-            <span>
-              <b className="text-foreground">0</b> plays
-            </span>
-            <span>
-              <b className="text-foreground">0</b> lists
-            </span>
-            <span>
-              <b className="text-foreground">0</b> friends
-            </span>
-          </div>
         </div>
       </div>
 
@@ -112,11 +113,11 @@ function SignedOutTeaser() {
       <div className="mt-6 overflow-hidden rounded-2xl border border-accent/30 bg-accent/8">
         <div className="p-5 text-center sm:p-6">
           <p className="font-display text-lg font-extrabold sm:text-xl">
-            Sign in to start your collection of game nights
+            Sign in to keep your games and rulebook chats
           </p>
           <p className="mx-auto mt-1 max-w-md text-sm text-muted">
-            Create a free account to log plays, track your stats, build Top
-            Games lists and add friends — it&apos;s all yours to keep.
+            Create a free account to build your collection and keep your rulebook
+            chats — it&apos;s all yours to keep.
           </p>
           <div className="mt-4 flex flex-wrap items-center justify-center gap-2.5">
             <Link href="/auth" className={buttonClasses("primary", "md")}>
@@ -129,9 +130,9 @@ function SignedOutTeaser() {
         </div>
       </div>
 
-      {/* What you get — a preview of the tabs */}
+      {/* What you get */}
       <p className="mb-2 mt-8 px-1 text-xs font-semibold uppercase tracking-widest text-subtle">
-        What&apos;s on your profile
+        What you get
       </p>
       <ul className="grid gap-3 sm:grid-cols-2">
         {FEATURES.map((f) => {

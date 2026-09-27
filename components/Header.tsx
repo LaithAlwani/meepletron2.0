@@ -9,18 +9,16 @@ import {
   Unauthenticated,
   AuthLoading,
 } from "convex/react";
-import { LayoutGrid, MessageCircle, Trophy, LogIn } from "lucide-react";
+import { LayoutGrid, MessageCircle, Hand, LogIn } from "lucide-react";
 import { api } from "@/convex/_generated/api";
-import { UserMenu } from "@/components/UserMenu";
 import { NavSearch } from "@/components/NavSearch";
-import { NotificationsBell } from "@/components/notifications/NotificationsBell";
 import { AvatarImg } from "@/components/ui/Avatar";
 import { cn } from "@/lib/cn";
 
 const NAV = [
   { href: "/boardgames", label: "Library", icon: LayoutGrid },
   { href: "/chats", label: "Chats", icon: MessageCircle },
-  { href: "/top-games", label: "Top Games", icon: Trophy },
+  { href: "/first-player", label: "First player", icon: Hand },
 ];
 
 function Brand() {
@@ -48,7 +46,6 @@ function Brand() {
 
 export function Header() {
   const me = useQuery(api.users.me);
-  const isAdmin = me?.role === "admin";
   const isGuest = me?.isAnonymous === true;
   const pathname = usePathname() ?? "";
 
@@ -116,7 +113,6 @@ export function Header() {
               signIn
             ) : (
               <>
-                <NotificationsBell variant="header" />
                 <Link
                   href="/profile"
                   aria-current={
@@ -144,13 +140,6 @@ export function Header() {
                     )}
                   </div>
                 </Link>
-                <UserMenu
-                  initial={(me?.name || me?.email || "?").charAt(0).toUpperCase()}
-                  avatarUrl={me?.avatarUrl}
-                  name={me?.name || me?.email || "Account"}
-                  username={me?.username}
-                  isAdmin={isAdmin}
-                />
               </>
             )}
           </Authenticated>

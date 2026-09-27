@@ -29,6 +29,7 @@ export async function generateMetadata({
     return {
       title,
       description,
+      robots: { index: false, follow: true },
       openGraph: { title: `${title} · Meepletron`, description, type: "website" },
       twitter: {
         card: "summary_large_image",

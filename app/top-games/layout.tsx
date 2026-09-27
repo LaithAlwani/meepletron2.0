@@ -12,6 +12,8 @@ const description =
 export const metadata: Metadata = {
   title: "Top Games",
   description,
+  // Hidden for now — keep the pages reachable but out of the search index.
+  robots: { index: false, follow: true },
   openGraph: {
     title: "Top Games · Meepletron",
     description,

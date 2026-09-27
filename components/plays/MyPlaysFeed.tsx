@@ -58,7 +58,7 @@ export function MyPlaysFeed() {
             <>
               Log your first game, or import your history in{" "}
               <Link
-                href="/settings"
+                href="/profile"
                 className="font-semibold text-accent hover:underline"
               >
                 Settings

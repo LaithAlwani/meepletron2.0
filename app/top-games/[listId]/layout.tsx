@@ -31,7 +31,7 @@ export async function generateMetadata({
     return {
       title,
       description,
-      alternates: { canonical: `/top-games/${listId}` },
+      robots: { index: false, follow: true },
       openGraph: {
         title: `${title} · Meepletron`,
         description,

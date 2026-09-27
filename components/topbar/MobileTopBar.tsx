@@ -10,7 +10,6 @@ import {
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ChevronLeft } from "lucide-react";
-import { NotificationsBell } from "@/components/notifications/NotificationsBell";
 import { NavSearch } from "@/components/NavSearch";
 import { useBackNav } from "@/components/ui/BackButton";
 import { resolveTopBar } from "./routes";
@@ -143,13 +142,9 @@ export function MobileTopBar() {
           <h1 className={titleClass}>{label}</h1>
         )}
 
-        {/* Search + notifications. Fixed-width slots so the title stays centred
-            whether or not the bell renders (it's empty when signed out). */}
+        {/* Search — fixed-width slot so the title stays centred. */}
         <div className="flex h-11 w-11 shrink-0 items-center justify-center">
           <NavSearch overlay />
-        </div>
-        <div className="flex h-11 w-11 shrink-0 items-center justify-center">
-          <NotificationsBell variant="bar" />
         </div>
       </div>
     </header>

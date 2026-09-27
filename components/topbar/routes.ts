@@ -25,17 +25,13 @@ const EXCLUDED = [
 const FIXED: Record<string, TopBarRoute> = {
   "/boardgames": { title: "Library", back: null },
   "/chats": { title: "Chats", back: null },
-  "/top-games": { title: "Top Games", back: null },
-  "/plays": { title: "My plays", back: null },
+  "/first-player": { title: "First player", back: null },
   "/profile": { title: "Profile", back: null },
 
   "/boardgames/all": { title: "All games", back: "/boardgames" },
-  "/who-goes-first": { title: "Who Goes First?", back: "/boardgames" },
   "/plays/people": { title: "Friends", back: "/plays" },
   "/notifications": { title: "Notifications", back: "/boardgames" },
-  "/settings": { title: "Settings", back: "/profile" },
   "/tuckbox": { title: "Tuckbox", back: "/boardgames" },
-  "/about": { title: "About", back: "/boardgames" },
   "/privacy": { title: "Privacy Policy", back: "/boardgames" },
   "/terms": { title: "Terms of Service", back: "/boardgames" },
   "/unauthorized": { title: "Not allowed", back: "/boardgames" },

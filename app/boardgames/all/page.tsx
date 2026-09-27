@@ -84,7 +84,7 @@ function AllBoardgamesInner() {
   const loadingFirst = status === "LoadingFirstPage";
 
   return (
-    <div className="mx-auto max-w-3xl px-4 pb-8 pt-3 nav:pt-8">
+    <div className="mx-auto max-w-5xl px-4 pb-8 pt-3 nav:pt-8">
       {/* Header — on desktop the back link and title share the first line; the
           search + filters sit on the next, right-aligned (matches /boardgames).
           Mobile gets all of it from the top bar instead. */}

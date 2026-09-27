@@ -58,7 +58,7 @@ export function RequestRulebookButton({
           confirmText: "Turn on in settings",
           cancelText: "Not now",
         });
-        if (go) router.push("/settings#product-updates");
+        if (go) router.push("/profile#product-updates");
       } else {
         toast(
           res.alreadyRequested

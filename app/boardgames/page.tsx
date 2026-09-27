@@ -51,7 +51,7 @@ function LibraryInner() {
 
   return (
     <div
-      className="mx-auto max-w-3xl px-4 pb-8 pt-3 nav:pt-8"
+      className="mx-auto max-w-5xl px-4 pb-8 pt-3 nav:pt-8"
       onClickCapture={(e) => {
         // Remember scroll before navigating to any card's detail page.
         if ((e.target as HTMLElement).closest("a")) save(results.length);

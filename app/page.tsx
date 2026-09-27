@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { Landing } from "@/components/home/Landing";
-import { SignedInRedirect } from "@/components/home/SignedInRedirect";
 
 const description =
   "Meepletron is an AI board game rules expert: ask any rules question and get an answer pulled from that game's actual rulebook, cited by page — not guessed from a general AI. Plus a game library, plays feed, stats and top-games lists.";
@@ -18,15 +17,10 @@ export const metadata: Metadata = {
 };
 
 /**
- * The home route. `Landing` is server-rendered for everyone (so its H1 + AI copy
- * are in the initial HTML for crawlers and LLMs); {@link SignedInRedirect} then
- * sends signed-in visitors on to the Library.
+ * The home route — the marketing landing, server-rendered for everyone (so its
+ * H1 + AI copy are in the initial HTML for crawlers and LLMs). Signed-in users
+ * stay here too; the landing shows them app CTAs instead of the sign-up ones.
  */
 export default function HomePage() {
-  return (
-    <>
-      <SignedInRedirect />
-      <Landing />
-    </>
-  );
+  return <Landing />;
 }

@@ -60,7 +60,7 @@ function CollectionRows() {
           <>
             <p className="mt-1 text-sm">Add games from the library, or</p>
             <Link
-              href="/settings"
+              href="/profile"
               className="mt-1 inline-block text-sm font-semibold text-accent hover:underline"
             >
               link BoardGameGeek

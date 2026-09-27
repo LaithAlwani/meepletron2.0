@@ -1,45 +1,24 @@
 "use client";
 
-import { use, useEffect, useRef, useState } from "react";
+import { use, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useQuery, useMutation } from "convex/react";
-import { useAuthActions } from "@convex-dev/auth/react";
-import type { FunctionReturnType } from "convex/server";
 import {
-  Trophy,
-  Dices,
-  Package,
-  Tag,
-  Heart,
-  Archive,
   Lock,
   Globe,
-  Settings,
-  Bell,
-  BarChart3,
-  LogOut,
   Loader2,
-  Settings2,
-  Plus,
-  type LucideIcon,
+  MessageCircle,
+  Sparkles,
+  Mail,
+  Settings,
+  X,
 } from "lucide-react";
 import { api } from "@/convex/_generated/api";
 import { Skeleton } from "@/components/ui/Surface";
 import { buttonClasses } from "@/components/ui/Button";
-import { ListCard } from "@/components/top-games/ListCard";
-import { CoverScroller } from "@/components/top-games/CoverScroller";
-import { PlaysGrid } from "@/components/plays/PlaysGrid";
-import { StatsPanel } from "@/components/plays/StatsPanel";
-import { useScrollRestore } from "@/components/lib/useScrollRestore";
-import { FriendButton } from "@/components/friends/FriendButton";
-import { FriendsSheet } from "@/components/friends/FriendsSheet";
-import { CreateListDrawer } from "@/components/top-games/CreateListDrawer";
-import { Fab } from "@/components/ui/Fab";
 import { useToast } from "@/components/ui/Toast";
-import { cn } from "@/lib/cn";
-
-type Tab = "stats" | "plays" | "lists" | "collection";
+import { Sheet } from "@/components/ui/Sheet";
+import { SettingsPanel } from "@/components/settings/SettingsPanel";
 
 export default function ProfilePage({
   params,
@@ -49,29 +28,11 @@ export default function ProfilePage({
   const { username } = use(params);
   const data = useQuery(api.topGames.publicProfile, { username });
   const me = useQuery(api.users.me);
-  // The active tab lives in the URL (?tab=…) so returning via Back lands on the
-  // same tab (e.g. Plays), not the default. Seeded from the URL on first render
-  // (only the loading skeleton is shown during SSR, so there's no mismatch).
-  const [tab, setTab] = useState<Tab | null>(() => {
-    if (typeof window === "undefined") return null;
-    const t = new URLSearchParams(window.location.search).get("tab");
-    return t === "stats" || t === "plays" || t === "lists" || t === "collection"
-      ? t
-      : null;
-  });
-  const [friendsOpen, setFriendsOpen] = useState(false);
-  const [createListOpen, setCreateListOpen] = useState(false);
-
-  function selectTab(next: Tab) {
-    setTab(next);
-    const url = new URL(window.location.href);
-    url.searchParams.set("tab", next);
-    window.history.replaceState(window.history.state, "", url);
-  }
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   if (data === undefined) {
     return (
-      <div className="mx-auto max-w-2xl px-4 pb-8 pt-3 nav:pt-8">
+      <div className="mx-auto max-w-5xl px-4 pb-8 pt-3 nav:pt-8">
         <div className="flex items-center gap-6">
           <Skeleton className="h-20 w-20 shrink-0 rounded-full" />
           <div className="flex-1 space-y-2">
@@ -84,10 +45,13 @@ export default function ProfilePage({
   }
   if (data === null) {
     return (
-      <div className="mx-auto max-w-2xl px-4 pb-8 pt-3 nav:pt-8">
+      <div className="mx-auto max-w-5xl px-4 pb-8 pt-3 nav:pt-8">
         <div className="rounded-2xl border border-dashed border-border p-10 text-center text-muted">
           <p className="font-medium">No such user.</p>
-          <Link href="/boardgames" className={`mt-4 ${buttonClasses("ghost", "sm")}`}>
+          <Link
+            href="/boardgames"
+            className={`mt-4 ${buttonClasses("ghost", "sm")}`}
+          >
             Back to the Library
           </Link>
         </div>
@@ -95,27 +59,20 @@ export default function ProfilePage({
     );
   }
 
-  const { author, lists } = data;
-  const isPrivate = data.private;
+  const { author } = data;
   const isSelf = data.isSelf;
+  const name = author?.realName ?? me?.name ?? author?.username ?? "Player";
   const initial = (author?.username ?? "?").charAt(0).toUpperCase();
-  const counts = data.counts;
-  const ownedCount = data.owned?.total ?? 0;
-  // Stats is a self-only tab (it includes your private activity); it defaults
-  // for you, Plays defaults for everyone else. Clamp `stats` to `plays` for a
-  // non-self viewer so a shared `?tab=stats` link can't land on a blank tab.
-  const requestedTab = tab ?? (isSelf ? "stats" : "plays");
-  const activeTab: Tab =
-    requestedTab === "stats" && !isSelf ? "plays" : requestedTab;
+  const avatarUrl = author?.avatarUrl ?? (isSelf ? me?.avatarUrl : null);
 
   return (
-    <div className="mx-auto max-w-2xl px-4 pb-8 pt-3 nav:pt-8">
+    <div className="mx-auto max-w-5xl px-4 pb-8 pt-3 nav:pt-8">
       {/* Header */}
       <div className="flex items-center gap-5 sm:gap-8">
-        {author?.avatarUrl ? (
+        {avatarUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
-            src={author.avatarUrl}
+            src={avatarUrl}
             alt=""
             className="h-20 w-20 shrink-0 rounded-full object-cover sm:h-24 sm:w-24"
           />
@@ -126,128 +83,117 @@ export default function ProfilePage({
         )}
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-            <h1 className="font-display truncate text-xl font-extrabold tracking-tight">
-              {author?.username ?? "Player"}
+            <h1 className="font-display truncate text-xl font-extrabold tracking-tight sm:text-2xl">
+              {name}
             </h1>
-            {isSelf ? (
-              <OwnerControls isPublic={me?.publicProfile?.isPublic ?? true} />
-            ) : (
-              author?.username && <FriendButton username={author.username} />
+            {isSelf && (
+              <OwnerControls
+                isPublic={me?.publicProfile?.isPublic ?? true}
+                onSettings={() => setSettingsOpen(true)}
+              />
             )}
           </div>
-          {author?.realName && (
-            <p className="mt-0.5 text-sm text-muted">{author.realName}</p>
+          {author?.username && (
+            <p className="mt-0.5 text-sm font-semibold text-accent">
+              @{author.username}
+            </p>
           )}
-          <div className="mt-3 flex flex-wrap gap-x-6 gap-y-1 text-sm">
-            <Stat n={counts.plays} label="plays" />
-            <Stat n={counts.lists} label="lists" />
-            <Stat n={ownedCount} label="owned" />
-            <button
-              onClick={() => setFriendsOpen(true)}
-              className="text-muted transition-colors hover:text-foreground"
-            >
-              <b className="text-foreground">{counts.friends}</b> friends
-            </button>
-          </div>
         </div>
       </div>
 
-      {isPrivate ? (
+      {isSelf ? (
+        <div className="mt-6">
+          <UsageCard email={me?.email ?? undefined} />
+        </div>
+      ) : data.private ? (
         <div className="mt-8 rounded-2xl border border-dashed border-border p-10 text-center text-muted">
           <Lock className="mx-auto h-7 w-7 text-subtle" />
           <p className="mt-3 font-medium">This profile is private.</p>
-          <p className="mt-1 text-sm">
-            Add {author?.username ?? "them"} as a friend to see their plays,
-            lists and collection.
-          </p>
         </div>
-      ) : (
-        <>
-          <div className="mt-6 flex border-b border-border">
-            {isSelf && (
-              <TabBtn
-                active={activeTab === "stats"}
-                onClick={() => selectTab("stats")}
-                icon={BarChart3}
-                label="Stats"
-              />
-            )}
-            <TabBtn
-              active={activeTab === "plays"}
-              onClick={() => selectTab("plays")}
-              icon={Dices}
-              label="Plays"
-            />
-            <TabBtn
-              active={activeTab === "lists"}
-              onClick={() => selectTab("lists")}
-              icon={Trophy}
-              label="Lists"
-            />
-            <TabBtn
-              active={activeTab === "collection"}
-              onClick={() => selectTab("collection")}
-              icon={Package}
-              label="Collection"
-            />
-          </div>
+      ) : null}
 
-          <div className="mt-5">
-            {activeTab === "stats" && isSelf && <StatsPanel />}
-            {activeTab === "plays" && (
-              <PlaysGrid isSelf={isSelf} username={username} />
-            )}
-            {activeTab === "lists" &&
-              (isSelf ? <MyListsGrid /> : <ListsGrid lists={lists} />)}
-            {activeTab === "collection" && (
-              <CollectionTab
-                username={username}
-                owned={data.owned}
-                forTrade={data.forTrade}
-                wishlist={data.wishlist}
-                prevOwned={data.prevOwned}
-              />
-            )}
-          </div>
-        </>
-      )}
-
-      <FriendsSheet
-        open={friendsOpen}
-        onClose={() => setFriendsOpen(false)}
-        username={username}
-        isSelf={isSelf}
-      />
-
-      {/* The Lists tab's floating action (your own profile). Plays has its own
-          FAB inside PlaysGrid; Stats + Collection have none. */}
-      {isSelf && !isPrivate && activeTab === "lists" && (
-        <Fab
-          icon={Plus}
-          label="New list"
-          onClick={() => setCreateListOpen(true)}
-        />
-      )}
+      {/* Settings — opened by the gear; no dedicated URL. */}
       {isSelf && (
-        <CreateListDrawer
-          open={createListOpen}
-          onClose={() => setCreateListOpen(false)}
-        />
+        <Sheet
+          open={settingsOpen}
+          onClose={() => setSettingsOpen(false)}
+          desktop="right"
+          desktopWidth="sm:w-[30rem]"
+        >
+          <div className="flex items-center justify-between border-b border-border px-4 py-3">
+            <p className="font-display text-lg font-bold">Settings</p>
+            <button
+              onClick={() => setSettingsOpen(false)}
+              aria-label="Close"
+              className="flex h-8 w-8 items-center justify-center rounded-lg text-muted hover:bg-surface-2 hover:text-foreground"
+            >
+              <X className="h-4.5 w-4.5" />
+            </button>
+          </div>
+          <div className="themed-scroll flex-1 overflow-y-auto p-4">
+            <SettingsPanel />
+          </div>
+        </Sheet>
       )}
     </div>
   );
 }
 
-function Stat({ n, label }: { n: number; label: string }) {
+/** The signed-in user's account at a glance: email, open chats, tokens used. */
+function UsageCard({ email }: { email?: string }) {
+  const stats = useQuery(api.users.myProfileStats);
   return (
-    <span className="text-muted">
-      <b className="text-foreground">{n}</b> {label}
-    </span>
+    <div className="space-y-3">
+      <div className="flex items-center gap-2 rounded-2xl border border-border bg-surface px-4 py-3.5 text-sm">
+        <Mail className="h-4 w-4 shrink-0 text-muted" />
+        <span className="min-w-0 truncate font-medium">{email ?? "—"}</span>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <Stat
+          icon={<MessageCircle className="h-4 w-4 text-accent" />}
+          label="Open chats"
+          value={stats ? String(stats.chats) : "…"}
+        />
+        <Stat
+          icon={<Sparkles className="h-4 w-4 text-accent" />}
+          label="Tokens used"
+          value={stats ? stats.tokensUsed.toLocaleString() : "…"}
+        />
+      </div>
+    </div>
   );
 }
 
-/** The owner's controls: one Public/Private toggle + a gear menu. */
-function OwnerControls({ isPublic }: { isPublic: boolean }) {
+function Stat({
+  icon,
+  label,
+  value,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+}) {
+  return (
+    <div className="rounded-2xl border border-border bg-surface p-4">
+      <div className="flex items-center gap-1.5 text-xs font-medium text-muted">
+        {icon}
+        {label}
+      </div>
+      <p className="font-display mt-1 text-2xl font-extrabold tracking-tight">
+        {value}
+      </p>
+    </div>
+  );
+}
+
+/** Self controls: a Public/Private toggle + a gear that opens Settings. */
+function OwnerControls({
+  isPublic,
+  onSettings,
+}: {
+  isPublic: boolean;
+  onSettings: () => void;
+}) {
   const setPublicProfile = useMutation(api.users.setPublicProfile);
   const toast = useToast();
   const [saving, setSaving] = useState(false);
@@ -284,283 +230,14 @@ function OwnerControls({ isPublic }: { isPublic: boolean }) {
         )}
         {isPublic ? "Public" : "Private"}
       </button>
-      <ProfileMenu />
-    </div>
-  );
-}
-
-const MENU_ITEMS: { href: string; label: string; icon: LucideIcon }[] = [
-  { href: "/settings", label: "Settings", icon: Settings },
-  { href: "/notifications", label: "Notifications", icon: Bell },
-];
-
-/** The owner's gear menu — settings, notifications, sign out. */
-function ProfileMenu() {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-  const { signOut } = useAuthActions();
-  const router = useRouter();
-
-  useEffect(() => {
-    if (!open) return;
-    const onDoc = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
-    document.addEventListener("mousedown", onDoc);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onDoc);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [open]);
-
-  async function handleSignOut() {
-    setOpen(false);
-    await signOut();
-    router.push("/");
-  }
-
-  return (
-    <div ref={ref} className="relative">
       <button
-        onClick={() => setOpen((v) => !v)}
-        aria-label="Profile menu"
-        aria-expanded={open}
+        onClick={onSettings}
+        aria-label="Settings"
+        title="Settings"
         className={buttonClasses("ghost", "sm")}
       >
-        <Settings2 className="h-4 w-4" />
+        <Settings className="h-4 w-4" />
       </button>
-      {open && (
-        <div className="animate-in absolute right-0 top-full z-20 mt-1 w-48 rounded-xl border border-border bg-surface p-1 shadow-xl">
-          {MENU_ITEMS.map((it) => {
-            const Icon = it.icon;
-            return (
-              <Link
-                key={it.href}
-                href={it.href}
-                onClick={() => setOpen(false)}
-                className="flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
-              >
-                <Icon className="h-4 w-4 shrink-0" />
-                {it.label}
-              </Link>
-            );
-          })}
-          <div className="my-1 border-t border-border" />
-          <button
-            onClick={handleSignOut}
-            className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm font-medium text-muted transition-colors hover:bg-surface-2 hover:text-red-500"
-          >
-            <LogOut className="h-4 w-4 shrink-0" />
-            Sign out
-          </button>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function TabBtn({
-  active,
-  onClick,
-  icon: Icon,
-  label,
-}: {
-  active: boolean;
-  onClick: () => void;
-  icon: typeof Trophy;
-  label: string;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={cn(
-        "flex flex-1 items-center justify-center gap-1.5 border-b-2 py-2.5 text-sm font-semibold transition-colors",
-        active
-          ? "border-accent text-foreground"
-          : "border-transparent text-muted hover:text-foreground",
-      )}
-    >
-      <Icon className="h-4 w-4" />
-      {label}
-    </button>
-  );
-}
-
-type Lists = NonNullable<
-  FunctionReturnType<typeof api.topGames.publicProfile>
->["lists"];
-type Section = NonNullable<
-  FunctionReturnType<typeof api.topGames.publicProfile>
->["owned"];
-
-function EmptyTab({ text }: { text: string }) {
-  return (
-    <p className="rounded-2xl border border-dashed border-border p-10 text-center text-sm text-muted">
-      {text}
-    </p>
-  );
-}
-
-
-function ListsGrid({ lists }: { lists: Lists }) {
-  if (lists.length === 0) return <EmptyTab text="No public Top Games lists yet." />;
-  return (
-    <ul className="grid gap-3 sm:grid-cols-2">
-      {lists.map((l) => (
-        <li key={l._id}>
-          <ListCard list={l} />
-        </li>
-      ))}
-    </ul>
-  );
-}
-
-/** Your own Lists tab — every list you own, drafts included (public browsing of
- *  another user's lists uses ListsGrid). Create via the tab's floating button. */
-function MyListsGrid() {
-  const lists = useQuery(api.topGames.listMine);
-  if (lists === undefined)
-    return <Skeleton className="h-40 w-full rounded-xl" />;
-  if (lists.length === 0)
-    return (
-      <EmptyTab text="No lists yet — tap + to build your first Top Games list." />
-    );
-  return (
-    <ul className="grid gap-3 sm:grid-cols-2">
-      {lists.map((l) => (
-        <li key={l._id}>
-          <ListCard list={l} />
-        </li>
-      ))}
-    </ul>
-  );
-}
-
-function CollectionBlock({
-  icon: Icon,
-  title,
-  section,
-  href,
-}: {
-  icon: LucideIcon;
-  title: string;
-  section: Section;
-  href: string;
-}) {
-  if (!section || section.total === 0) return null;
-  const remaining = section.total - section.items.length;
-  const items = section.items.map((g, i) => ({
-    key: g.gameId ?? String(i),
-    title: g.title,
-    thumbUrl: g.thumbUrl,
-    href: g.slug ? `/boardgames/${g.slug}` : undefined,
-  }));
-  return (
-    <section>
-      <div className="mb-2 flex items-center gap-2 text-accent">
-        <Icon className="h-4 w-4" />
-        <h2 className="text-sm font-bold uppercase tracking-[0.14em]">{title}</h2>
-        <span className="text-xs font-semibold text-subtle">{section.total}</span>
-        {remaining > 0 && (
-          <Link
-            href={href}
-            className="ml-auto text-xs font-semibold text-accent hover:underline"
-          >
-            See all
-          </Link>
-        )}
-      </div>
-      <CoverScroller
-        items={items}
-        trailing={
-          remaining > 0 ? (
-            <li className="shrink-0">
-              <Link
-                href={href}
-                className="flex aspect-square w-24 flex-col items-center justify-center rounded-xl border border-dashed border-border text-center text-xs font-semibold text-muted transition-colors hover:border-accent/50 hover:text-accent"
-              >
-                +{remaining}
-                <span className="text-[10px] font-medium">more</span>
-              </Link>
-            </li>
-          ) : undefined
-        }
-      />
-    </section>
-  );
-}
-
-function CollectionTab({
-  username,
-  owned,
-  forTrade,
-  wishlist,
-  prevOwned,
-}: {
-  username: string;
-  owned: Section;
-  forTrade: Section;
-  wishlist: Section;
-  prevOwned: Section;
-}) {
-  // Restore page scroll when returning from a game's detail page. The previews
-  // are bounded, so gate on how many covers have rendered.
-  const rendered =
-    (owned?.items.length ?? 0) +
-    (forTrade?.items.length ?? 0) +
-    (wishlist?.items.length ?? 0) +
-    (prevOwned?.items.length ?? 0);
-  const { restoreIfReady, save } = useScrollRestore(
-    `profile-collection:${username}`,
-    1,
-  );
-  useEffect(() => {
-    restoreIfReady(rendered);
-  }, [rendered, restoreIfReady]);
-
-  const empty =
-    (owned?.total ?? 0) === 0 &&
-    (forTrade?.total ?? 0) === 0 &&
-    (wishlist?.total ?? 0) === 0 &&
-    (prevOwned?.total ?? 0) === 0;
-  if (empty) {
-    return (
-      <EmptyTab text="No collection shared. Turn on Owned / For Sale / Wishlist in Settings to show them here." />
-    );
-  }
-  return (
-    <div
-      className="space-y-6"
-      onClickCapture={(e) => {
-        if ((e.target as HTMLElement).closest("a")) save(rendered);
-      }}
-    >
-      <CollectionBlock
-        icon={Package}
-        title="Owned games"
-        section={owned}
-        href={`/user/${username}/owned`}
-      />
-      <CollectionBlock
-        icon={Tag}
-        title="For Sale"
-        section={forTrade}
-        href={`/user/${username}/for-sale`}
-      />
-      <CollectionBlock
-        icon={Heart}
-        title="Wishlist"
-        section={wishlist}
-        href={`/user/${username}/wishlist`}
-      />
-      <CollectionBlock
-        icon={Archive}
-        title="Previously owned"
-        section={prevOwned}
-        href={`/user/${username}/prev-owned`}
-      />
     </div>
   );
 }

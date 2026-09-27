@@ -15,7 +15,6 @@ import {
   FileText,
   Paperclip,
   X,
-  Dices,
 } from "lucide-react";
 import { api } from "@/convex/_generated/api";
 import { useTopBarTitle } from "@/components/topbar/MobileTopBar";
@@ -34,8 +33,6 @@ import { decodeHtmlEntities } from "@/lib/htmlEntities";
 import { Fab } from "@/components/ui/Fab";
 import { buttonClasses } from "@/components/ui/Button";
 import { Die } from "@/components/ui/icons";
-import { LogPlayWizard } from "@/components/plays/LogPlayWizard";
-import { GamePlaysSection } from "@/components/plays/GamePlaysSection";
 
 function InfoSection({
   title,
@@ -212,11 +209,10 @@ export default function GameDetailPage({
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, [zoomed]);
-  const [logOpen, setLogOpen] = useState(false);
 
   if (game === undefined) {
     return (
-      <div className="mx-auto max-w-3xl px-4 pb-8 pt-3 nav:pt-8">
+      <div className="mx-auto max-w-5xl px-4 pb-8 pt-3 nav:pt-8">
         <div className="flex flex-col gap-6 sm:flex-row">
           <div className="mx-auto h-64 w-48 shrink-0 animate-pulse rounded-2xl bg-surface-2 sm:mx-0" />
           <div className="flex-1 space-y-3">
@@ -230,7 +226,7 @@ export default function GameDetailPage({
   }
   if (game === null) {
     return (
-      <div className="mx-auto max-w-3xl px-4 py-16 text-center text-muted">
+      <div className="mx-auto max-w-5xl px-4 py-16 text-center text-muted">
         Game not found.
       </div>
     );
@@ -253,19 +249,6 @@ export default function GameDetailPage({
   const chatHref = game.parent
     ? `/boardgames/${game.parent.slug}/chat?module=${game._id}`
     : `/boardgames/${game.slug}/chat`;
-  // An expansion is never the logged game: logging from one records a play of
-  // the base game, with this expansion already ticked on the wizard's list.
-  const playGame = game.parent
-    ? {
-        gameId: game.parent._id,
-        bggId: game.parent.bggId ?? undefined,
-        title: game.parent.title,
-        coverUrl: game.parent.imageUrl ?? game.parent.thumbnailUrl ?? null,
-      }
-    : { gameId, bggId: game.bggId ?? undefined, title: game.title, coverUrl: cover };
-  const playExpansions = game.parent
-    ? [{ gameId, bggId: game.bggId ?? undefined, title: game.title }]
-    : undefined;
 
   return (
     <>
@@ -273,7 +256,7 @@ export default function GameDetailPage({
 
       {/* Hero — light + warm */}
       <section className="border-b border-border-muted">
-        <div className="mx-auto max-w-3xl px-4 pb-6 pt-3 nav:pt-5">
+        <div className="mx-auto max-w-5xl px-4 pb-6 pt-3 nav:pt-5">
           <nav
             className="mb-5 hidden items-center gap-1.5 text-sm text-muted nav:flex"
             aria-label="Breadcrumb"
@@ -386,15 +369,6 @@ export default function GameDetailPage({
                   size="md"
                   className={actionCls}
                 />
-                <button
-                  type="button"
-                  onClick={() => setLogOpen(true)}
-                  aria-label="Log a play"
-                  title="Log a play"
-                  className={actionCls}
-                >
-                  <Dices className="h-4.5 w-4.5" />
-                </button>
                 <ShareButton title={game.title} className={actionCls} />
                 {isAdmin && (
                   <Link
@@ -452,9 +426,7 @@ export default function GameDetailPage({
       </section>
 
       {/* Content */}
-      <div className="mx-auto max-w-3xl px-4 pb-8 pt-3 nav:pt-8">
-        <GamePlaysSection gameId={gameId} onLog={() => setLogOpen(true)} />
-
+      <div className="mx-auto max-w-5xl px-4 pb-8 pt-3 nav:pt-8">
         {(game.designers.length > 0 ||
           game.artists.length > 0 ||
           game.publishers.length > 0 ||
@@ -569,13 +541,6 @@ export default function GameDetailPage({
           </button>
         </div>
       )}
-
-      <LogPlayWizard
-        open={logOpen}
-        onClose={() => setLogOpen(false)}
-        initialGame={playGame}
-        initialExpansions={playExpansions}
-      />
     </>
   );
 }

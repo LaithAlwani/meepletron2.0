@@ -28,6 +28,31 @@ export const me = query({
   },
 });
 
+/** The current user's lightweight profile stats: chats + all-time tokens used
+ *  (summed across their chat messages). Self-only. */
+export const myProfileStats = query({
+  args: {},
+  handler: async (ctx) => {
+    const user = await getCurrentUser(ctx);
+    if (!user) return null;
+    const chats = await ctx.db
+      .query("chats")
+      .withIndex("by_user", (q) => q.eq("userId", user._id))
+      .take(2000);
+    let tokensUsed = 0;
+    for (const chat of chats) {
+      const msgs = await ctx.db
+        .query("messages")
+        .withIndex("by_chat", (q) => q.eq("chatId", chat._id))
+        .take(2000);
+      for (const m of msgs) {
+        tokensUsed += finite(m.inputTokens) + finite(m.outputTokens);
+      }
+    }
+    return { chats: chats.length, tokensUsed };
+  },
+});
+
 /**
  * The current user's daily token budget. `tokensUsedToday` is authoritative
  * because the nightly cron zeroes it at UTC midnight, so we can report what's

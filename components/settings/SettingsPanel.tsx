@@ -2,12 +2,8 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import {
-  useMutation,
-  Authenticated,
-  Unauthenticated,
-  AuthLoading,
-} from "convex/react";
+import { useMutation, useQuery } from "convex/react";
+import { Shield, ChevronRight } from "lucide-react";
 import { api } from "@/convex/_generated/api";
 import {
   usePreferences,
@@ -16,34 +12,7 @@ import {
 } from "@/lib/usePreferences";
 import { BggAccountCard } from "@/components/settings/BggAccountCard";
 import { AccountSection } from "@/components/settings/AccountSection";
-
-export default function SettingsPage() {
-  return (
-    <div className="mx-auto max-w-3xl px-4 pb-16 pt-3 nav:pt-10">
-      <h1 className="mb-1 hidden nav:block text-2xl font-bold">Settings</h1>
-      <p className="mb-6 text-sm text-muted">
-        These preferences are saved to your account.
-      </p>
-      <AuthLoading>
-        <p className="text-muted">Loading…</p>
-      </AuthLoading>
-      <Unauthenticated>
-        <div className="rounded-2xl border border-border-muted bg-surface p-6 text-center">
-          <p className="text-sm text-muted">Sign in to change your settings.</p>
-          <Link
-            href="/auth"
-            className="mt-3 inline-block rounded-xl bg-accent px-4 py-2 text-sm font-semibold text-accent-foreground"
-          >
-            Sign in
-          </Link>
-        </div>
-      </Unauthenticated>
-      <Authenticated>
-        <SettingsBody />
-      </Authenticated>
-    </div>
-  );
-}
+import { ThemeMenu } from "@/components/ThemeToggle";
 
 const FONT_OPTIONS: { value: FontSize; label: string }[] = [
   { value: "sm", label: "Small" },
@@ -52,12 +21,15 @@ const FONT_OPTIONS: { value: FontSize; label: string }[] = [
   { value: "xl", label: "Extra large" },
 ];
 
-function SettingsBody() {
+/** The full account + preferences panel. Lives on the profile page. */
+export function SettingsPanel() {
   const prefs = usePreferences();
+  const me = useQuery(api.users.me);
+  const isAdmin = me?.role === "admin";
   const save = useMutation(api.users.updateSettings);
 
-  // Deep-link support: `/settings#product-updates` (e.g. from the "request a
-  // rulebook" nudge) scrolls to and briefly highlights that exact toggle.
+  // Deep-link support: `#product-updates` (e.g. from the "request a rulebook"
+  // nudge) scrolls to and briefly highlights that exact toggle.
   const [highlightUpdates, setHighlightUpdates] = useState(false);
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -99,6 +71,9 @@ function SettingsBody() {
 
       {/* Display */}
       <Section title="Display">
+        <div className="py-2">
+          <ThemeMenu />
+        </div>
         <div className="px-4 py-3.5">
           <p className="text-sm font-medium text-foreground">Font size</p>
           <p className="mb-2.5 text-xs text-muted">
@@ -165,24 +140,6 @@ function SettingsBody() {
           }
         />
         <Toggle
-          label="Friend requests"
-          hint="Email me when someone sends me a friend request."
-          checked={prefs.emailFriendRequests}
-          onChange={(v) => set({ emailFriendRequests: v })}
-        />
-        <Toggle
-          label="Comments on your plays"
-          hint="Email me when someone comments on one of my plays."
-          checked={prefs.emailComments}
-          onChange={(v) => set({ emailComments: v })}
-        />
-        <Toggle
-          label="Mentions"
-          hint="Email me when someone @mentions me in a comment."
-          checked={prefs.emailMentions}
-          onChange={(v) => set({ emailMentions: v })}
-        />
-        <Toggle
           id="product-updates"
           highlight={highlightUpdates}
           label="Product update emails"
@@ -191,6 +148,20 @@ function SettingsBody() {
           onChange={(v) => set({ emailUpdates: v })}
         />
       </Section>
+
+      {/* Admin — only for admins. */}
+      {isAdmin && (
+        <Section title="Admin">
+          <Link
+            href="/admin"
+            className="flex items-center gap-3 px-4 py-3.5 text-sm font-medium text-foreground transition-colors hover:bg-surface-2"
+          >
+            <Shield className="h-4.5 w-4.5 shrink-0 text-muted" />
+            <span className="flex-1">Admin console</span>
+            <ChevronRight className="h-4 w-4 shrink-0 text-subtle" />
+          </Link>
+        </Section>
+      )}
     </div>
   );
 }

@@ -1,17 +1,17 @@
-import Link from "next/link";
 import Image from "next/image";
 import {
   Dices,
   BarChart3,
   Trophy,
   Package,
-  ArrowRight,
   MessageCircleQuestion,
   type LucideIcon,
 } from "lucide-react";
-import { buttonClasses } from "@/components/ui/buttonStyles";
 import { Reveal, Stagger, StaggerItem } from "@/components/motion/Reveal";
 import { HeroBackdrop } from "@/components/home/HeroBackdrop";
+import { HomeCta } from "@/components/home/HomeCta";
+import { LoggedOutOnly } from "@/components/home/LoggedOutOnly";
+import ContactForm from "@/components/ContactForm";
 
 // The AI rules expert is the hero; these are everything else around the table.
 const FEATURES: { icon: LucideIcon; title: string; body: string }[] = [
@@ -49,7 +49,7 @@ export function Landing() {
       <HeroBackdrop />
 
       {/* Hero — leads with the AI rules expert. */}
-      <section className="mx-auto max-w-3xl px-4 pb-10 pt-16 text-center sm:pt-24">
+      <section className="mx-auto max-w-5xl px-4 pb-10 pt-16 text-center sm:pt-24">
         <Image
           src="/logo.webp"
           alt="Meepletron"
@@ -72,25 +72,11 @@ export function Landing() {
           from, not a guess from a general AI. Plus a game library, a plays
           feed, stats and top-games lists for everything else around the table.
         </p>
-        <div className="animate-in mt-7 flex flex-wrap items-center justify-center gap-3">
-          <Link href="/auth" className={buttonClasses("primary", "lg")}>
-            Create free account
-          </Link>
-          <Link href="/auth" className={buttonClasses("ghost", "lg")}>
-            Log in
-          </Link>
-        </div>
-        <Link
-          href="/boardgames"
-          className="animate-in mt-5 inline-flex items-center gap-1 text-sm font-semibold text-muted transition-colors hover:text-foreground"
-        >
-          Just browsing? Explore the game library
-          <ArrowRight className="h-4 w-4" />
-        </Link>
+        <HomeCta />
       </section>
 
       {/* Everything else for game night */}
-      <section className="mx-auto max-w-4xl px-4 pb-20">
+      <section className="mx-auto max-w-5xl px-4 pb-20">
         <Reveal className="mb-6 text-center">
           <h2 className="font-display text-2xl font-extrabold tracking-tight sm:text-3xl">
             Everything else for game night
@@ -127,13 +113,38 @@ export function Landing() {
           <p className="mx-auto mt-1.5 max-w-md text-sm text-muted">
             Free to join. Your plays, stats and lists are yours to keep.
           </p>
-          <div className="mt-5 flex flex-wrap items-center justify-center gap-3">
-            <Link href="/auth" className={buttonClasses("primary", "lg")}>
-              Create free account
-            </Link>
-          </div>
+          <HomeCta closing />
         </Reveal>
       </section>
+
+      {/* About — moved here from the old /about page; signed-out visitors only. */}
+      <LoggedOutOnly>
+        <section className="mx-auto max-w-5xl px-4 pb-16">
+          <Reveal className="rounded-2xl border border-border bg-surface/60 p-6 backdrop-blur sm:p-8">
+            <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-accent">
+              Why it exists
+            </p>
+            <div className="mt-3 space-y-4 text-base leading-relaxed text-muted">
+              <p>
+                Every group has that moment: a rule comes up, someone&apos;s sure
+                they remember it, someone else isn&apos;t, and the game stops
+                while the rulebook gets passed around. Meepletron answers the
+                question in seconds — in the rulebook&apos;s own words, with a
+                citation you can check before anyone argues about it.
+              </p>
+              <p>
+                Once the game night was covered, the rest followed naturally: a
+                place to keep your collection, log the plays you finish, rank
+                your favourites, and share it all with the people you play with.
+              </p>
+            </div>
+          </Reveal>
+        </section>
+
+        <div className="mx-auto max-w-5xl">
+          <ContactForm />
+        </div>
+      </LoggedOutOnly>
     </div>
   );
 }
