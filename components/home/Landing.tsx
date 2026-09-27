@@ -10,7 +10,6 @@ import {
 import { Reveal, Stagger, StaggerItem } from "@/components/motion/Reveal";
 import { HeroBackdrop } from "@/components/home/HeroBackdrop";
 import { HomeCta } from "@/components/home/HomeCta";
-import { LoggedOutOnly } from "@/components/home/LoggedOutOnly";
 import ContactForm from "@/components/ContactForm";
 
 // The AI rules expert is the hero; these are everything else around the table.
@@ -117,34 +116,32 @@ export function Landing() {
         </Reveal>
       </section>
 
-      {/* About — moved here from the old /about page; signed-out visitors only. */}
-      <LoggedOutOnly>
-        <section className="mx-auto max-w-5xl px-4 pb-16">
-          <Reveal className="rounded-2xl border border-border bg-surface/60 p-6 backdrop-blur sm:p-8">
-            <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-accent">
-              Why it exists
+      {/* About — moved here from the old /about page. Always shown. */}
+      <section className="mx-auto max-w-5xl px-4 pb-16">
+        <Reveal className="rounded-2xl border border-border bg-surface/60 p-6 backdrop-blur sm:p-8">
+          <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-accent">
+            Why it exists
+          </p>
+          <div className="mt-3 space-y-4 text-base leading-relaxed text-muted">
+            <p>
+              Every group has that moment: a rule comes up, someone&apos;s sure
+              they remember it, someone else isn&apos;t, and the game stops while
+              the rulebook gets passed around. Meepletron answers the question in
+              seconds — in the rulebook&apos;s own words, with a citation you can
+              check before anyone argues about it.
             </p>
-            <div className="mt-3 space-y-4 text-base leading-relaxed text-muted">
-              <p>
-                Every group has that moment: a rule comes up, someone&apos;s sure
-                they remember it, someone else isn&apos;t, and the game stops
-                while the rulebook gets passed around. Meepletron answers the
-                question in seconds — in the rulebook&apos;s own words, with a
-                citation you can check before anyone argues about it.
-              </p>
-              <p>
-                Once the game night was covered, the rest followed naturally: a
-                place to keep your collection, log the plays you finish, rank
-                your favourites, and share it all with the people you play with.
-              </p>
-            </div>
-          </Reveal>
-        </section>
+            <p>
+              Once the game night was covered, the rest followed naturally: a
+              place to keep your collection and settle who goes first, with the
+              people you play with.
+            </p>
+          </div>
+        </Reveal>
+      </section>
 
-        <div className="mx-auto max-w-5xl">
-          <ContactForm />
-        </div>
-      </LoggedOutOnly>
+      <div className="mx-auto max-w-5xl">
+        <ContactForm />
+      </div>
     </div>
   );
 }

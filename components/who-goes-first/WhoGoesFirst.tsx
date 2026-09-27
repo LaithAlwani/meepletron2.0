@@ -167,10 +167,13 @@ export function WhoGoesFirst() {
 
   const toggleMode = useCallback(() => {
     setMode((m) => (m === "first" ? "order" : "first"));
-    // Drop any result so the next round runs under the new mode.
-    setWinner(null);
-    setRanks(null);
-  }, []);
+    // Full board reset — not just the result. After a round the lifted fingers
+    // stay in `touches` (removeTouch is ignored on a results screen), so clearing
+    // only the result would leave those stale touches and immediately restart a
+    // phantom countdown with no fingers actually down. Clearing everything drops
+    // the board back to idle, waiting for real fingers under the new mode.
+    reset();
+  }, [reset]);
 
   const addTouch = useCallback(
     (e: React.PointerEvent) => {
@@ -252,6 +255,10 @@ export function WhoGoesFirst() {
   }
 
   const flooded = phase === "winner";
+  // Fingers are actively on the screen (waiting or counting) — not a results
+  // screen, where `touches` lingers. Switching mode mid-round would restart it,
+  // so the toggle is locked until the board is clear or showing a result.
+  const fingersDown = !winner && !ranks && touches.length > 0;
   const pillPos = "top-[calc(env(safe-area-inset-top)+3.5rem)]";
 
   return (
@@ -343,11 +350,14 @@ export function WhoGoesFirst() {
           touches.map((t) => (
             <div
               key={t.id}
-              className="animate-in pointer-events-none absolute z-20"
+              className="pointer-events-none absolute z-20"
               style={{ left: t.x, top: t.y, transform: "translate(-50%, -50%)" }}
             >
+              {/* animate-in stays on the numeral, not this wrapper: its fade-up
+                  keyframe animates `transform`, which would otherwise override the
+                  wrapper's centering translate and shift the number off the finger. */}
               <span
-                className="font-display flex items-center justify-center rounded-full font-extrabold text-white"
+                className="animate-in font-display flex items-center justify-center rounded-full font-extrabold text-white"
                 style={{
                   width: DOT,
                   height: DOT,
@@ -436,8 +446,9 @@ export function WhoGoesFirst() {
       <button
         type="button"
         onClick={toggleMode}
+        disabled={fingersDown}
         aria-label={`Mode: ${mode === "first" ? "first player" : "turn order"} — tap to switch`}
-        className={`fixed left-3 z-20 flex items-center gap-1.5 rounded-full bg-surface px-3 py-1.5 text-sm font-semibold text-foreground shadow-sm ${pillPos}`}
+        className={`fixed left-3 z-20 flex items-center gap-1.5 rounded-full bg-surface px-3 py-1.5 text-sm font-semibold text-foreground shadow-sm transition-opacity disabled:pointer-events-none disabled:opacity-40 ${pillPos}`}
       >
         {mode === "first" ? (
           <Crown className="h-4 w-4 text-accent" />

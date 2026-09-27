@@ -6,7 +6,7 @@ import { useQuery, useMutation } from "convex/react";
 import { useAuthActions } from "@convex-dev/auth/react";
 import { Camera, LogOut, Loader2 } from "lucide-react";
 import { api } from "@/convex/_generated/api";
-import type { Doc, Id } from "@/convex/_generated/dataModel";
+import type { Doc } from "@/convex/_generated/dataModel";
 import { AvatarImg } from "@/components/ui/Avatar";
 import { Die } from "@/components/ui/icons";
 import { useToast } from "@/components/ui/Toast";
@@ -70,32 +70,20 @@ export function AccountSection() {
 
   return (
     <div className="overflow-hidden rounded-2xl border border-border-muted bg-surface">
-      <div className="flex items-center gap-4 p-5">
-        <ProfileAvatar
-          avatarUrl={me.avatarUrl}
-          canEdit={!isGuest}
-          isGuest={isGuest}
-          initial={(me.name || me.email || "?").charAt(0).toUpperCase()}
-          hasUpload={!!(me.avatarKey || me.avatarStorageId)}
-          recentAvatars={me.recentAvatars}
-        />
-        <div className="min-w-0 flex-1">
+      {/* Name, username, email + member-since. The editable avatar now lives on
+          the profile header, so it's no longer shown here. */}
+      {isGuest ? (
+        <div className="p-5">
           <p className="truncate font-display text-lg font-extrabold">
-            {me.name || me.email || "Guest"}
+            {me.name || "Guest"}
           </p>
-          {me.username && (
-            <p className="truncate text-sm font-semibold text-accent">
-              @{me.username}
-            </p>
-          )}
           <p className="mt-0.5 text-xs text-subtle">Member since {memberSince}</p>
         </div>
-      </div>
+      ) : (
+        <PersonalInfo me={me} />
+      )}
 
-      {!isGuest && <PersonalInfo me={me} />}
-
-      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border-muted px-5 py-4">
-        <p className="text-sm text-muted">{me.email ?? "—"}</p>
+      <div className="flex flex-wrap items-center justify-end gap-3 border-t border-border-muted px-5 py-4">
         {isGuest ? (
           <a href="/auth" className={buttonClasses("primary", "sm")}>
             Create an account
@@ -116,7 +104,7 @@ export function AccountSection() {
   );
 }
 
-function ProfileAvatar({
+export function ProfileAvatar({
   avatarUrl,
   canEdit,
   isGuest,
@@ -284,6 +272,10 @@ function PersonalInfo({ me }: { me: Doc<"users"> }) {
   const dirty = nameDirty || usernameDirty;
   const inputCls =
     "w-full rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-accent/50 disabled:opacity-50";
+  const memberSince = new Date(me._creationTime).toLocaleDateString("en-US", {
+    month: "long",
+    year: "numeric",
+  });
 
   async function save() {
     if (!dirty) {
@@ -304,10 +296,10 @@ function PersonalInfo({ me }: { me: Doc<"users"> }) {
   }
 
   return (
-    <div className="border-t border-border-muted px-5 py-4">
+    <div className="px-5 py-4">
       <div className="mb-3 flex items-center justify-between">
         <p className="text-xs font-semibold uppercase tracking-widest text-subtle">
-          Name &amp; handle
+          Account
         </p>
         {!editing && (
           <button
@@ -368,6 +360,16 @@ function PersonalInfo({ me }: { me: Doc<"users"> }) {
           )}
         </div>
       </div>
+
+      {/* Email — read-only, shown alongside name and username. */}
+      <div className="mt-3 space-y-1">
+        <label className="text-xs font-medium text-muted">Email</label>
+        <p className="py-2 text-sm text-foreground">
+          {me.email || <span className="text-subtle">—</span>}
+        </p>
+      </div>
+
+      <p className="mt-1 text-xs text-subtle">Member since {memberSince}</p>
 
       {editing && (
         <div className="mt-3 flex items-center justify-end gap-2">

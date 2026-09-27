@@ -1,9 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
-import { useMutation, useQuery } from "convex/react";
-import { Shield, ChevronRight } from "lucide-react";
+import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import {
   usePreferences,
@@ -11,7 +9,6 @@ import {
   type Preferences,
 } from "@/lib/usePreferences";
 import { BggAccountCard } from "@/components/settings/BggAccountCard";
-import { AccountSection } from "@/components/settings/AccountSection";
 import { ThemeMenu } from "@/components/ThemeToggle";
 
 const FONT_OPTIONS: { value: FontSize; label: string }[] = [
@@ -24,8 +21,6 @@ const FONT_OPTIONS: { value: FontSize; label: string }[] = [
 /** The full account + preferences panel. Lives on the profile page. */
 export function SettingsPanel() {
   const prefs = usePreferences();
-  const me = useQuery(api.users.me);
-  const isAdmin = me?.role === "admin";
   const save = useMutation(api.users.updateSettings);
 
   // Deep-link support: `#product-updates` (e.g. from the "request a rulebook"
@@ -56,14 +51,6 @@ export function SettingsPanel() {
 
   return (
     <div className="space-y-6">
-      {/* Account */}
-      <div>
-        <p className="mb-2 px-1 text-xs font-semibold uppercase tracking-widest text-subtle">
-          Account
-        </p>
-        <AccountSection />
-      </div>
-
       {/* BoardGameGeek */}
       <Section title="BoardGameGeek">
         <BggAccountCard />
@@ -148,20 +135,6 @@ export function SettingsPanel() {
           onChange={(v) => set({ emailUpdates: v })}
         />
       </Section>
-
-      {/* Admin — only for admins. */}
-      {isAdmin && (
-        <Section title="Admin">
-          <Link
-            href="/admin"
-            className="flex items-center gap-3 px-4 py-3.5 text-sm font-medium text-foreground transition-colors hover:bg-surface-2"
-          >
-            <Shield className="h-4.5 w-4.5 shrink-0 text-muted" />
-            <span className="flex-1">Admin console</span>
-            <ChevronRight className="h-4 w-4 shrink-0 text-subtle" />
-          </Link>
-        </Section>
-      )}
     </div>
   );
 }

@@ -9,8 +9,9 @@ import {
   Loader2,
   MessageCircle,
   Sparkles,
-  Mail,
   Settings,
+  Shield,
+  ChevronRight,
   X,
 } from "lucide-react";
 import { api } from "@/convex/_generated/api";
@@ -19,6 +20,7 @@ import { buttonClasses } from "@/components/ui/Button";
 import { useToast } from "@/components/ui/Toast";
 import { Sheet } from "@/components/ui/Sheet";
 import { SettingsPanel } from "@/components/settings/SettingsPanel";
+import { AccountSection, ProfileAvatar } from "@/components/settings/AccountSection";
 
 export default function ProfilePage({
   params,
@@ -69,7 +71,17 @@ export default function ProfilePage({
     <div className="mx-auto max-w-5xl px-4 pb-8 pt-3 nav:pt-8">
       {/* Header */}
       <div className="flex items-center gap-5 sm:gap-8">
-        {avatarUrl ? (
+        {isSelf && me ? (
+          // Own profile: the editable avatar (camera + recent photos) lives here.
+          <ProfileAvatar
+            avatarUrl={me.avatarUrl ?? null}
+            canEdit={me.isAnonymous !== true}
+            isGuest={me.isAnonymous === true}
+            initial={initial}
+            hasUpload={!!(me.avatarKey || me.avatarStorageId)}
+            recentAvatars={me.recentAvatars}
+          />
+        ) : avatarUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={avatarUrl}
@@ -102,8 +114,19 @@ export default function ProfilePage({
       </div>
 
       {isSelf ? (
-        <div className="mt-6">
-          <UsageCard email={me?.email ?? undefined} />
+        <div className="mt-6 space-y-6">
+          <AccountSection />
+          <UsageCard />
+          {me?.role === "admin" && (
+            <Link
+              href="/admin"
+              className="flex items-center gap-3 rounded-2xl border border-border-muted bg-surface px-4 py-3.5 text-sm font-medium text-foreground transition-colors hover:bg-surface-2"
+            >
+              <Shield className="h-4.5 w-4.5 shrink-0 text-muted" />
+              <span className="flex-1">Admin console</span>
+              <ChevronRight className="h-4 w-4 shrink-0 text-subtle" />
+            </Link>
+          )}
         </div>
       ) : data.private ? (
         <div className="mt-8 rounded-2xl border border-dashed border-border p-10 text-center text-muted">
@@ -120,7 +143,7 @@ export default function ProfilePage({
           desktop="right"
           desktopWidth="sm:w-[30rem]"
         >
-          <div className="flex items-center justify-between border-b border-border px-4 py-3">
+          <div className="flex shrink-0 items-center justify-between border-b border-border px-4 py-3">
             <p className="font-display text-lg font-bold">Settings</p>
             <button
               onClick={() => setSettingsOpen(false)}
@@ -130,7 +153,10 @@ export default function ProfilePage({
               <X className="h-4.5 w-4.5" />
             </button>
           </div>
-          <div className="themed-scroll flex-1 overflow-y-auto p-4">
+          <div
+            data-lenis-prevent
+            className="themed-scroll min-h-0 flex-1 overflow-y-auto p-4"
+          >
             <SettingsPanel />
           </div>
         </Sheet>
@@ -139,27 +165,21 @@ export default function ProfilePage({
   );
 }
 
-/** The signed-in user's account at a glance: email, open chats, tokens used. */
-function UsageCard({ email }: { email?: string }) {
+/** The signed-in user's usage at a glance: open chats + tokens used. */
+function UsageCard() {
   const stats = useQuery(api.users.myProfileStats);
   return (
-    <div className="space-y-3">
-      <div className="flex items-center gap-2 rounded-2xl border border-border bg-surface px-4 py-3.5 text-sm">
-        <Mail className="h-4 w-4 shrink-0 text-muted" />
-        <span className="min-w-0 truncate font-medium">{email ?? "—"}</span>
-      </div>
-      <div className="grid grid-cols-2 gap-3">
-        <Stat
-          icon={<MessageCircle className="h-4 w-4 text-accent" />}
-          label="Open chats"
-          value={stats ? String(stats.chats) : "…"}
-        />
-        <Stat
-          icon={<Sparkles className="h-4 w-4 text-accent" />}
-          label="Tokens used"
-          value={stats ? stats.tokensUsed.toLocaleString() : "…"}
-        />
-      </div>
+    <div className="grid grid-cols-2 gap-3">
+      <Stat
+        icon={<MessageCircle className="h-4 w-4 text-accent" />}
+        label="Open chats"
+        value={stats ? String(stats.chats) : "…"}
+      />
+      <Stat
+        icon={<Sparkles className="h-4 w-4 text-accent" />}
+        label="Tokens used"
+        value={stats ? stats.tokensUsed.toLocaleString() : "…"}
+      />
     </div>
   );
 }

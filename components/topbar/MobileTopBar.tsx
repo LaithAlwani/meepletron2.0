@@ -131,8 +131,6 @@ export function MobileTopBar() {
             <ChevronLeft className="h-6.5 w-6.5" strokeWidth={2.75} />
           </button>
         )}
-        {/* Balances the two-icon right cluster so the title stays centred. */}
-        <span aria-hidden className="h-11 w-11 shrink-0" />
 
         {active?.href ? (
           <Link href={active.href} className={titleClass}>
