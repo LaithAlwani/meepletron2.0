@@ -15,8 +15,8 @@ import { cn } from "@/lib/cn";
  * The global game search, living in the top nav. A search icon that expands
  * into an input; typing drops a list of up to ten suggestions — the library
  * first, then games we don't have yet from BoardGameGeek. Picking one opens
- * that game (or its import); submitting instead lands on the full results page
- * (/boardgames/all?q=…), which shows everything both sources return.
+ * that game (or its import); submitting instead lands on the library
+ * (/boardgames?q=…), which shows everything both sources return.
  *
  * Two shapes:
  *  - inline  (desktop header): the input grows in place next to the icon.
@@ -83,7 +83,7 @@ export function NavSearch({ overlay = false }: { overlay?: boolean }) {
     const q = term.trim();
     close();
     if (q) {
-      router.push(`/boardgames/all?q=${encodeURIComponent(q)}`);
+      router.push(`/boardgames?q=${encodeURIComponent(q)}`);
       return;
     }
     // Submitted empty — drop the ?q= narrowing the page we're on rather than

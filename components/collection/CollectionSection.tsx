@@ -7,7 +7,7 @@ import {
   Authenticated,
   Unauthenticated,
 } from "convex/react";
-import type { LucideIcon } from "lucide-react";
+import { RefreshCw, type LucideIcon } from "lucide-react";
 import { api } from "@/convex/_generated/api";
 import { GameCard } from "@/components/boardgames/GameCard";
 import { CardRail } from "@/components/boardgames/CardRail";
@@ -17,13 +17,24 @@ import {
   type CollStatus,
 } from "@/components/collection/status";
 
-/** "Your Collection" — one horizontal rail per list, shown below the library. */
+/** "Collection" — one horizontal rail per list, the /collection page body. */
 export function CollectionSection() {
   return (
     <section>
-      <h2 className="font-display mb-4 text-2xl font-extrabold tracking-tight">
-        Your collection
-      </h2>
+      <div className="mb-4 flex items-center gap-3">
+        <h2 className="font-display text-2xl font-extrabold tracking-tight">
+          Collection
+        </h2>
+        <Authenticated>
+          <Link
+            href="/settings"
+            className="ml-auto inline-flex h-9 shrink-0 items-center gap-1.5 rounded-xl border border-border bg-surface px-3 text-sm font-semibold text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
+          >
+            <RefreshCw className="h-3.5 w-3.5" />
+            Sync BGG
+          </Link>
+        </Authenticated>
+      </div>
       <Unauthenticated>
         <div className="rounded-2xl border border-dashed border-border p-6 text-center text-sm text-muted">
           <Link href="/auth" className="font-semibold text-accent hover:underline">

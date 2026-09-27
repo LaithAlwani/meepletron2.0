@@ -29,7 +29,6 @@ const FIXED: Record<string, TopBarRoute> = {
   "/first-player": { title: "First player", back: null },
   "/profile": { title: "Profile", back: null },
 
-  "/boardgames/all": { title: "All games", back: "/boardgames" },
   "/notifications": { title: "Notifications", back: "/boardgames" },
   "/settings": { title: "Settings", back: "/profile" },
   "/tuckbox": { title: "Tuckbox", back: "/boardgames" },
