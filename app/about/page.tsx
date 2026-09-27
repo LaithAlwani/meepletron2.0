@@ -19,8 +19,7 @@ const description =
 export const metadata: Metadata = {
   title: "About Meepletron",
   description,
-  // Hidden from the app's nav; keep the page reachable but out of the index.
-  robots: { index: false, follow: true },
+  alternates: { canonical: "/about" },
   openGraph: {
     title: "About Meepletron",
     description,

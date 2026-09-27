@@ -12,12 +12,10 @@ import { api } from "@/convex/_generated/api";
 import {
   usePreferences,
   type FontSize,
-  type DefaultDestination,
   type Preferences,
 } from "@/lib/usePreferences";
 import { BggAccountCard } from "@/components/settings/BggAccountCard";
 import { AccountSection } from "@/components/settings/AccountSection";
-import { ThemeMenu } from "@/components/ThemeToggle";
 
 export default function SettingsPage() {
   return (
@@ -52,12 +50,6 @@ const FONT_OPTIONS: { value: FontSize; label: string }[] = [
   { value: "base", label: "Default" },
   { value: "lg", label: "Large" },
   { value: "xl", label: "Extra large" },
-];
-
-const DESTINATION_OPTIONS: { value: DefaultDestination; label: string }[] = [
-  { value: "boardgames", label: "Library" },
-  { value: "chats", label: "Chats" },
-  { value: "profile", label: "Profile" },
 ];
 
 function SettingsBody() {
@@ -100,37 +92,6 @@ function SettingsBody() {
         <AccountSection />
       </div>
 
-      {/* General */}
-      <Section title="General">
-        <div className="px-4 py-3.5">
-          <p className="text-sm font-medium text-foreground">Default destination</p>
-          <p className="mb-2.5 text-xs text-muted">
-            Where the home page&apos;s &ldquo;Go to&rdquo; button takes you.
-          </p>
-          <div className="flex flex-wrap gap-1.5">
-            {DESTINATION_OPTIONS.map((o) => (
-              <button
-                key={o.value}
-                onClick={() => set({ defaultDestination: o.value })}
-                className={`rounded-lg border px-3 py-1.5 text-sm transition-colors ${
-                  prefs.defaultDestination === o.value
-                    ? "border-accent bg-accent text-accent-foreground"
-                    : "border-border bg-surface text-muted hover:bg-surface-2"
-                }`}
-              >
-                {o.label}
-              </button>
-            ))}
-          </div>
-        </div>
-        <Toggle
-          label="Skip home page"
-          hint="Go straight to your default destination instead of the home page when signed in."
-          checked={prefs.skipHome}
-          onChange={(v) => set({ skipHome: v })}
-        />
-      </Section>
-
       {/* BoardGameGeek */}
       <Section title="BoardGameGeek">
         <BggAccountCard />
@@ -138,9 +99,6 @@ function SettingsBody() {
 
       {/* Display */}
       <Section title="Display">
-        <div className="py-2">
-          <ThemeMenu />
-        </div>
         <div className="px-4 py-3.5">
           <p className="text-sm font-medium text-foreground">Font size</p>
           <p className="mb-2.5 text-xs text-muted">

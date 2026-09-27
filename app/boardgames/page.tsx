@@ -1,34 +1,37 @@
 "use client";
 
 import { Suspense, useEffect, useState } from "react";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { usePaginatedQuery, useQuery, useMutation } from "convex/react";
+import { usePaginatedQuery, useQuery } from "convex/react";
+import { ArrowRight } from "lucide-react";
 import { api } from "@/convex/_generated/api";
 import { useTopBarTitle } from "@/components/topbar/MobileTopBar";
 import { GameCard } from "@/components/boardgames/GameCard";
-import { PreviewCard } from "@/components/boardgames/PreviewCard";
-import { useBggSearch } from "@/components/boardgames/useBggSearch";
+import { CardRail } from "@/components/boardgames/CardRail";
 import { FilterDrawer } from "@/components/boardgames/FilterDrawer";
 import { useLibraryFilters } from "@/components/boardgames/useLibraryFilters";
 import { LibraryControls } from "@/components/boardgames/LibraryControls";
 import { ActiveFilterBar } from "@/components/boardgames/ActiveFilterBar";
-import { CARD_GRID, GameGridSkeleton } from "@/components/boardgames/GameGrid";
+import { RAIL_CELL, RailSkeletonCells } from "@/components/boardgames/GameGrid";
+import { CollectionSection } from "@/components/collection/CollectionSection";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { useScrollRestore } from "@/components/lib/useScrollRestore";
-import { useInfiniteScroll } from "@/components/lib/useInfiniteScroll";
 
 function LibraryInner() {
-  // The nav search deep-links here as /boardgames?q=…
+  // The nav search deep-links here as /boardgames?q=… — the term seeds the
+  // results row; "View all" carries it into the full grid.
   const q = useSearchParams().get("q") ?? undefined;
   const { term, searching, filters, setFilters, sort, setSort, clear, args, activeCount } =
     useLibraryFilters(undefined, undefined, q);
   const [drawerOpen, setDrawerOpen] = useState(false);
 
-  // Restore scroll + how-many-loaded when returning from a game's detail page.
+  // Restore page scroll when returning from a game's detail page.
   const { initialNumItems, restoreIfReady, save } = useScrollRestore(
     "library-home",
-    24,
+    20,
   );
-  const { results, status, loadMore } = usePaginatedQuery(
+  const { results, status } = usePaginatedQuery(
     api.games.libraryGames,
     { ...args, sort },
     { initialNumItems },
@@ -36,36 +39,24 @@ function LibraryInner() {
   useEffect(() => {
     restoreIfReady(results.length);
   }, [results.length, restoreIfReady]);
-
-  // Skip the exact count while searching — it's a full-catalogue scan; show the
-  // running result count instead.
-  const total = useQuery(api.games.libraryCount, searching ? "skip" : args);
-
-  const logSearch = useMutation(api.search.logSearch);
-  useEffect(() => {
-    if (searching) void logSearch({ term });
-  }, [term, searching, logSearch]);
-
-  // Wider "not in our library yet" search from BoardGameGeek (deduped). Skipped
-  // when the chat-ready filter is on: BGG hits have no rulebook, so they can
-  // never be chat-ready and shouldn't slip past that filter.
-  const catalogBggIds = new Set(
-    results.map((g) => g.bggId).filter((x): x is string => !!x),
-  );
-  const { results: bggResults, pending: bggPending } = useBggSearch(
-    searching && !filters.chatOnly ? term : "",
-    catalogBggIds,
-  );
-
-  const sentinelRef = useInfiniteScroll(() => loadMore(24), {
-    canLoadMore: status === "CanLoadMore",
-  });
-
-  const loadingFirst = status === "LoadingFirstPage";
+  // Count of everything matching the current query/filters — sits beside the
+  // row heading and tells you whether "View all" is worth a tap.
+  const total = useQuery(api.games.libraryCount, args);
   useTopBarTitle("Library");
 
+  const loadingFirst = status === "LoadingFirstPage";
+  const allHref = q
+    ? `/boardgames/all?q=${encodeURIComponent(q)}`
+    : "/boardgames/all";
+
   return (
-    <div className="mx-auto max-w-3xl px-4 pb-8 pt-3 nav:pt-8">
+    <div
+      className="mx-auto max-w-3xl px-4 pb-8 pt-3 nav:pt-8"
+      onClickCapture={(e) => {
+        // Remember scroll before navigating to any card's detail page.
+        if ((e.target as HTMLElement).closest("a")) save(results.length);
+      }}
+    >
       {/* Header — title on its own line; sort + filter on the next, right-aligned
           on desktop. (Search lives in the top nav.) */}
       <div className="mb-4 sm:mb-5">
@@ -75,18 +66,6 @@ function LibraryInner() {
           </p>
           <h1 className="font-display hidden nav:block text-2xl font-extrabold tracking-tight text-foreground sm:text-4xl">
             Board games
-            {searching ? (
-              results.length > 0 && (
-                <span className="ml-2.5 align-middle text-base font-bold text-subtle">
-                  {results.length}
-                  {status === "CanLoadMore" || status === "LoadingMore" ? "+" : ""}
-                </span>
-              )
-            ) : total !== undefined ? (
-              <span className="ml-2.5 align-middle text-base font-bold text-subtle">
-                {total}
-              </span>
-            ) : null}
           </h1>
         </div>
 
@@ -102,54 +81,69 @@ function LibraryInner() {
 
       <ActiveFilterBar term={term} activeCount={activeCount} onClear={clear} />
 
-      {loadingFirst ? (
-        <GameGridSkeleton count={12} />
-      ) : results.length === 0 && bggResults.length === 0 ? (
-        bggPending ? (
-          <div className="flex flex-col items-center gap-3 py-20 text-center">
-            <span className="h-6 w-6 animate-spin rounded-full border-2 border-accent border-t-transparent" />
-            <p className="text-sm text-muted">Searching…</p>
-          </div>
-        ) : (
-          <div className="flex flex-col items-center gap-2 py-20 text-center">
-            <p className="font-semibold">
-              {searching
-                ? `No results for “${term}”`
-                : "No games match these filters"}
-            </p>
-            {activeCount > 0 && (
-              <button
-                onClick={clear}
-                className="text-sm text-accent hover:underline"
-              >
-                Clear filters
-              </button>
+      {/* Board games rail — the search results (or a browse sample) */}
+      <section className="mb-7 nav:mb-10">
+        <div className="mb-3 flex items-end justify-between">
+          <h2 className="font-display text-lg font-bold tracking-tight">
+            {searching || activeCount > 0 ? "Results" : "Browse"}
+            {total !== undefined && (
+              <span className="ml-2 align-middle text-base font-bold text-subtle">
+                {total}
+              </span>
             )}
-          </div>
-        )
-      ) : (
-        <>
-          <div
-            className={CARD_GRID}
-            onClickCapture={(e) => {
-              // Remember scroll before navigating to a card's detail page.
-              if ((e.target as HTMLElement).closest("a")) save(results.length);
-            }}
+          </h2>
+          <Link
+            href={allHref}
+            className="inline-flex items-center gap-1 pb-1 text-sm font-semibold text-accent hover:underline"
           >
-            {results.map((g, i) => (
-              <GameCard key={g._id} game={g} index={i} />
-            ))}
-            {bggResults.map((h, i) => (
-              <PreviewCard key={h.bggId} hit={h} index={results.length + i} />
-            ))}
-          </div>
+            View all
+            <ArrowRight className="h-3.5 w-3.5" />
+          </Link>
+        </div>
 
-          <div ref={sentinelRef} aria-hidden className="h-px" />
-          {status === "LoadingMore" && (
-            <p className="mt-8 text-center text-sm text-muted">Loading…</p>
-          )}
-        </>
-      )}
+        {loadingFirst ? (
+          <RailSkeletonCells count={6} />
+        ) : results.length === 0 ? (
+          // Local catalogue only — games we don't have yet come from BoardGameGeek,
+          // which the full results page shows.
+          <EmptyState
+            title="No games match."
+            action={
+              searching || activeCount > 0 ? (
+                <>
+                  {searching && (
+                    <Link
+                      href={allHref}
+                      className="inline-block text-sm text-accent hover:underline"
+                    >
+                      Search BoardGameGeek for “{term}”
+                    </Link>
+                  )}
+                  {activeCount > 0 && (
+                    <button
+                      onClick={clear}
+                      className="block w-full text-sm text-accent hover:underline"
+                    >
+                      Clear filters
+                    </button>
+                  )}
+                </>
+              ) : undefined
+            }
+          />
+        ) : (
+          <CardRail>
+            {results.slice(0, 20).map((game, i) => (
+              <li key={game._id} className={RAIL_CELL}>
+                <GameCard game={game} index={i} />
+              </li>
+            ))}
+          </CardRail>
+        )}
+      </section>
+
+      {/* Your collection — hidden while searching, to keep the focus on results. */}
+      {!searching && <CollectionSection />}
 
       <FilterDrawer
         open={drawerOpen}

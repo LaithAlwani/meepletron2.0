@@ -12,8 +12,6 @@ const description =
 export const metadata: Metadata = {
   title: "Top Games",
   description,
-  // Hidden from the app's nav; keep reachable but out of the search index.
-  robots: { index: false, follow: true },
   openGraph: {
     title: "Top Games · Meepletron",
     description,

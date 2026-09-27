@@ -7,6 +7,8 @@ import { useQuery, useMutation } from "convex/react";
 import { useAuthActions } from "@convex-dev/auth/react";
 import type { FunctionReturnType } from "convex/server";
 import {
+  Trophy,
+  Dices,
   Package,
   Tag,
   Heart,
@@ -15,17 +17,29 @@ import {
   Globe,
   Settings,
   Bell,
+  BarChart3,
   LogOut,
   Loader2,
   Settings2,
+  Plus,
   type LucideIcon,
 } from "lucide-react";
 import { api } from "@/convex/_generated/api";
 import { Skeleton } from "@/components/ui/Surface";
 import { buttonClasses } from "@/components/ui/Button";
+import { ListCard } from "@/components/top-games/ListCard";
 import { CoverScroller } from "@/components/top-games/CoverScroller";
+import { PlaysGrid } from "@/components/plays/PlaysGrid";
+import { StatsPanel } from "@/components/plays/StatsPanel";
 import { useScrollRestore } from "@/components/lib/useScrollRestore";
+import { FriendButton } from "@/components/friends/FriendButton";
+import { FriendsSheet } from "@/components/friends/FriendsSheet";
+import { CreateListDrawer } from "@/components/top-games/CreateListDrawer";
+import { Fab } from "@/components/ui/Fab";
 import { useToast } from "@/components/ui/Toast";
+import { cn } from "@/lib/cn";
+
+type Tab = "stats" | "plays" | "lists" | "collection";
 
 export default function ProfilePage({
   params,
@@ -35,6 +49,25 @@ export default function ProfilePage({
   const { username } = use(params);
   const data = useQuery(api.topGames.publicProfile, { username });
   const me = useQuery(api.users.me);
+  // The active tab lives in the URL (?tab=…) so returning via Back lands on the
+  // same tab (e.g. Plays), not the default. Seeded from the URL on first render
+  // (only the loading skeleton is shown during SSR, so there's no mismatch).
+  const [tab, setTab] = useState<Tab | null>(() => {
+    if (typeof window === "undefined") return null;
+    const t = new URLSearchParams(window.location.search).get("tab");
+    return t === "stats" || t === "plays" || t === "lists" || t === "collection"
+      ? t
+      : null;
+  });
+  const [friendsOpen, setFriendsOpen] = useState(false);
+  const [createListOpen, setCreateListOpen] = useState(false);
+
+  function selectTab(next: Tab) {
+    setTab(next);
+    const url = new URL(window.location.href);
+    url.searchParams.set("tab", next);
+    window.history.replaceState(window.history.state, "", url);
+  }
 
   if (data === undefined) {
     return (
@@ -62,13 +95,18 @@ export default function ProfilePage({
     );
   }
 
-  const { author } = data;
+  const { author, lists } = data;
   const isPrivate = data.private;
   const isSelf = data.isSelf;
   const initial = (author?.username ?? "?").charAt(0).toUpperCase();
+  const counts = data.counts;
   const ownedCount = data.owned?.total ?? 0;
-  const wishlistCount = data.wishlist?.total ?? 0;
-  const forSaleCount = data.forTrade?.total ?? 0;
+  // Stats is a self-only tab (it includes your private activity); it defaults
+  // for you, Plays defaults for everyone else. Clamp `stats` to `plays` for a
+  // non-self viewer so a shared `?tab=stats` link can't land on a blank tab.
+  const requestedTab = tab ?? (isSelf ? "stats" : "plays");
+  const activeTab: Tab =
+    requestedTab === "stats" && !isSelf ? "plays" : requestedTab;
 
   return (
     <div className="mx-auto max-w-2xl px-4 pb-8 pt-3 nav:pt-8">
@@ -91,17 +129,25 @@ export default function ProfilePage({
             <h1 className="font-display truncate text-xl font-extrabold tracking-tight">
               {author?.username ?? "Player"}
             </h1>
-            {isSelf && (
+            {isSelf ? (
               <OwnerControls isPublic={me?.publicProfile?.isPublic ?? true} />
+            ) : (
+              author?.username && <FriendButton username={author.username} />
             )}
           </div>
           {author?.realName && (
             <p className="mt-0.5 text-sm text-muted">{author.realName}</p>
           )}
           <div className="mt-3 flex flex-wrap gap-x-6 gap-y-1 text-sm">
+            <Stat n={counts.plays} label="plays" />
+            <Stat n={counts.lists} label="lists" />
             <Stat n={ownedCount} label="owned" />
-            <Stat n={wishlistCount} label="wishlist" />
-            <Stat n={forSaleCount} label="for sale" />
+            <button
+              onClick={() => setFriendsOpen(true)}
+              className="text-muted transition-colors hover:text-foreground"
+            >
+              <b className="text-foreground">{counts.friends}</b> friends
+            </button>
           </div>
         </div>
       </div>
@@ -110,17 +156,83 @@ export default function ProfilePage({
         <div className="mt-8 rounded-2xl border border-dashed border-border p-10 text-center text-muted">
           <Lock className="mx-auto h-7 w-7 text-subtle" />
           <p className="mt-3 font-medium">This profile is private.</p>
+          <p className="mt-1 text-sm">
+            Add {author?.username ?? "them"} as a friend to see their plays,
+            lists and collection.
+          </p>
         </div>
       ) : (
-        <div className="mt-6">
-          <CollectionShelves
-            username={username}
-            owned={data.owned}
-            forTrade={data.forTrade}
-            wishlist={data.wishlist}
-            prevOwned={data.prevOwned}
-          />
-        </div>
+        <>
+          <div className="mt-6 flex border-b border-border">
+            {isSelf && (
+              <TabBtn
+                active={activeTab === "stats"}
+                onClick={() => selectTab("stats")}
+                icon={BarChart3}
+                label="Stats"
+              />
+            )}
+            <TabBtn
+              active={activeTab === "plays"}
+              onClick={() => selectTab("plays")}
+              icon={Dices}
+              label="Plays"
+            />
+            <TabBtn
+              active={activeTab === "lists"}
+              onClick={() => selectTab("lists")}
+              icon={Trophy}
+              label="Lists"
+            />
+            <TabBtn
+              active={activeTab === "collection"}
+              onClick={() => selectTab("collection")}
+              icon={Package}
+              label="Collection"
+            />
+          </div>
+
+          <div className="mt-5">
+            {activeTab === "stats" && isSelf && <StatsPanel />}
+            {activeTab === "plays" && (
+              <PlaysGrid isSelf={isSelf} username={username} />
+            )}
+            {activeTab === "lists" &&
+              (isSelf ? <MyListsGrid /> : <ListsGrid lists={lists} />)}
+            {activeTab === "collection" && (
+              <CollectionTab
+                username={username}
+                owned={data.owned}
+                forTrade={data.forTrade}
+                wishlist={data.wishlist}
+                prevOwned={data.prevOwned}
+              />
+            )}
+          </div>
+        </>
+      )}
+
+      <FriendsSheet
+        open={friendsOpen}
+        onClose={() => setFriendsOpen(false)}
+        username={username}
+        isSelf={isSelf}
+      />
+
+      {/* The Lists tab's floating action (your own profile). Plays has its own
+          FAB inside PlaysGrid; Stats + Collection have none. */}
+      {isSelf && !isPrivate && activeTab === "lists" && (
+        <Fab
+          icon={Plus}
+          label="New list"
+          onClick={() => setCreateListOpen(true)}
+        />
+      )}
+      {isSelf && (
+        <CreateListDrawer
+          open={createListOpen}
+          onClose={() => setCreateListOpen(false)}
+        />
       )}
     </div>
   );
@@ -249,9 +361,82 @@ function ProfileMenu() {
   );
 }
 
+function TabBtn({
+  active,
+  onClick,
+  icon: Icon,
+  label,
+}: {
+  active: boolean;
+  onClick: () => void;
+  icon: typeof Trophy;
+  label: string;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={cn(
+        "flex flex-1 items-center justify-center gap-1.5 border-b-2 py-2.5 text-sm font-semibold transition-colors",
+        active
+          ? "border-accent text-foreground"
+          : "border-transparent text-muted hover:text-foreground",
+      )}
+    >
+      <Icon className="h-4 w-4" />
+      {label}
+    </button>
+  );
+}
+
+type Lists = NonNullable<
+  FunctionReturnType<typeof api.topGames.publicProfile>
+>["lists"];
 type Section = NonNullable<
   FunctionReturnType<typeof api.topGames.publicProfile>
 >["owned"];
+
+function EmptyTab({ text }: { text: string }) {
+  return (
+    <p className="rounded-2xl border border-dashed border-border p-10 text-center text-sm text-muted">
+      {text}
+    </p>
+  );
+}
+
+
+function ListsGrid({ lists }: { lists: Lists }) {
+  if (lists.length === 0) return <EmptyTab text="No public Top Games lists yet." />;
+  return (
+    <ul className="grid gap-3 sm:grid-cols-2">
+      {lists.map((l) => (
+        <li key={l._id}>
+          <ListCard list={l} />
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** Your own Lists tab — every list you own, drafts included (public browsing of
+ *  another user's lists uses ListsGrid). Create via the tab's floating button. */
+function MyListsGrid() {
+  const lists = useQuery(api.topGames.listMine);
+  if (lists === undefined)
+    return <Skeleton className="h-40 w-full rounded-xl" />;
+  if (lists.length === 0)
+    return (
+      <EmptyTab text="No lists yet — tap + to build your first Top Games list." />
+    );
+  return (
+    <ul className="grid gap-3 sm:grid-cols-2">
+      {lists.map((l) => (
+        <li key={l._id}>
+          <ListCard list={l} />
+        </li>
+      ))}
+    </ul>
+  );
+}
 
 function CollectionBlock({
   icon: Icon,
@@ -307,7 +492,7 @@ function CollectionBlock({
   );
 }
 
-function CollectionShelves({
+function CollectionTab({
   username,
   owned,
   forTrade,
@@ -342,10 +527,7 @@ function CollectionShelves({
     (prevOwned?.total ?? 0) === 0;
   if (empty) {
     return (
-      <p className="rounded-2xl border border-dashed border-border p-10 text-center text-sm text-muted">
-        No collection shared. Turn on Owned / For Sale / Wishlist in Settings to
-        show them here.
-      </p>
+      <EmptyTab text="No collection shared. Turn on Owned / For Sale / Wishlist in Settings to show them here." />
     );
   }
   return (

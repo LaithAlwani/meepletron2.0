@@ -1,12 +1,7 @@
-"use client";
+import { redirect } from "next/navigation";
 
-import { CollectionSection } from "@/components/collection/CollectionSection";
-
-/** "Collection" — the personal collection (BGG sync), a top-level page. */
-export default function CollectionPage() {
-  return (
-    <div className="mx-auto max-w-3xl px-4 pb-8 pt-3 nav:pt-8">
-      <CollectionSection />
-    </div>
-  );
+// The collection now lives inside the library (/boardgames). Keep this path as a
+// redirect so old links / bookmarks don't 404.
+export default function CollectionRedirect() {
+  redirect("/boardgames");
 }

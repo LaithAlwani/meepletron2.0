@@ -237,12 +237,12 @@ export function WhoGoesFirst() {
       <main className="flex min-h-[80dvh] flex-col items-center justify-center gap-5 px-6 text-center">
         <Smartphone className="h-12 w-12 text-accent" />
         <h1 className="font-display text-3xl font-bold text-foreground">
-          First player
+          Who Goes First?
         </h1>
         <p className="max-w-sm text-muted">
           This is a touch game — open{" "}
           <span className="font-semibold text-foreground">
-            meepletron.com/first-player
+            meepletron.com/who-goes-first
           </span>{" "}
           on your phone or tablet. Everyone holds a finger on the screen and one
           player is randomly chosen to go first.
