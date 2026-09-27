@@ -3,6 +3,7 @@ import { mutation } from "./_generated/server";
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { internal } from "./_generated/api";
 import { deleteUserAndAuth } from "./lib/purge";
+import { recordMessages } from "./lib/stats";
 
 const UPGRADE_TTL_MS = 15 * 60 * 1000;
 
@@ -75,7 +76,14 @@ export const completeUpgrade = mutation({
           .query("messages")
           .withIndex("by_chat", (q) => q.eq("chatId", chat._id))
           .take(2000);
-        for (const m of msgs) await ctx.db.delete("messages", m._id);
+        let delUser = 0;
+        let delAi = 0;
+        for (const m of msgs) {
+          if (m.role === "user") delUser++;
+          else delAi++;
+          await ctx.db.delete("messages", m._id);
+        }
+        await recordMessages(ctx, { user: -delUser, ai: -delAi });
         await ctx.db.delete("chats", chat._id);
       } else {
         await ctx.db.patch("chats", chat._id, { userId: currentUserId });

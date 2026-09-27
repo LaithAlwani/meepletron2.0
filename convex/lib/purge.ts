@@ -1,6 +1,7 @@
 import type { MutationCtx } from "../_generated/server";
 import type { Id } from "../_generated/dataModel";
 import { internal } from "../_generated/api";
+import { recordMessages } from "./stats";
 
 /**
  * Delete a user's Convex Auth rows (accounts, verification codes, sessions,
@@ -60,14 +61,21 @@ export async function deleteUserAppData(
     .query("chats")
     .withIndex("by_user", (q) => q.eq("userId", userId))
     .take(1000);
+  let delUser = 0;
+  let delAi = 0;
   for (const chat of chats) {
     const messages = await ctx.db
       .query("messages")
       .withIndex("by_chat", (q) => q.eq("chatId", chat._id))
       .take(2000);
-    for (const m of messages) await ctx.db.delete("messages", m._id);
+    for (const m of messages) {
+      if (m.role === "user") delUser++;
+      else delAi++;
+      await ctx.db.delete("messages", m._id);
+    }
     await ctx.db.delete("chats", chat._id);
   }
+  await recordMessages(ctx, { user: -delUser, ai: -delAi });
 
   // BGG link + job rows are at most a handful, so they go inline. Note the
   // account row holds the sealed session cookie — it must not outlive the user.

@@ -219,6 +219,15 @@ export default defineSchema({
       filterFields: ["isExpansion", "isStub"],
     }),
 
+  // Detail-only game content, kept off the `games` doc so the hot card/list
+  // reads (library, similar, collection) don't pay to read a 1–3 KB description
+  // they never show. Read only on the game detail page (games.gameDetail).
+  // `games.description` remains as a fallback for rows not yet backfilled.
+  gameContent: defineTable({
+    gameId: v.id("games"),
+    description: v.optional(v.string()),
+  }).index("by_game", ["gameId"]),
+
   // A game can have several rulebooks (Base Rules, Solo Mode, ...). Each is the
   // unit of ingestion and the unit a user selects to chat with.
   rulebooks: defineTable({
@@ -510,8 +519,36 @@ export default defineSchema({
   // without a 2,000-doc reactive subscription that re-reads on every game write.
   catalogueStats: defineTable({
     baseGameCount: v.number(), // non-stub, non-expansion games (the library set)
+    // All expansion games (incl. stubs) — matches the admin dashboard's count.
+    // Denormalized off the daily recomputeSimilarGames scan.
+    expansionCount: v.optional(v.number()),
     updatedAt: v.number(),
   }),
+
+  // Running counters for the admin dashboard, maintained incrementally so the
+  // dashboard reads a couple of small docs instead of scanning messages/usageLog
+  // (and stops re-scanning them on every insert). Backfill: admin.backfillStats.
+  adminCounters: defineTable({
+    messagesTotal: v.number(),
+    messagesByUser: v.number(),
+    messagesByAi: v.number(),
+    // All-time LLM tokens, keyed by model so cost can be recomputed at read time
+    // from current pricing (not frozen at insert time).
+    tokensByModel: v.record(
+      v.string(),
+      v.object({ input: v.number(), output: v.number() }),
+    ),
+  }),
+
+  // Per-month LLM token totals (key = "YYYY-MM", UTC), for the dashboard's
+  // "this month" figures. One tiny row per month.
+  usageMonthly: defineTable({
+    month: v.string(),
+    tokensByModel: v.record(
+      v.string(),
+      v.object({ input: v.number(), output: v.number() }),
+    ),
+  }).index("by_month", ["month"]),
 
   usageLog: defineTable({
     purpose: v.union(

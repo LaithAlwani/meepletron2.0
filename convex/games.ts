@@ -5,6 +5,7 @@ import {
   mutation,
   internalQuery,
   internalMutation,
+  internalAction,
   type QueryCtx,
   type MutationCtx,
 } from "./_generated/server";
@@ -23,6 +24,7 @@ import {
 } from "./lib/gameSort";
 import { bggStatsValidator } from "./lib/bggStats";
 import { coverUrls, thumbUrl } from "./lib/gameCover";
+import { recordMessages } from "./lib/stats";
 
 /** Resolve a game's cover URLs for the client (BGG CDN preferred, Convex blob
  *  fallback). Drops the server-only `searchText` (a large blob no client reads). */
@@ -975,7 +977,8 @@ export const similarGames = query({
       const valid = docs.filter(
         (g): g is Doc<"games"> => !!g && !g.isStub && !g.isExpansion,
       );
-      return await Promise.all(valid.map((g) => withMedia(ctx, g)));
+      // The rail renders GameCards — return the lean card shape, not full docs.
+      return await Promise.all(valid.map((g) => withCardMedia(ctx, g)));
     }
 
     // Fallback (not yet computed): scan the catalogue once.
@@ -990,7 +993,7 @@ export const similarGames = query({
     const picked = ids
       .map((id) => byId.get(id))
       .filter((g): g is Doc<"games"> => !!g);
-    return await Promise.all(picked.map((g) => withMedia(ctx, g)));
+    return await Promise.all(picked.map((g) => withCardMedia(ctx, g)));
   },
 });
 
@@ -1016,18 +1019,26 @@ export const recomputeSimilarGames = internalMutation({
       )
       .take(2000);
 
-    // Denormalize the catalogue total off the back of this scan, so the library
-    // header (games.libraryCount) reads one small doc instead of re-scanning
-    // every game on every view + every game write.
+    // Denormalize the catalogue totals off the back of this scan, so the library
+    // header (games.libraryCount) and the admin dashboard (admin.dashboardStats)
+    // read one small doc instead of re-scanning every game on every view + write.
+    const expansionCount = (
+      await ctx.db
+        .query("games")
+        .withIndex("by_isExpansion", (q) => q.eq("isExpansion", true))
+        .take(20000)
+    ).length;
     const stats = await ctx.db.query("catalogueStats").first();
     if (stats) {
       await ctx.db.patch("catalogueStats", stats._id, {
         baseGameCount: games.length,
+        expansionCount,
         updatedAt: Date.now(),
       });
     } else {
       await ctx.db.insert("catalogueStats", {
         baseGameCount: games.length,
+        expansionCount,
         updatedAt: Date.now(),
       });
     }
@@ -1049,7 +1060,7 @@ export const recomputeSimilarGames = internalMutation({
 
 /** Assemble a game detail: the game (with media), parent, expansions, rulebooks. */
 async function gameDetail(ctx: QueryCtx, game: Doc<"games">) {
-  const [expansions, rulebookDocs, parentDoc] = await Promise.all([
+  const [expansions, rulebookDocs, parentDoc, content] = await Promise.all([
     ctx.db
       .query("games")
       .withIndex("by_parent", (q) => q.eq("parentId", game._id))
@@ -1061,9 +1072,16 @@ async function gameDetail(ctx: QueryCtx, game: Doc<"games">) {
     game.parentId
       ? ctx.db.get("games", game.parentId)
       : Promise.resolve(null),
+    ctx.db
+      .query("gameContent")
+      .withIndex("by_game", (q) => q.eq("gameId", game._id))
+      .first(),
   ]);
   return {
     ...(await withMedia(ctx, game)),
+    // Description lives in the gameContent sidecar; fall back to the game doc
+    // for rows not yet backfilled.
+    description: content?.description ?? game.description,
     // For expansions, the base game they belong to (null for base games).
     parent: parentDoc ? await withMedia(ctx, parentDoc) : null,
     expansions: await Promise.all(expansions.map((e) => withMedia(ctx, e))),
@@ -1257,6 +1275,24 @@ async function adjustBaseGameCount(
   });
 }
 
+/** Upsert a game's detail-only description into the gameContent sidecar, so it
+ *  stays off the hot `games` doc that card/list reads pay for. */
+async function setGameDescription(
+  ctx: MutationCtx,
+  gameId: Id<"games">,
+  description: string | undefined,
+): Promise<void> {
+  const existing = await ctx.db
+    .query("gameContent")
+    .withIndex("by_game", (q) => q.eq("gameId", gameId))
+    .first();
+  if (existing) {
+    await ctx.db.patch("gameContent", existing._id, { description });
+  } else if (description !== undefined) {
+    await ctx.db.insert("gameContent", { gameId, description });
+  }
+}
+
 export const createGame = mutation({
   args: {
     title: v.string(),
@@ -1287,7 +1323,7 @@ export const createGame = mutation({
       minAge: args.minAge,
       minPlayTime: args.minPlayTime,
       maxPlayTime: args.maxPlayTime,
-      description: args.description,
+      // description lives in the gameContent sidecar (set below), not here.
       designers: args.designers ?? [],
       artists: args.artists ?? [],
       publishers: args.publishers ?? [],
@@ -1305,6 +1341,7 @@ export const createGame = mutation({
       ...sortKeys({ title, year: args.year, bgg: args.bgg }),
       contentUpdatedAt: Date.now(),
     });
+    await setGameDescription(ctx, gameId, args.description);
     // A new non-expansion game joins the library — keep the cached total live.
     if (!args.isExpansion) await adjustBaseGameCount(ctx, 1);
     // Adopt any collection rows already pointing at this BGG id.
@@ -1330,7 +1367,9 @@ export const updateGame = mutation({
     await requireAdmin(ctx);
     const game = await ctx.db.get("games", gameId);
     if (!game) throw new Error("Game not found");
-    const patch: Record<string, unknown> = { ...rest };
+    // Description is stored in the gameContent sidecar, not on the game doc.
+    const { description, ...gameArgs } = rest;
+    const patch: Record<string, unknown> = { ...gameArgs };
     if (rest.title !== undefined) {
       const title = rest.title.trim();
       if (!title) throw new Error("Title cannot be empty");
@@ -1358,6 +1397,9 @@ export const updateGame = mutation({
     );
     patch.contentUpdatedAt = Date.now();
     await ctx.db.patch("games", gameId, patch);
+    if (description !== undefined) {
+      await setGameDescription(ctx, gameId, description);
+    }
 
     // A stub promoted to a real (non-expansion) game joins the library — bump
     // the cached total so it stays live between reconciling recomputes.
@@ -1556,7 +1598,7 @@ export const applyStubEnrichment = internalMutation({
       minAge: meta.minAge,
       minPlayTime: meta.minPlayTime,
       maxPlayTime: meta.maxPlayTime,
-      description: meta.description,
+      // description goes to the gameContent sidecar (set below), not here.
       designers: meta.designers ?? [],
       artists: meta.artists ?? [],
       publishers: meta.publishers ?? [],
@@ -1588,6 +1630,51 @@ export const applyStubEnrichment = internalMutation({
       }
     }
     await ctx.db.patch("games", gameId, patch);
+    await setGameDescription(ctx, gameId, meta.description);
+  },
+});
+
+/**
+ * One-time, idempotent, resumable migration: move each game's `description` into
+ * the gameContent sidecar and clear it off the game doc, so card/list reads stop
+ * paying for it. Safe to run while serving traffic — gameDetail falls back to
+ * the game doc for any row not yet moved. Drive it with the action below:
+ *
+ *   npx convex run games:backfillGameContentAll        (dev)
+ *   npx convex run games:backfillGameContentAll --prod  (prod)
+ */
+export const backfillGameContentPage = internalMutation({
+  args: { cursor: v.union(v.string(), v.null()) },
+  handler: async (ctx, { cursor }) => {
+    const res = await ctx.db.query("games").paginate({ numItems: 200, cursor });
+    let moved = 0;
+    for (const g of res.page) {
+      if (g.description === undefined) continue;
+      await setGameDescription(ctx, g._id, g.description);
+      await ctx.db.patch("games", g._id, { description: undefined });
+      moved++;
+    }
+    return { moved, isDone: res.isDone, cursor: res.continueCursor };
+  },
+});
+
+export const backfillGameContentAll = internalAction({
+  args: {},
+  handler: async (ctx): Promise<{ moved: number; pages: number }> => {
+    let cursor: string | null = null;
+    let moved = 0;
+    let pages = 0;
+    for (;;) {
+      const r: { moved: number; isDone: boolean; cursor: string } =
+        await ctx.runMutation(internal.games.backfillGameContentPage, {
+          cursor,
+        });
+      moved += r.moved;
+      pages++;
+      if (r.isDone) break;
+      cursor = r.cursor;
+    }
+    return { moved, pages };
   },
 });
 
@@ -1776,14 +1863,21 @@ export async function purgeGame(ctx: MutationCtx, game: Doc<"games">) {
     .query("chats")
     .filter((q) => q.eq(q.field("gameId"), gameId))
     .take(500);
+  let delUser = 0;
+  let delAi = 0;
   for (const chat of chats) {
     const msgs = await ctx.db
       .query("messages")
       .withIndex("by_chat", (q) => q.eq("chatId", chat._id))
       .take(1000);
-    for (const m of msgs) await ctx.db.delete("messages", m._id);
+    for (const m of msgs) {
+      if (m.role === "user") delUser++;
+      else delAi++;
+      await ctx.db.delete("messages", m._id);
+    }
     await ctx.db.delete("chats", chat._id);
   }
+  await recordMessages(ctx, { user: -delUser, ai: -delAi });
 
   // Free cover + thumbnail objects (R2 keys or legacy blobs; dedupe).
   const covers = new Set<string>();

@@ -11,6 +11,7 @@ import type { Doc, Id } from "./_generated/dataModel";
 import { getCurrentUser, requireUser, requireAdmin } from "./lib/auth";
 import { finite } from "./lib/num";
 import { thumbUrl } from "./lib/gameCover";
+import { recordMessages, recordUsage } from "./lib/stats";
 
 /** Daily token budgets: guests get a smaller allowance to nudge sign-up. */
 export const DAILY_TOKEN_LIMIT = 100_000;
@@ -197,6 +198,7 @@ export const postMessage = mutation({
       role: "user",
       content: trimmed,
     });
+    await recordMessages(ctx, { user: 1 });
     await ctx.db.patch("chats", chatId, {
       lastMessage: trimmed,
       lastMessageAt: Date.now(),
@@ -572,6 +574,7 @@ export const saveAssistantMessage = internalMutation({
       outputTokens += completionTokens;
       total += totalTokens;
     }
+    await recordUsage(ctx, usage);
 
     await ctx.db.insert("messages", {
       chatId,
@@ -581,6 +584,7 @@ export const saveAssistantMessage = internalMutation({
       inputTokens: inputTokens || undefined,
       outputTokens: outputTokens || undefined,
     });
+    await recordMessages(ctx, { ai: 1 });
     await ctx.db.patch("chats", chatId, {
       lastMessage: content.slice(0, 200),
       lastMessageAt: Date.now(),

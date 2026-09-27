@@ -9,6 +9,7 @@ import {
 import type { Id } from "./_generated/dataModel";
 import { internal } from "./_generated/api";
 import { requireAdmin } from "./lib/auth";
+import { recordUsage } from "./lib/stats";
 
 const batchPlanValidator = v.array(
   v.object({
@@ -180,6 +181,13 @@ export const saveBatch = internalMutation({
       completionTokens: args.usage.completionTokens,
       totalTokens: args.usage.totalTokens,
     });
+    await recordUsage(ctx, [
+      {
+        model: "gemini-2.5-flash",
+        promptTokens: args.usage.promptTokens,
+        completionTokens: args.usage.completionTokens,
+      },
+    ]);
   },
 });
 
@@ -375,6 +383,13 @@ export const finalizeCommit = internalMutation({
       completionTokens: 0,
       totalTokens: embedTokens,
     });
+    await recordUsage(ctx, [
+      {
+        model: "gemini-embedding-001",
+        promptTokens: embedTokens,
+        completionTokens: 0,
+      },
+    ]);
     // Generate the derived detail-page content (FAQ, glossary, reminders) from
     // the freshly-ingested rulebook — but ONLY the first time this rulebook is
     // ingested. Each of these runs several vector searches + LLM calls, so we

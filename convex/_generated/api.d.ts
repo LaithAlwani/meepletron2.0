@@ -61,6 +61,7 @@ import type * as lib_prompts from "../lib/prompts.js";
 import type * as lib_purge from "../lib/purge.js";
 import type * as lib_r2keys from "../lib/r2keys.js";
 import type * as lib_slug from "../lib/slug.js";
+import type * as lib_stats from "../lib/stats.js";
 import type * as lib_topGamesCategories from "../lib/topGamesCategories.js";
 import type * as maintenance from "../maintenance.js";
 import type * as otp_EmailOtp from "../otp/EmailOtp.js";
@@ -140,6 +141,7 @@ declare const fullApi: ApiFromModules<{
   "lib/purge": typeof lib_purge;
   "lib/r2keys": typeof lib_r2keys;
   "lib/slug": typeof lib_slug;
+  "lib/stats": typeof lib_stats;
   "lib/topGamesCategories": typeof lib_topGamesCategories;
   maintenance: typeof maintenance;
   "otp/EmailOtp": typeof otp_EmailOtp;

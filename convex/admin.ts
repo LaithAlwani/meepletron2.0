@@ -1,7 +1,8 @@
 import { v } from "convex/values";
-import { query } from "./_generated/server";
+import { query, internalMutation } from "./_generated/server";
 import { requireAdmin } from "./lib/auth";
 import { finite } from "./lib/num";
+import { monthKey, foldTokens, type TokensByModel } from "./lib/stats";
 
 // Approximate USD pricing per 1M tokens. Update as provider pricing changes.
 const PRICING: Record<string, { input: number; output: number }> = {
@@ -19,71 +20,123 @@ function rowCost(model: string, promptTokens: number, completionTokens: number) 
 
 const SCAN_CAP = 20000;
 
+/** Sum a per-model token map into totals + estimated cost at current pricing. */
+function sumTokens(m: TokensByModel | undefined) {
+  let input = 0;
+  let output = 0;
+  let cost = 0;
+  for (const [model, t] of Object.entries(m ?? {})) {
+    input += finite(t.input);
+    output += finite(t.output);
+    cost += rowCost(model, t.input, t.output);
+  }
+  return { input, output, cost };
+}
+
 /**
  * Admin dashboard totals: users, games/expansions, messages (by role), and AI
- * token input/output for the current month + all time (+ est. cost). `monthStart`
- * is passed in (queries can't read wall-clock). Bounded scans — fine at this
- * scale; move to @convex-dev/aggregate if any table grows past ~16k rows.
+ * token input/output for the current month + all time (+ est. cost).
+ *
+ * Reads denormalized counters — the running `adminCounters`/`usageMonthly` rows
+ * (maintained on message/usage writes; backfill via `admin.backfillStats`) and
+ * the catalogue totals stamped by the daily recompute cron — so it touches a
+ * handful of small docs instead of scanning messages/usageLog/games (and no
+ * longer re-runs when those high-write tables change). Only the small `users`
+ * scan remains, because users are created inside the auth component. `monthStart`
+ * is passed in since queries can't read wall-clock.
  */
 export const dashboardStats = query({
   args: { monthStart: v.number() },
   handler: async (ctx, { monthStart }) => {
     await requireAdmin(ctx);
 
-    const [baseGames, expansions, users] = await Promise.all([
+    const [catalogue, counters, monthly, users] = await Promise.all([
+      ctx.db.query("catalogueStats").first(),
+      ctx.db.query("adminCounters").first(),
       ctx.db
-        .query("games")
-        .withIndex("by_isExpansion", (q) => q.eq("isExpansion", false))
-        .take(SCAN_CAP),
-      ctx.db
-        .query("games")
-        .withIndex("by_isExpansion", (q) => q.eq("isExpansion", true))
-        .take(SCAN_CAP),
+        .query("usageMonthly")
+        .withIndex("by_month", (q) => q.eq("month", monthKey(monthStart)))
+        .first(),
       ctx.db.query("users").take(SCAN_CAP),
     ]);
 
-    let msgTotal = 0;
-    let msgUser = 0;
-    let msgAi = 0;
-    for (const m of await ctx.db.query("messages").take(SCAN_CAP)) {
-      msgTotal++;
-      if (m.role === "user") msgUser++;
-      else msgAi++;
-    }
-
-    let inTotal = 0;
-    let outTotal = 0;
-    let inMonth = 0;
-    let outMonth = 0;
-    let costTotal = 0;
-    let costMonth = 0;
-    for (const r of await ctx.db.query("usageLog").take(SCAN_CAP)) {
-      const inp = finite(r.promptTokens);
-      const out = finite(r.completionTokens);
-      const c = rowCost(r.model, r.promptTokens, r.completionTokens);
-      inTotal += inp;
-      outTotal += out;
-      costTotal += c;
-      if (r._creationTime >= monthStart) {
-        inMonth += inp;
-        outMonth += out;
-        costMonth += c;
-      }
-    }
-
     const guestUsers = users.filter((u) => u.isAnonymous === true).length;
+    const total = sumTokens(counters?.tokensByModel);
+    const month = sumTokens(monthly?.tokensByModel);
 
     return {
       users: users.length,
       registeredUsers: users.length - guestUsers,
       guestUsers,
-      baseGames: baseGames.length,
-      expansions: expansions.length,
-      messages: { total: msgTotal, byUser: msgUser, byAi: msgAi },
-      tokensMonth: { input: inMonth, output: outMonth },
-      tokensTotal: { input: inTotal, output: outTotal },
-      costMonth,
-      costTotal,
+      baseGames: catalogue?.baseGameCount ?? 0,
+      expansions: catalogue?.expansionCount ?? 0,
+      messages: {
+        total: counters?.messagesTotal ?? 0,
+        byUser: counters?.messagesByUser ?? 0,
+        byAi: counters?.messagesByAi ?? 0,
+      },
+      tokensMonth: { input: month.input, output: month.output },
+      tokensTotal: { input: total.input, output: total.output },
+      costMonth: month.cost,
+      costTotal: total.cost,
+    };
+  },
+});
+
+/**
+ * One-time (idempotent) backfill of the denormalized dashboard counters from the
+ * existing messages + usageLog rows. Run after deploying the counter code:
+ *
+ *   npx convex run admin:backfillStats            (dev)
+ *   npx convex run admin:backfillStats --prod      (prod)
+ *
+ * Re-runnable: it resets the counters and rebuilds from scratch each call. The
+ * catalogue counts (base/expansion) are stamped separately by the daily
+ * recomputeSimilarGames cron — run `games:recomputeSimilarGames` if needed.
+ */
+export const backfillStats = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    let msgUser = 0;
+    let msgAi = 0;
+    for (const m of await ctx.db.query("messages").take(SCAN_CAP)) {
+      if (m.role === "user") msgUser++;
+      else msgAi++;
+    }
+
+    let allTime: TokensByModel = {};
+    const byMonth = new Map<string, TokensByModel>();
+    for (const r of await ctx.db.query("usageLog").take(SCAN_CAP)) {
+      const row = [
+        { model: r.model, input: r.promptTokens, output: r.completionTokens },
+      ];
+      allTime = foldTokens(allTime, row);
+      const mk = monthKey(r._creationTime);
+      byMonth.set(mk, foldTokens(byMonth.get(mk) ?? {}, row));
+    }
+
+    // Reset + write the counters singleton.
+    const existing = await ctx.db.query("adminCounters").first();
+    const counterDoc = {
+      messagesTotal: msgUser + msgAi,
+      messagesByUser: msgUser,
+      messagesByAi: msgAi,
+      tokensByModel: allTime,
+    };
+    if (existing) await ctx.db.patch("adminCounters", existing._id, counterDoc);
+    else await ctx.db.insert("adminCounters", counterDoc);
+
+    // Reset + rewrite the monthly buckets.
+    for (const old of await ctx.db.query("usageMonthly").take(SCAN_CAP)) {
+      await ctx.db.delete("usageMonthly", old._id);
+    }
+    for (const [month, tokensByModel] of byMonth) {
+      await ctx.db.insert("usageMonthly", { month, tokensByModel });
+    }
+
+    return {
+      messages: { byUser: msgUser, byAi: msgAi },
+      months: byMonth.size,
     };
   },
 });
