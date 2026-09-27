@@ -277,6 +277,14 @@ export const updateSettings = mutation({
       compact: v.optional(v.boolean()),
       enterToSend: v.optional(v.boolean()),
       showSources: v.optional(v.boolean()),
+      defaultDestination: v.optional(
+        v.union(
+          v.literal("boardgames"),
+          v.literal("chats"),
+          v.literal("profile"),
+        ),
+      ),
+      skipHome: v.optional(v.boolean()),
       emailUpdates: v.optional(v.boolean()),
       emailFriendRequests: v.optional(v.boolean()),
       emailComments: v.optional(v.boolean()),

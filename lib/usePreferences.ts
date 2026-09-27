@@ -5,12 +5,23 @@ import { api } from "@/convex/_generated/api";
 
 export type FontSize = "sm" | "base" | "lg" | "xl";
 
+export type DefaultDestination = "boardgames" | "chats" | "profile";
+
+/** Route a `defaultDestination` maps to. */
+export const DESTINATION_HREF: Record<DefaultDestination, string> = {
+  boardgames: "/boardgames",
+  chats: "/chats",
+  profile: "/profile",
+};
+
 export type Preferences = {
   fontSize: FontSize;
   reduceMotion: boolean;
   compact: boolean;
   enterToSend: boolean;
   showSources: boolean;
+  defaultDestination: DefaultDestination;
+  skipHome: boolean;
   emailUpdates: boolean;
   emailFriendRequests: boolean;
   emailComments: boolean;
@@ -23,6 +34,8 @@ export const DEFAULT_PREFERENCES: Preferences = {
   compact: false,
   enterToSend: true,
   showSources: true,
+  defaultDestination: "boardgames",
+  skipHome: false,
   emailUpdates: false,
   emailFriendRequests: true,
   emailComments: true,

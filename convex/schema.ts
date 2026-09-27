@@ -102,6 +102,16 @@ export default defineSchema({
         compact: v.optional(v.boolean()),
         enterToSend: v.optional(v.boolean()),
         showSources: v.optional(v.boolean()),
+        // Where a signed-in visitor to "/" is sent (or where the landing's
+        // "Go to …" CTA points). `skipHome` auto-redirects; off shows the landing.
+        defaultDestination: v.optional(
+          v.union(
+            v.literal("boardgames"),
+            v.literal("chats"),
+            v.literal("profile"),
+          ),
+        ),
+        skipHome: v.optional(v.boolean()),
         emailUpdates: v.optional(v.boolean()),
         // Email nudges (all default on). Gate the transactional notification
         // emails; the in-app bell always shows regardless.

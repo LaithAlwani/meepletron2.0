@@ -1,44 +1,37 @@
-import Link from "next/link";
 import Image from "next/image";
 import {
-  Dices,
-  BarChart3,
-  Trophy,
-  Package,
-  ArrowRight,
+  LayoutGrid,
+  Bookmark,
+  MessageCircle,
+  Crown,
   MessageCircleQuestion,
   type LucideIcon,
 } from "lucide-react";
-import { buttonClasses } from "@/components/ui/buttonStyles";
 import { Reveal, Stagger, StaggerItem } from "@/components/motion/Reveal";
 import { HeroBackdrop } from "@/components/home/HeroBackdrop";
+import { HeroCta } from "@/components/home/HeroCta";
 
 // The AI rules expert is the hero; these are everything else around the table.
 const FEATURES: { icon: LucideIcon; title: string; body: string }[] = [
   {
-    icon: Dices,
-    title: "Log your plays",
-    body: "Record every game night — scores, winners, photos and who was at the table.",
+    icon: LayoutGrid,
+    title: "A game library",
+    body: "Browse the catalogue, open any game's rules, reference, and rulebook chat.",
   },
   {
-    icon: BarChart3,
-    title: "Track your stats",
-    body: "Win rates, most-played games and your play history, updated automatically.",
+    icon: MessageCircle,
+    title: "Rulebook chat",
+    body: "Ask any rules question and get an answer from the actual rulebook, cited by page.",
   },
   {
-    icon: Trophy,
-    title: "Top Games lists",
-    body: "Rank your all-time favourites into lists worth sharing.",
-  },
-  {
-    icon: Package,
+    icon: Bookmark,
     title: "Your collection",
-    body: "Keep what you own, your wishlist, and what's up for sale in one place.",
+    body: "Keep what you own, your wishlist, and what's up for sale — synced from BoardGameGeek.",
   },
   {
-    icon: Dices,
-    title: "Play with friends",
-    body: "Add friends, tag them in plays, and see the game nights they share.",
+    icon: Crown,
+    title: "First player",
+    body: "Settle who starts with a tap — everyone holds a finger, one is chosen.",
   },
 ];
 
@@ -69,24 +62,10 @@ export function Landing() {
         <p className="animate-in mx-auto mt-4 max-w-xl text-balance text-base text-muted sm:text-lg">
           Meepletron reads the game&apos;s actual rulebook and answers your
           question in seconds — quoting the exact rule with the page it came
-          from, not a guess from a general AI. Plus a game library, a plays
-          feed, stats and top-games lists for everything else around the table.
+          from, not a guess from a general AI. Plus a game library, your
+          collection, and a first-player picker for game night.
         </p>
-        <div className="animate-in mt-7 flex flex-wrap items-center justify-center gap-3">
-          <Link href="/auth" className={buttonClasses("primary", "lg")}>
-            Create free account
-          </Link>
-          <Link href="/auth" className={buttonClasses("ghost", "lg")}>
-            Log in
-          </Link>
-        </div>
-        <Link
-          href="/boardgames"
-          className="animate-in mt-5 inline-flex items-center gap-1 text-sm font-semibold text-muted transition-colors hover:text-foreground"
-        >
-          Just browsing? Explore the game library
-          <ArrowRight className="h-4 w-4" />
-        </Link>
+        <HeroCta />
       </section>
 
       {/* Everything else for game night */}
@@ -125,13 +104,9 @@ export function Landing() {
             Settle the rules, then keep the whole game night
           </p>
           <p className="mx-auto mt-1.5 max-w-md text-sm text-muted">
-            Free to join. Your plays, stats and lists are yours to keep.
+            Free to join. Your library, collection and chats are yours to keep.
           </p>
-          <div className="mt-5 flex flex-wrap items-center justify-center gap-3">
-            <Link href="/auth" className={buttonClasses("primary", "lg")}>
-              Create free account
-            </Link>
-          </div>
+          <HeroCta compact />
         </Reveal>
       </section>
     </div>

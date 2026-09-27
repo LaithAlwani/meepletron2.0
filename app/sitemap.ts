@@ -20,10 +20,7 @@ const ROUTES: {
 }[] = [
   { path: "/", changeFrequency: "daily", priority: 1 },
   { path: "/boardgames", changeFrequency: "daily", priority: 0.9 },
-  { path: "/top-games", changeFrequency: "weekly", priority: 0.8 },
-  { path: "/who-goes-first", changeFrequency: "monthly", priority: 0.7 },
-  { path: "/tuckbox", changeFrequency: "monthly", priority: 0.6 },
-  { path: "/about", changeFrequency: "monthly", priority: 0.5 },
+  { path: "/first-player", changeFrequency: "monthly", priority: 0.7 },
   { path: "/privacy", changeFrequency: "yearly", priority: 0.2 },
   { path: "/terms", changeFrequency: "yearly", priority: 0.2 },
 ];
@@ -35,13 +32,6 @@ const ROUTES: {
 const getGameSlugs = unstable_cache(
   () => fetchQuery(api.games.sitemapSlugs, {}),
   ["sitemap-game-slugs"],
-  { revalidate: ONE_DAY },
-);
-
-// Public Top Games lists — same daily-cache pattern as the game slugs.
-const getTopLists = unstable_cache(
-  () => fetchQuery(api.topGames.sitemapLists, {}),
-  ["sitemap-top-lists"],
   { revalidate: ONE_DAY },
 );
 
@@ -77,19 +67,5 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     // If Convex is unreachable at build/request time, still emit the static map.
   }
 
-  // Public Top Games lists — shareable ranked lists worth indexing.
-  let listRoutes: MetadataRoute.Sitemap = [];
-  try {
-    const lists = await getTopLists();
-    listRoutes = lists.map((l) => ({
-      url: `${SITE_URL}/top-games/${l.id}`,
-      lastModified: new Date(l.updatedAt),
-      changeFrequency: "weekly" as const,
-      priority: 0.6,
-    }));
-  } catch {
-    // Non-fatal — omit list URLs if Convex is unreachable.
-  }
-
-  return [...staticRoutes, ...gameRoutes, ...listRoutes];
+  return [...staticRoutes, ...gameRoutes];
 }

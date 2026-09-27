@@ -2,15 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import {
-  Scissors,
-  Shield,
-  Hand,
-  Info,
-  MoreVertical,
-  type LucideIcon,
-} from "lucide-react";
-import { cn } from "@/lib/cn";
+import { Shield, MoreVertical, type LucideIcon } from "lucide-react";
 import { ThemeMenu } from "@/components/ThemeToggle";
 import { AvatarImg } from "@/components/ui/Avatar";
 
@@ -44,22 +36,9 @@ export function UserMenu({
     };
   }, [open]);
 
-  // Avoid duplicating links that already live in a persistent nav:
-  //  - `bottomNav`: in the mobile tab bar → hide here on mobile, show on desktop.
-  //  - `headerNav`: in the desktop header nav → hide here on desktop, show on mobile.
-  // Chats/Favourites live in the header nav (desktop) + tab bar (mobile), so
-  // they're not repeated here.
-  const items: {
-    href: string;
-    label: string;
-    icon: LucideIcon;
-    bottomNav?: boolean;
-    headerNav?: boolean;
-    touchOnly?: boolean;
-  }[] = [
-    { href: "/tuckbox", label: "Tuckbox", icon: Scissors },
-    { href: "/who-goes-first", label: "Who goes first", icon: Hand, touchOnly: true },
-    { href: "/about", label: "About", icon: Info },
+  // Overflow items not already in the persistent nav (Library/Collection/Chats/
+  // First player live in the header). Admin only, for admins.
+  const items: { href: string; label: string; icon: LucideIcon }[] = [
     ...(isAdmin
       ? [{ href: "/admin", label: "Admin", icon: Shield as LucideIcon }]
       : []),
@@ -100,16 +79,7 @@ export function UserMenu({
                 key={it.href}
                 href={it.href}
                 onClick={() => setOpen(false)}
-                className={cn(
-                  "items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-medium text-muted transition-colors hover:bg-surface-2 hover:text-foreground",
-                  it.touchOnly
-                    ? "hidden pointer-coarse:flex" // touch devices only (phones + tablets)
-                    : it.bottomNav
-                      ? "hidden sm:flex"
-                      : it.headerNav
-                        ? "flex sm:hidden"
-                        : "flex",
-                )}
+                className="flex items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-medium text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
               >
                 <Icon className="h-4 w-4 shrink-0" />
                 {it.label}

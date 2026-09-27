@@ -14,7 +14,6 @@ import { useLibraryFilters } from "@/components/boardgames/useLibraryFilters";
 import { LibraryControls } from "@/components/boardgames/LibraryControls";
 import { ActiveFilterBar } from "@/components/boardgames/ActiveFilterBar";
 import { RAIL_CELL, RailSkeletonCells } from "@/components/boardgames/GameGrid";
-import { CollectionSection } from "@/components/collection/CollectionSection";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { useScrollRestore } from "@/components/lib/useScrollRestore";
 
@@ -141,9 +140,6 @@ function LibraryInner() {
           </CardRail>
         )}
       </section>
-
-      {/* Your collection — hidden while searching, to keep the focus on results. */}
-      {!searching && <CollectionSection />}
 
       <FilterDrawer
         open={drawerOpen}

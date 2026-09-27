@@ -24,18 +24,15 @@ const EXCLUDED = [
 /** The bottom-nav destinations + fixed pages, by exact path. */
 const FIXED: Record<string, TopBarRoute> = {
   "/boardgames": { title: "Library", back: null },
+  "/collection": { title: "Collection", back: null },
   "/chats": { title: "Chats", back: null },
-  "/top-games": { title: "Top Games", back: null },
-  "/plays": { title: "My plays", back: null },
+  "/first-player": { title: "First player", back: null },
   "/profile": { title: "Profile", back: null },
 
   "/boardgames/all": { title: "All games", back: "/boardgames" },
-  "/who-goes-first": { title: "Who Goes First?", back: "/boardgames" },
-  "/plays/people": { title: "Friends", back: "/plays" },
   "/notifications": { title: "Notifications", back: "/boardgames" },
   "/settings": { title: "Settings", back: "/profile" },
   "/tuckbox": { title: "Tuckbox", back: "/boardgames" },
-  "/about": { title: "About", back: "/boardgames" },
   "/privacy": { title: "Privacy Policy", back: "/boardgames" },
   "/terms": { title: "Terms of Service", back: "/boardgames" },
   "/unauthorized": { title: "Not allowed", back: "/boardgames" },
@@ -79,12 +76,6 @@ export function resolveTopBar(pathname: string): TopBarRoute | null {
     // /boardgames/<slug> — the game's own title arrives from the page.
     if (seg[1]) return { title: "", back: "/boardgames" };
   }
-
-  // /plays/<playId>
-  if (seg[0] === "plays" && seg[1]) return { title: "", back: "/plays" };
-
-  // /top-games/<listId>
-  if (seg[0] === "top-games" && seg[1]) return { title: "", back: "/top-games" };
 
   if (seg[0] === "user" && seg[1]) {
     // /user/<username>/<list>

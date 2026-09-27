@@ -1,37 +1,33 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useQuery } from "convex/react";
-import { LayoutGrid, MessageCircle, Trophy, MoreHorizontal } from "lucide-react";
+import { LayoutGrid, Bookmark, MessageCircle, Crown } from "lucide-react";
 import { api } from "@/convex/_generated/api";
 import { AvatarImg } from "@/components/ui/Avatar";
 import { cn } from "@/lib/cn";
-import { MoreSheet } from "@/components/MoreSheet";
 
 const TABS = [
   { href: "/boardgames", label: "Library", icon: LayoutGrid },
+  { href: "/collection", label: "Collection", icon: Bookmark },
   { href: "/chats", label: "Chats", icon: MessageCircle },
-  { href: "/top-games", label: "Top Games", icon: Trophy },
+  { href: "/first-player", label: "First player", icon: Crown },
 ];
 
 /**
- * Mobile-only bottom tab bar (the primary nav on small screens). Hidden on the
- * chat (own shell) and auth routes. The last tab is "More" (⋯), which opens the
- * former header avatar menu as a bottom sheet. Renders a matching in-flow spacer
- * so the fixed bar never covers page content.
+ * Mobile-only bottom tab bar (the primary nav on small screens): Library, My
+ * list, Chats, First player, Profile. Hidden on the chat (own shell) and auth
+ * routes. Renders a matching in-flow spacer so the fixed bar never covers page
+ * content.
  */
 export function BottomNav() {
   const pathname = usePathname() ?? "";
   const me = useQuery(api.users.me);
-  const [moreOpen, setMoreOpen] = useState(false);
   const hidden =
-    // The home route (`/`) is chrome-free: it's the signed-out landing, and
-    // signed-in users are redirected off it (there's no logged-in home).
+    // The home route (`/`) is chrome-free: the landing owns the whole screen.
     pathname === "/" ||
     pathname === "/auth" ||
-    pathname === "/who-goes-first" ||
     /^\/boardgames\/[^/]+\/chat/.test(pathname);
   if (hidden) return null;
 
@@ -95,27 +91,8 @@ export function BottomNav() {
               Profile
             </Link>
           </li>
-          <li className="flex-1">
-            <button
-              onClick={() => setMoreOpen(true)}
-              aria-haspopup="menu"
-              aria-expanded={moreOpen}
-              className={cn(
-                "flex h-13 w-full flex-col items-center justify-center gap-0.5 text-[10px] font-semibold transition-colors",
-                moreOpen ? "text-accent" : "text-subtle hover:text-muted",
-              )}
-            >
-              <MoreHorizontal
-                className="h-4.5 w-4.5"
-                strokeWidth={moreOpen ? 2.4 : 2}
-              />
-              More
-            </button>
-          </li>
         </ul>
       </nav>
-
-      <MoreSheet open={moreOpen} onClose={() => setMoreOpen(false)} />
     </>
   );
 }

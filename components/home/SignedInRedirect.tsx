@@ -3,26 +3,30 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Authenticated } from "convex/react";
+import { usePreferences, DESTINATION_HREF } from "@/lib/usePreferences";
 
 /**
- * Signed-in visitors have no logged-in home screen — send them into the app
- * (the Library). This mounts as a sibling of the server-rendered {@link Landing}:
- * crawlers and signed-out users keep the full, crawlable marketing page, while
- * signed-in users get covered and redirected so they never see a landing flash.
+ * Home-route behavior for signed-in visitors. Crawlers and signed-out users
+ * always get the server-rendered {@link Landing}. Signed-in users see the
+ * landing too (with a "Go to …" CTA) UNLESS they've turned on "Skip home page"
+ * in settings — then they're sent straight to their default destination.
  */
 export function SignedInRedirect() {
   return (
     <Authenticated>
-      <Redirect />
+      <MaybeRedirect />
     </Authenticated>
   );
 }
 
-function Redirect() {
+function MaybeRedirect() {
+  const { skipHome, defaultDestination } = usePreferences();
   const router = useRouter();
   useEffect(() => {
-    router.replace("/boardgames");
-  }, [router]);
+    if (skipHome) router.replace(DESTINATION_HREF[defaultDestination]);
+  }, [skipHome, defaultDestination, router]);
+
+  if (!skipHome) return null;
   // Opaque cover over the landing while the client-side redirect fires.
   return <div className="fixed inset-0 z-50 bg-background" aria-hidden />;
 }
