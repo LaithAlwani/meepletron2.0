@@ -2,14 +2,14 @@
 
 import Link from "next/link";
 import { useConvexAuth } from "convex/react";
-import { ArrowRight, LayoutGrid, Package } from "lucide-react";
+import { ArrowRight, LayoutGrid, MessageCircle } from "lucide-react";
 import { buttonClasses } from "@/components/ui/buttonStyles";
 
 /**
  * Home-page call-to-action. During SSR and for signed-out visitors it renders
  * the sign-up CTAs (so the landing stays crawlable); once the client confirms a
- * signed-in session it swaps to app entry points (browse the library / your
- * collection). `closing` renders the compact single-button variant used by the
+ * signed-in session it swaps to app entry points (browse the library / chats).
+ * `closing` renders the compact single-button variant used by the
  * closing card.
  */
 export function HomeCta({ closing = false }: { closing?: boolean }) {
@@ -23,12 +23,9 @@ export function HomeCta({ closing = false }: { closing?: boolean }) {
           Browse the library
         </Link>
         {!closing && (
-          <Link
-            href="/boardgames/collection/owned"
-            className={buttonClasses("ghost", "lg")}
-          >
-            <Package className="h-4.5 w-4.5" />
-            Your collection
+          <Link href="/chats" className={buttonClasses("ghost", "lg")}>
+            <MessageCircle className="h-4.5 w-4.5" />
+            Chats
           </Link>
         )}
       </div>
