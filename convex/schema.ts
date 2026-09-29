@@ -535,6 +535,20 @@ export default defineSchema({
     updatedAt: v.number(),
   }),
 
+  // User headcounts for the admin dashboard, stamped once a day by the
+  // `recomputeUserCounters` cron (users live inside the auth component, so
+  // there's no per-insert hook to keep this live). Lets the dashboard read one
+  // small doc instead of scanning the whole users table — and its guest split
+  // instead of a chats query per guest — on every load / message. Singleton.
+  userStats: defineTable({
+    users: v.number(), // all user rows
+    registered: v.number(), // non-anonymous
+    guests: v.number(), // anonymous
+    activeGuests: v.number(), // guests who sent at least one message
+    emptyGuests: v.number(), // guests who never chatted (bots/crawlers)
+    updatedAt: v.number(),
+  }),
+
   // Running counters for the admin dashboard, maintained incrementally so the
   // dashboard reads a couple of small docs instead of scanning messages/usageLog
   // (and stops re-scanning them on every insert). Backfill: admin.backfillStats.

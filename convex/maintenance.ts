@@ -106,6 +106,77 @@ export const repairUsageLog = internalMutation({
 });
 
 /**
+ * Daily: recompute the `userStats` singleton the admin dashboard reads —
+ * total / registered / guest headcounts, plus the guest active-vs-empty split.
+ *
+ * This is the one place that still scans the whole users table (users live in
+ * the auth component, so there's no per-insert hook to keep a live counter).
+ * Running it once a day here — instead of on every dashboard load / message —
+ * is the whole point: the dashboard queries then read one small doc. Paginated
+ * with a threaded accumulator so it stays inside a single transaction's limits;
+ * the totals are written only on the final page. Also serves as the backfill:
+ * `npx convex run maintenance:recomputeUserCounters` (add --prod for prod).
+ */
+const USER_STATS_PAGE = 100;
+const emptyUserAcc = {
+  users: 0,
+  registered: 0,
+  guests: 0,
+  activeGuests: 0,
+  emptyGuests: 0,
+};
+export const recomputeUserCounters = internalMutation({
+  args: {
+    cursor: v.optional(v.union(v.string(), v.null())),
+    acc: v.optional(
+      v.object({
+        users: v.number(),
+        registered: v.number(),
+        guests: v.number(),
+        activeGuests: v.number(),
+        emptyGuests: v.number(),
+      }),
+    ),
+  },
+  handler: async (ctx, { cursor, acc }) => {
+    const a = { ...emptyUserAcc, ...acc };
+    const page = await ctx.db
+      .query("users")
+      .paginate({ cursor: cursor ?? null, numItems: USER_STATS_PAGE });
+
+    for (const u of page.page) {
+      a.users++;
+      if (u.isAnonymous !== true) {
+        a.registered++;
+        continue;
+      }
+      a.guests++;
+      // Same activity signal the guest-cleanup sweeps use.
+      const chats = await ctx.db
+        .query("chats")
+        .withIndex("by_user", (q) => q.eq("userId", u._id))
+        .take(50);
+      if (chats.some((c) => (c.lastMessageAt ?? 0) > 0)) a.activeGuests++;
+      else a.emptyGuests++;
+    }
+
+    if (!page.isDone) {
+      await ctx.scheduler.runAfter(
+        0,
+        internal.maintenance.recomputeUserCounters,
+        { cursor: page.continueCursor, acc: a },
+      );
+      return;
+    }
+
+    const doc = { ...a, updatedAt: Date.now() };
+    const existing = await ctx.db.query("userStats").first();
+    if (existing) await ctx.db.patch("userStats", existing._id, doc);
+    else await ctx.db.insert("userStats", doc);
+  },
+});
+
+/**
  * Nightly: find abandoned ingestion drafts (parsed/parsing but never committed,
  * older than STALE_DRAFT_MS) and schedule a cascade delete for each. Committed
  * drafts are kept as the ingestion record.

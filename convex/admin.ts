@@ -38,35 +38,50 @@ function sumTokens(m: TokensByModel | undefined) {
  * token input/output for the current month + all time (+ est. cost).
  *
  * Reads denormalized counters — the running `adminCounters`/`usageMonthly` rows
- * (maintained on message/usage writes; backfill via `admin.backfillStats`) and
- * the catalogue totals stamped by the daily recompute cron — so it touches a
- * handful of small docs instead of scanning messages/usageLog/games (and no
- * longer re-runs when those high-write tables change). Only the small `users`
- * scan remains, because users are created inside the auth component. `monthStart`
- * is passed in since queries can't read wall-clock.
+ * (maintained on message/usage writes; backfill via `admin.backfillStats`), the
+ * catalogue totals stamped by the daily recompute cron, and the `userStats`
+ * singleton stamped by the daily `recomputeUserCounters` cron — so it touches a
+ * handful of small docs instead of scanning messages/usageLog/games/users (and
+ * no longer re-runs when those high-write tables change). Falls back to a live
+ * users scan only until that cron has stamped `userStats` once (e.g. right after
+ * this ships). `monthStart` is passed in since queries can't read wall-clock.
  */
 export const dashboardStats = query({
   args: { monthStart: v.number() },
   handler: async (ctx, { monthStart }) => {
     await requireAdmin(ctx);
 
-    const [catalogue, counters, monthly, users] = await Promise.all([
+    const [catalogue, counters, monthly, userStats] = await Promise.all([
       ctx.db.query("catalogueStats").first(),
       ctx.db.query("adminCounters").first(),
       ctx.db
         .query("usageMonthly")
         .withIndex("by_month", (q) => q.eq("month", monthKey(monthStart)))
         .first(),
-      ctx.db.query("users").take(SCAN_CAP),
+      ctx.db.query("userStats").first(),
     ]);
 
-    const guestUsers = users.filter((u) => u.isAnonymous === true).length;
+    // Prefer the daily-stamped counter; bridge with a live scan until it exists.
+    let users: number;
+    let registeredUsers: number;
+    let guestUsers: number;
+    if (userStats) {
+      users = userStats.users;
+      registeredUsers = userStats.registered;
+      guestUsers = userStats.guests;
+    } else {
+      const rows = await ctx.db.query("users").take(SCAN_CAP);
+      guestUsers = rows.filter((u) => u.isAnonymous === true).length;
+      users = rows.length;
+      registeredUsers = users - guestUsers;
+    }
+
     const total = sumTokens(counters?.tokensByModel);
     const month = sumTokens(monthly?.tokensByModel);
 
     return {
-      users: users.length,
-      registeredUsers: users.length - guestUsers,
+      users,
+      registeredUsers,
       guestUsers,
       baseGames: catalogue?.baseGameCount ?? 0,
       expansions: catalogue?.expansionCount ?? 0,
@@ -142,16 +157,19 @@ export const backfillStats = internalMutation({
 });
 
 /**
- * Split anonymous guests into "active" (sent at least one message) vs "empty"
- * (never messaged — almost all bots/crawlers/link-unfurlers). Kept out of the
- * hot `dashboardStats` query because it joins users→chats. Bounded scan — fine
- * at this scale, and the 48h empty-guest purge keeps `empty` small; move to
- * @convex-dev/aggregate if guests ever pass ~16k rows.
+ * Guest active/empty split for the dashboard. Reads the daily-stamped
+ * `userStats` singleton (see `recomputeUserCounters`) so it no longer scans
+ * users + a chats query per guest on every load. Falls back to the live scan
+ * only until that cron has stamped `userStats` once.
  */
 export const adminGuestStats = query({
   args: {},
   handler: async (ctx) => {
     await requireAdmin(ctx);
+    const stats = await ctx.db.query("userStats").first();
+    if (stats) return { active: stats.activeGuests, empty: stats.emptyGuests };
+
+    // Bridge until the daily recompute has run once.
     const guests = (await ctx.db.query("users").take(SCAN_CAP)).filter(
       (u) => u.isAnonymous === true,
     );

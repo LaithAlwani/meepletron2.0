@@ -75,6 +75,17 @@ if (!process.env.CRONS_DISABLED) {
     {},
   );
 
+  // Stamp the admin dashboard's user headcounts (total/registered/guests + the
+  // guest active/empty split) into the `userStats` singleton. This is the only
+  // full users-table scan left; doing it once a day here keeps it off the hot
+  // dashboard queries, which then read one small doc.
+  crons.daily(
+    "recompute user counters",
+    { hourUTC: 4, minuteUTC: 45 },
+    internal.maintenance.recomputeUserCounters,
+    {},
+  );
+
   // Recompute the denormalized "similar games" ranking + reconcile the cached
   // catalogue count. Rankings barely change day to day, so every 3 days is plenty
   // (the count stays live between runs via the +1/-1 hooks in create/update/delete
