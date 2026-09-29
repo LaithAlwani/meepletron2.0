@@ -6,7 +6,6 @@ import {
   internalQuery,
 } from "./_generated/server";
 import { internal } from "./_generated/api";
-import type { ActionCtx } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
 import { bggStatsValidator } from "./lib/bggStats";
 import { bggSortKeys } from "./lib/gameSort";
@@ -285,11 +284,15 @@ export const refreshStale = internalAction({
 });
 
 /**
- * Refresh one chunk of games from a single batched /thing call, and queue
- * expansion reconciliation for any base game whose BGG expansion list changed.
+ * Refresh one chunk of games' BGG stats from a single batched /thing call.
  *
  * A game missing from the response still gets stamped via `markChecked`, so a
  * permanently unresolvable id can't occupy a slot in every run.
+ *
+ * Expansion reconciliation used to be queued from here, which grew the
+ * catalogue on its own. It's now admin-only — an admin adds a game's
+ * expansions deliberately via the "Fill from BGG" picker (`recordExpansions`),
+ * so nothing creates expansion games in the background anymore.
  */
 export const refreshChunk = internalAction({
   args: { gameIds: v.array(v.id("games")) },
@@ -307,7 +310,6 @@ export const refreshChunk = internalAction({
       return;
     }
 
-    let queued = 0;
     for (const t of targets) {
       const block = items.get(t.bggId);
       if (!block) {
@@ -318,101 +320,6 @@ export const refreshChunk = internalAction({
         gameId: t.gameId,
         bgg: { ...parseItem(block), fetchedAt: Date.now() },
       });
-
-      // Expansions hang off base games only, and the links came free with the
-      // stats we just fetched. Skip when the set is unchanged since last time.
-      if (t.isExpansion) continue;
-      const links = parseExpansionLinks(block).slice(0, MAX_EXPANSION_LINKS);
-      if (links.length === 0) continue;
-      const hash = expansionsFingerprint(links.map((l) => l.bggId));
-      if (hash === t.expansionsHash) continue;
-
-      // Its own action so qualifying (which does fetch) is paced separately and
-      // one bad game can't fail the whole chunk.
-      await ctx.scheduler.runAfter(
-        ++queued * REFRESH_STAGGER_MS,
-        internal.bgg.syncExpansions,
-        { gameId: t.gameId, links, hash },
-      );
-    }
-  },
-});
-
-/**
- * Reconcile one base game's expansions against BGG.
- *
- * Discovery was free (the links rode along with the stats), but deciding which
- * of them are real costs a fetch — so this qualifies them in batched /thing
- * calls and keeps the ones clearing MIN_EXPANSION_RATINGS. Anything already in
- * our library is kept regardless of rating: it's there because someone wanted
- * it. The fingerprint is stamped either way, so an unchanged list never pays
- * this cost twice.
- */
-/**
- * Decide which of a base game's BGG expansion links are worth recording, then
- * record them. Shared by the nightly reconcile and the admin button so the two
- * can't drift apart.
- *
- * Anything already in our library is kept whatever its rating — it's there
- * because someone wanted it. The rest are qualified in batched /thing calls and
- * kept only if they clear MIN_EXPANSION_RATINGS, which is what separates a real
- * expansion from the promos BGG lists beside it.
- *
- * Throws if BGG can't be reached, leaving the fingerprint unstamped so the next
- * pass retries rather than recording a half-qualified list.
- */
-async function qualifyAndLink(
-  ctx: ActionCtx,
-  parentId: Id<"games">,
-  links: { bggId: string; name: string }[],
-  hash: string,
-): Promise<{ created: number; linked: number }> {
-  const knownIds: string[] = await ctx.runQuery(internal.games.knownBggIds, {
-    bggIds: links.map((l) => l.bggId),
-  });
-  const known = new Set(knownIds);
-
-  const keep = links
-    .filter((l) => known.has(l.bggId))
-    .map((l) => ({ bggId: l.bggId, title: l.name }));
-
-  for (const group of chunk(
-    links.filter((l) => !known.has(l.bggId)),
-    THING_CHUNK,
-  )) {
-    const items = itemsById(
-      await fetchThing(
-        group.map((g) => g.bggId),
-        true,
-      ),
-    );
-    for (const l of group) {
-      const block = items.get(l.bggId);
-      if (!block) continue;
-      const { ratingCount } = parseItem(block);
-      if ((ratingCount ?? 0) < MIN_EXPANSION_RATINGS) continue;
-      keep.push({ bggId: l.bggId, title: l.name });
-    }
-  }
-
-  return await ctx.runMutation(internal.games.linkExpansions, {
-    parentId,
-    expansions: keep,
-    hash,
-  });
-}
-
-export const syncExpansions = internalAction({
-  args: {
-    gameId: v.id("games"),
-    links: v.array(v.object({ bggId: v.string(), name: v.string() })),
-    hash: v.string(),
-  },
-  handler: async (ctx, { gameId, links, hash }): Promise<void> => {
-    try {
-      await qualifyAndLink(ctx, gameId, links, hash);
-    } catch {
-      // Unreachable BGG: leave the fingerprint unset so the next run retries.
     }
   },
 });

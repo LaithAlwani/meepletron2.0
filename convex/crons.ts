@@ -42,10 +42,12 @@ if (!process.env.CRONS_DISABLED) {
     {},
   );
 
-  // Refresh the stalest games' BGG stats, and reconcile their expansion lists.
-  // Daily rather than every 72h: the batched /thing calls make a 300-game run
-  // ~15 requests, and only a daily cadence keeps a ~2,000-game catalogue inside
-  // the 7-day freshness window it claims.
+  // Refresh the stalest games' BGG stats (ratings/weight/etc). No longer
+  // reconciles expansion lists — expansions are added manually by an admin via
+  // "Fill from BGG", so this cron never grows the catalogue on its own. Daily
+  // rather than every 72h: the batched /thing calls make a 300-game run ~15
+  // requests, and only a daily cadence keeps a ~2,000-game catalogue inside the
+  // 7-day freshness window it claims.
   crons.daily(
     "refresh stale bgg stats",
     { hourUTC: 2, minuteUTC: 0 },

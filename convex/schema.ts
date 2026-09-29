@@ -578,6 +578,9 @@ export default defineSchema({
   searches: defineTable({
     query: v.string(),
     count: v.number(),
+    // Ms timestamp of the most recent time this term was searched. Optional so
+    // rows logged before this field validate; falls back to `_creationTime`.
+    lastSearchedAt: v.optional(v.number()),
   }).index("by_query", ["query"]),
 
   contactMessages: defineTable({

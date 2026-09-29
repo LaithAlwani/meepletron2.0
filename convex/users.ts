@@ -342,20 +342,47 @@ export const deleteAccount = mutation({
   },
 });
 
-/** List users for the admin console. */
+/** List users for the admin console, enriched with per-user chat activity
+ *  (how many chats they've opened and when they were last active) so the
+ *  console can show whether the site is getting traffic. */
 export const adminListUsers = query({
   args: {},
   handler: async (ctx) => {
     await requireAdmin(ctx);
     const users = await ctx.db.query("users").order("desc").take(500);
-    return users.map((u) => ({
-      _id: u._id,
-      name: u.name,
-      email: u.email,
-      role: u.role ?? "user",
-      isAnonymous: u.isAnonymous ?? false,
-      tokensUsedToday: finite(u.tokensUsedToday),
-    }));
+
+    // One bounded pass over chats → per-user { count, lastActiveAt }. Cheaper
+    // than a query per user; the `hitLimit` flag tells the UI the numbers are a
+    // floor if we ever exceed the scan cap.
+    const CHAT_SCAN = 8000;
+    const chats = await ctx.db.query("chats").take(CHAT_SCAN);
+    const activity = new Map<string, { chats: number; lastActiveAt: number }>();
+    for (const c of chats) {
+      const cur = activity.get(c.userId) ?? { chats: 0, lastActiveAt: 0 };
+      cur.chats += 1;
+      if (c.lastMessageAt > cur.lastActiveAt) cur.lastActiveAt = c.lastMessageAt;
+      activity.set(c.userId, cur);
+    }
+
+    return {
+      hitLimit: chats.length === CHAT_SCAN,
+      users: users.map((u) => {
+        const a = activity.get(u._id);
+        return {
+          _id: u._id,
+          name: u.name,
+          email: u.email,
+          role: u.role ?? "user",
+          isAnonymous: u.isAnonymous ?? false,
+          tokensUsedToday: finite(u.tokensUsedToday),
+          joinedAt: u._creationTime,
+          chats: a?.chats ?? 0,
+          // Best available "last seen" — the site tracks no login timestamp, so
+          // this is the most recent chat message they sent (0 = never chatted).
+          lastActiveAt: a?.lastActiveAt ?? 0,
+        };
+      }),
+    };
   },
 });
 
