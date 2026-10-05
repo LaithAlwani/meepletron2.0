@@ -435,19 +435,37 @@ function hasAnyValue(gameVals: string[], selected: string[] | undefined): boolea
 }
 
 /** Games (base + expansions) matching every active library filter, newest first. */
+/** When searching, how many top-relevance index hits to pull as the candidate
+ *  set. Far cheaper than scanning the whole catalogue, and deep enough that the
+ *  real matches for any term are covered. */
+const SEARCH_CANDIDATES = 500;
+
 async function filteredLibrary(
   ctx: QueryCtx,
   f: LibraryFilters,
 ): Promise<Doc<"games">[]> {
-  // Include expansions everywhere the library appears — browse, search, and the
-  // full grid alike. Only stubs (unimported placeholders) are held back.
-  const base = await ctx.db
-    .query("games")
-    .withIndex("by_isStub_and_isExpansion", (q) => q.eq("isStub", false))
-    .order("desc")
-    .take(2000);
+  const search = (f.term ?? "").trim();
+  const terms = search.toLowerCase().split(/\s+/).filter(Boolean);
+
+  // Candidate set. With a search term, pull the top relevance hits from the
+  // full-text index — reads ~the top matches, NOT the whole catalogue (this was
+  // a 2,000-full-doc scan on every search, the library's biggest read cost).
+  // Without a term (genre/mechanic/chat-only filters), fall back to the bounded
+  // scan. Expansions are included; only stubs are held back.
+  const base =
+    search.length >= 2
+      ? await ctx.db
+          .query("games")
+          .withSearchIndex("search_text", (q) =>
+            q.search("searchText", search).eq("isStub", false),
+          )
+          .take(SEARCH_CANDIDATES)
+      : await ctx.db
+          .query("games")
+          .withIndex("by_isStub_and_isExpansion", (q) => q.eq("isStub", false))
+          .order("desc")
+          .take(2000);
   const chatIds = f.chatOnly ? await chatEnabledBaseIds(ctx) : null;
-  const terms = (f.term ?? "").trim().toLowerCase().split(/\s+/).filter(Boolean);
   return base.filter((g) => {
     if (!matchesLibraryFilters(g, f.players, f.time, f.hasExpansions)) return false;
     if (chatIds && !chatIds.has(g._id)) return false;
