@@ -1,6 +1,7 @@
 "use client";
 
-import { ReactLenis } from "lenis/react";
+import { useEffect } from "react";
+import { ReactLenis, useLenis } from "lenis/react";
 import { useReducedMotionPref } from "@/components/lib/useReducedMotionPref";
 
 /**
@@ -19,7 +20,34 @@ export function LenisProvider({ children }: { children: React.ReactNode }) {
   if (reduced) return <>{children}</>;
   return (
     <ReactLenis root options={{ lerp: 0.12, smoothWheel: true }}>
+      <LenisResizeWatcher />
       {children}
     </ReactLenis>
   );
+}
+
+/**
+ * Re-measure Lenis whenever the page content grows. Lenis's own autoResize
+ * observes `document.documentElement`, whose box stays viewport-height even as
+ * its scrollHeight grows — so it misses content appended by infinite-scroll
+ * lists (and late-loading images), leaving a stale max-scroll that makes
+ * scrolling stick/stutter. `document.body` DOES grow with content, so observing
+ * it and calling `lenis.resize()` keeps the scroll bounds correct.
+ */
+function LenisResizeWatcher() {
+  const lenis = useLenis();
+  useEffect(() => {
+    if (!lenis || typeof ResizeObserver === "undefined") return;
+    let raf = 0;
+    const ro = new ResizeObserver(() => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => lenis.resize());
+    });
+    ro.observe(document.body);
+    return () => {
+      cancelAnimationFrame(raf);
+      ro.disconnect();
+    };
+  }, [lenis]);
+  return null;
 }
