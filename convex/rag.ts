@@ -11,6 +11,7 @@ import { google } from "@ai-sdk/google";
 import { generateText, generateObject } from "ai";
 import { z } from "zod";
 import { embedQuery, EMBEDDING_MODEL_ID } from "./lib/embedding";
+import { thinkingBudgetFor } from "./lib/chatConfig";
 import { finite } from "./lib/num";
 import {
   buildRerankPrompt,
@@ -61,7 +62,9 @@ async function rewriteQuery(
       model,
       prompt: buildRewritePrompt(history, query),
       temperature: 0,
-      providerOptions: { google: { thinkingConfig: { thinkingBudget: 0 } } },
+      providerOptions: {
+        google: { thinkingConfig: { thinkingBudget: thinkingBudgetFor(modelId, 0) } },
+      },
     });
     const rewritten = text.trim();
     const it = finite(u.inputTokens);
@@ -104,7 +107,9 @@ async function rerankChunks(
       // question — e.g. the "take a researcher card" action vs. a card that
       // merely mentions "researcher card" — is exactly the judgement that a
       // little thinking gets right where keyword overlap alone misleads.
-      providerOptions: { google: { thinkingConfig: { thinkingBudget: 512 } } },
+      providerOptions: {
+        google: { thinkingConfig: { thinkingBudget: thinkingBudgetFor(modelId, 512) } },
+      },
     });
     const rInTok = finite(rerankUsage.inputTokens);
     const rOutTok = finite(rerankUsage.outputTokens);

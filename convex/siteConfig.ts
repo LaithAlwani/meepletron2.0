@@ -1,22 +1,27 @@
 import { v } from "convex/values";
 import { query, mutation, internalMutation } from "./_generated/server";
 import { requireAdmin } from "./lib/auth";
-import { CHAT_CONFIG_DEFAULTS } from "./lib/chatConfig";
-
-const modelValidator = v.union(
-  v.literal("gemini-2.5-flash"),
-  v.literal("gemini-2.5-flash-lite"),
-);
+import {
+  CHAT_CONFIG_DEFAULTS,
+  CHAT_MODEL_IDS,
+  knownModel,
+} from "./lib/chatConfig";
 
 const DEFAULTS = CHAT_CONFIG_DEFAULTS;
 
-/** The current RAG-tuning knobs (admin). Defaults fill any missing fields. */
+/** The current RAG-tuning knobs (admin). Defaults fill any missing fields, and
+ *  model ids are coerced to a supported one so a retired id reads back valid. */
 export const get = query({
   args: {},
   handler: async (ctx) => {
     await requireAdmin(ctx);
     const rows = await ctx.db.query("siteConfig").order("desc").take(1);
-    return { ...DEFAULTS, ...rows[0] };
+    const merged = { ...DEFAULTS, ...rows[0] };
+    return {
+      ...merged,
+      answerModel: knownModel(merged.answerModel),
+      auxModel: knownModel(merged.auxModel),
+    };
   },
 });
 
@@ -29,12 +34,13 @@ export const update = mutation({
     historyMessageLimit: v.number(),
     rerankCandidates: v.number(),
     answerTemperature: v.number(),
-    answerModel: modelValidator,
-    auxModel: modelValidator,
+    answerModel: v.string(),
+    auxModel: v.string(),
     answerThinkingBudget: v.number(),
   },
   handler: async (ctx, args) => {
     await requireAdmin(ctx);
+    const models = CHAT_MODEL_IDS as readonly string[];
     if (
       args.v2TopK < 1 ||
       args.rerankTopN < 1 ||
@@ -44,7 +50,9 @@ export const update = mutation({
       args.answerTemperature > 2 ||
       // -1 (dynamic) or 0 (off) or a sane positive cap. Gemini's max is 24576.
       args.answerThinkingBudget < -1 ||
-      args.answerThinkingBudget > 24576
+      args.answerThinkingBudget > 24576 ||
+      !models.includes(args.answerModel) ||
+      !models.includes(args.auxModel)
     ) {
       throw new Error("Invalid config values");
     }
@@ -66,8 +74,8 @@ export const internalUpdate = internalMutation({
     historyMessageLimit: v.optional(v.number()),
     rerankCandidates: v.optional(v.number()),
     answerTemperature: v.optional(v.number()),
-    answerModel: v.optional(modelValidator),
-    auxModel: v.optional(modelValidator),
+    answerModel: v.optional(v.string()),
+    auxModel: v.optional(v.string()),
     answerThinkingBudget: v.optional(v.number()),
   },
   handler: async (ctx, args) => {

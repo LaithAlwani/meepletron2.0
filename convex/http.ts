@@ -7,6 +7,7 @@ import { streamText } from "ai";
 import { google } from "@ai-sdk/google";
 import { auth } from "./auth";
 import { finite } from "./lib/num";
+import { thinkingBudgetFor } from "./lib/chatConfig";
 import { buildAnswer } from "./rag";
 import { createIconTokenStripper } from "./lib/prompts";
 
@@ -158,7 +159,11 @@ const chat = httpAction(async (ctx, request) => {
     messages,
     temperature: answerTemperature,
     providerOptions: {
-      google: { thinkingConfig: { thinkingBudget: answerThinkingBudget } },
+      google: {
+        thinkingConfig: {
+          thinkingBudget: thinkingBudgetFor(answerModel, answerThinkingBudget),
+        },
+      },
     },
   });
 

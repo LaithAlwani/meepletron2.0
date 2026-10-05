@@ -45,14 +45,15 @@ const knobs = [
   {
     key: "answerThinkingBudget" as const,
     label: "Answer thinking budget",
-    help: "Gemini reasoning tokens for the answer (billed as output). 0 = off (cheapest, recommended — answers are grounded on retrieved passages), -1 = dynamic/auto, or a token cap up to 24576.",
+    help: "Gemini reasoning tokens for the answer (billed as output). 0 = off (cheapest, recommended — answers are grounded on retrieved passages), -1 = dynamic/auto, or a token cap up to 24576. Note: Flash-Lite can't be 0 — it's auto-raised to 512.",
     step: 1,
   },
 ];
 
 const MODEL_LABELS: Record<ChatModelId, string> = {
-  "gemini-2.5-flash": "Flash 2.5 — higher quality",
-  "gemini-2.5-flash-lite": "Flash-Lite 2.5 — ~6× cheaper output",
+  "gemini-2.5-flash": "Flash 2.5 — current default ($0.30/$2.50 per 1M)",
+  "gemini-3.5-flash-lite": "Flash-Lite 3.5 — newer, same price ($0.30/$2.50)",
+  "gemini-3.5-flash": "Flash 3.5 — premium, ~5× cost ($1.50/$9.00)",
 };
 
 const modelKnobs = [

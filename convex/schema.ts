@@ -519,20 +519,12 @@ export default defineSchema({
     // read). Lower = more consistent replies for the same question.
     answerTemperature: v.optional(v.number()),
     // Which Gemini model answers the question, and which runs the cheap
-    // auxiliary steps (query rewrite + rerank). flash-lite is cheaper; the
-    // answer is the quality-sensitive one. Optional; defaults applied on read.
-    answerModel: v.optional(
-      v.union(
-        v.literal("gemini-2.5-flash"),
-        v.literal("gemini-2.5-flash-lite"),
-      ),
-    ),
-    auxModel: v.optional(
-      v.union(
-        v.literal("gemini-2.5-flash"),
-        v.literal("gemini-2.5-flash-lite"),
-      ),
-    ),
+    // auxiliary steps (query rewrite + rerank). Plain string (not a literal
+    // union) so a model id retired by Google — or a new one — never fails the
+    // schema push; the admin picker constrains the choices and the runtime
+    // coerces unknown ids to a supported default. Defaults applied on read.
+    answerModel: v.optional(v.string()),
+    auxModel: v.optional(v.string()),
     // Gemini "thinking" budget for the answer, in tokens (billed as output).
     // 0 = off (cheapest), -1 = dynamic/auto, or a positive cap. The rewrite and
     // rerank steps keep their own fixed budgets.

@@ -12,7 +12,7 @@ import { getCurrentUser, requireUser, requireAdmin } from "./lib/auth";
 import { finite } from "./lib/num";
 import { thumbUrl } from "./lib/gameCover";
 import { recordMessages, recordUsage } from "./lib/stats";
-import { CHAT_CONFIG_DEFAULTS } from "./lib/chatConfig";
+import { CHAT_CONFIG_DEFAULTS, knownModel } from "./lib/chatConfig";
 
 /** Daily token budgets: guests get a smaller allowance to nudge sign-up. */
 export const DAILY_TOKEN_LIMIT = 100_000;
@@ -484,8 +484,15 @@ export const getActiveConfig = internalQuery({
   args: {},
   handler: async (ctx) => {
     const rows = await ctx.db.query("siteConfig").order("desc").take(1);
-    // Defaults fill any missing fields (e.g. an older row without newer knobs).
-    return { ...CHAT_CONFIG_DEFAULTS, ...rows[0] };
+    // Defaults fill any missing fields (e.g. an older row without newer knobs);
+    // model ids are coerced to a supported one so a retired id in the stored row
+    // (e.g. gemini-2.5-flash-lite) can't break the chat.
+    const merged = { ...CHAT_CONFIG_DEFAULTS, ...rows[0] };
+    return {
+      ...merged,
+      answerModel: knownModel(merged.answerModel),
+      auxModel: knownModel(merged.auxModel),
+    };
   },
 });
 
