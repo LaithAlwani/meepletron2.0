@@ -11,7 +11,7 @@ import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { getCurrentUser, requireUser, requireAdmin } from "./lib/auth";
 import { generateText } from "ai";
-import { CHAT_MODEL, buildAnswer, type Annotation } from "./rag";
+import { resolveContentModel, buildAnswer, type Annotation } from "./rag";
 import { stripIconTokens } from "./lib/prompts";
 import { annotationValidator } from "./lib/annotations";
 
@@ -96,6 +96,7 @@ export const generateForGame = internalAction({
       answer: string;
       annotations: Annotation[];
     }[] = [];
+    const { model } = await resolveContentModel(ctx);
     for (const question of STARTER_QUESTIONS) {
       const { system, annotations, empty } = await buildAnswer(ctx, {
         rulebookIds: setup.rulebookIds,
@@ -105,7 +106,7 @@ export const generateForGame = internalAction({
       });
       if (empty || !system) continue;
       const { text } = await generateText({
-        model: CHAT_MODEL,
+        model,
         system,
         messages: [{ role: "user", content: question }],
       });

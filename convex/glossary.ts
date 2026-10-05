@@ -10,7 +10,7 @@ import {
 import { internal } from "./_generated/api";
 import { generateObject } from "ai";
 import { z } from "zod";
-import { CHAT_MODEL } from "./rag";
+import { resolveContentModel } from "./rag";
 import { embedQuery } from "./lib/embedding";
 import { requireAdmin } from "./lib/auth";
 
@@ -75,8 +75,9 @@ export const generateForGame = internalAction({
       .slice(0, 12000);
     if (compText.trim()) {
       try {
+        const { model } = await resolveContentModel(ctx);
         const { object } = await generateObject({
-          model: CHAT_MODEL,
+          model,
           schema: z.object({
             components: z.array(
               z.object({ item: z.string(), count: z.number() }),

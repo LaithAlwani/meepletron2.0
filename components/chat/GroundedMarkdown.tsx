@@ -1,6 +1,7 @@
 "use client";
 
 import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 // Lowercase words that legitimately follow a citation ("[1] and [2]", "[3] or")
 // — these don't signal a quantity, so a bracket before one is still a citation.
@@ -85,7 +86,33 @@ export function GroundedMarkdown({
   return (
     <div className={`prose-chat text-sm leading-relaxed ${className}`}>
       <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
         components={{
+          // GFM tables — wrap in a horizontal scroller so a wide table can't
+          // blow out the chat width on mobile.
+          table({ children }) {
+            return (
+              <div className="my-2 overflow-x-auto">
+                <table className="w-full border-collapse text-left text-xs">
+                  {children}
+                </table>
+              </div>
+            );
+          },
+          th({ children }) {
+            return (
+              <th className="border border-border bg-surface-2 px-2 py-1 font-semibold">
+                {children}
+              </th>
+            );
+          },
+          td({ children }) {
+            return (
+              <td className="border border-border px-2 py-1 align-top">
+                {children}
+              </td>
+            );
+          },
           a({ href, children }) {
             const m = /^#cite-(\d+)$/.exec(href ?? "");
             if (m) {

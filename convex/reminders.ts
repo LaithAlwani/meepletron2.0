@@ -9,7 +9,7 @@ import {
 import { internal } from "./_generated/api";
 import { generateObject } from "ai";
 import { z } from "zod";
-import { CHAT_MODEL } from "./rag";
+import { resolveContentModel } from "./rag";
 import { embedQuery } from "./lib/embedding";
 import { requireAdmin } from "./lib/auth";
 
@@ -57,8 +57,9 @@ export const generateForGame = internalAction({
 
     let reminders: { label: string; detail: string }[] = [];
     try {
+      const { model } = await resolveContentModel(ctx);
       const { object } = await generateObject({
-        model: CHAT_MODEL,
+        model,
         schema: z.object({
           reminders: z.array(
             z.object({ label: z.string(), detail: z.string() }),

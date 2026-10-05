@@ -323,6 +323,12 @@ export default defineSchema({
     // stored on the assistant message for the admin-only usage readout.
     inputTokens: v.optional(v.number()),
     outputTokens: v.optional(v.number()),
+    // Actual USD cost of this answer, summed across each step priced at ITS
+    // model's rate (steps can use different models), so the admin readout is
+    // correct whatever model answered. `answerModel` = the model that wrote the
+    // answer, shown alongside. Both admin-only; older messages lack them.
+    costUsd: v.optional(v.number()),
+    answerModel: v.optional(v.string()),
     // persisted citation snapshots (bounded to rerankTopN). Our own field —
     // unrelated to the deprecated AI SDK message-annotations API.
     annotations: v.optional(
@@ -418,6 +424,10 @@ export default defineSchema({
         totalTokens: v.number(),
       }),
     ),
+    // Which model parsed this PDF, so the per-rulebook cost readout prices it
+    // correctly (ingestion model is admin-configurable). Optional; older drafts
+    // lack it and fall back to the default rate.
+    parseModel: v.optional(v.string()),
     error: v.optional(v.string()),
   })
     .index("by_rulebook", ["rulebookId"])
@@ -525,6 +535,10 @@ export default defineSchema({
     // coerces unknown ids to a supported default. Defaults applied on read.
     answerModel: v.optional(v.string()),
     auxModel: v.optional(v.string()),
+    // Model for rulebook ingestion (PDF parse) + the offline FAQ/glossary/
+    // reminder generators — the low-volume, quality-critical path. String for
+    // the same forward-compat reason as the chat models.
+    contentModel: v.optional(v.string()),
     // Gemini "thinking" budget for the answer, in tokens (billed as output).
     // 0 = off (cheapest), -1 = dynamic/auto, or a positive cap. The rewrite and
     // rerank steps keep their own fixed budgets.

@@ -12,7 +12,12 @@ import { getCurrentUser, requireUser, requireAdmin } from "./lib/auth";
 import { finite } from "./lib/num";
 import { thumbUrl } from "./lib/gameCover";
 import { recordMessages, recordUsage } from "./lib/stats";
-import { CHAT_CONFIG_DEFAULTS, knownModel } from "./lib/chatConfig";
+import {
+  CHAT_CONFIG_DEFAULTS,
+  knownModel,
+  knownContentModel,
+} from "./lib/chatConfig";
+import { rowCost } from "./lib/pricing";
 
 /** Daily token budgets: guests get a smaller allowance to nudge sign-up. */
 export const DAILY_TOKEN_LIMIT = 100_000;
@@ -157,6 +162,31 @@ export const getChat = query({
   },
 });
 
+/** Delete one of the caller's own chats and every message in it, and keep the
+ *  dashboard message counters in step. A single chat never holds enough
+ *  messages to approach a transaction limit, so this runs inline. */
+export const deleteChat = mutation({
+  args: { chatId: v.id("chats") },
+  handler: async (ctx, { chatId }) => {
+    const user = await requireUser(ctx);
+    await loadOwnedChat(ctx, chatId, user._id);
+    const messages = await ctx.db
+      .query("messages")
+      .withIndex("by_chat", (q) => q.eq("chatId", chatId))
+      .take(2000);
+    let delUser = 0;
+    let delAi = 0;
+    for (const m of messages) {
+      if (m.role === "user") delUser++;
+      else delAi++;
+      await ctx.db.delete("messages", m._id);
+    }
+    await ctx.db.delete("chats", chatId);
+    await recordMessages(ctx, { user: -delUser, ai: -delAi });
+    return null;
+  },
+});
+
 /** Paginated messages, newest-first (client reverses for display + loads older). */
 export const messagesPaginated = query({
   args: { chatId: v.id("chats"), paginationOpts: paginationOptsValidator },
@@ -171,7 +201,7 @@ export const messagesPaginated = query({
       .withIndex("by_chat", (q) => q.eq("chatId", chatId))
       .order("desc")
       .paginate(paginationOpts);
-    // The per-question token totals are an admin-only readout.
+    // The per-question token totals + cost are an admin-only readout.
     if (user.role !== "admin") {
       return {
         ...result,
@@ -179,6 +209,8 @@ export const messagesPaginated = query({
           ...m,
           inputTokens: undefined,
           outputTokens: undefined,
+          costUsd: undefined,
+          answerModel: undefined,
         })),
       };
     }
@@ -492,6 +524,9 @@ export const getActiveConfig = internalQuery({
       ...merged,
       answerModel: knownModel(merged.answerModel),
       auxModel: knownModel(merged.auxModel),
+      contentModel: knownContentModel(merged.contentModel),
+      // Token count — coerce a stray fractional (e.g. a mis-typed 0.5) to int.
+      answerThinkingBudget: Math.round(merged.answerThinkingBudget),
     };
   },
 });
@@ -556,6 +591,8 @@ export const saveAssistantMessage = internalMutation({
     let inputTokens = 0;
     let outputTokens = 0;
     let total = 0;
+    let costUsd = 0;
+    let answerModel: string | undefined;
     for (const u of usage) {
       const promptTokens = finite(u.promptTokens);
       const completionTokens = finite(u.completionTokens);
@@ -570,6 +607,10 @@ export const saveAssistantMessage = internalMutation({
       inputTokens += promptTokens;
       outputTokens += completionTokens;
       total += totalTokens;
+      // Price each step at its OWN model's rate (rewrite/rerank/embed/answer can
+      // differ), so the admin cost readout reflects the models actually used.
+      costUsd += rowCost(u.model, promptTokens, completionTokens);
+      if (u.purpose === "chat-answer") answerModel = u.model;
     }
     await recordUsage(ctx, usage);
 
@@ -580,6 +621,8 @@ export const saveAssistantMessage = internalMutation({
       annotations: annotations.length > 0 ? annotations : undefined,
       inputTokens: inputTokens || undefined,
       outputTokens: outputTokens || undefined,
+      costUsd: costUsd || undefined,
+      answerModel,
     });
     await recordMessages(ctx, { ai: 1 });
     await ctx.db.patch("chats", chatId, {

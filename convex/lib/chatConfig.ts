@@ -4,17 +4,24 @@
  * the runtime reader (`chat.getActiveConfig`) so the two can never drift. Plain
  * data/logic — no server imports — so it's safe to import from anywhere.
  */
-export type ChatModelId =
-  | "gemini-2.5-flash"
-  | "gemini-3.5-flash-lite"
-  | "gemini-3.5-flash";
+export type ChatModelId = "gemini-3.5-flash-lite" | "gemini-3.5-flash";
 
-// The models offered in the admin picker. 2.5-flash-lite was retired by Google
-// ("no longer available to new users"); 3.5 is the current generation. Note the
-// 3.5 pricing shift: 3.5-flash-lite costs the same as 2.5-flash, and 3.5-flash
-// is several times pricier — so a model swap is a quality choice, not a saving.
-export const CHAT_MODEL_IDS: ChatModelId[] = [
+// Models for the cold, quality-critical path: rulebook PDF ingestion and the
+// offline FAQ/glossary/reminder generators. These are low-volume (per manual /
+// admin-triggered), so the full Flash models are the right pick — Lite's cost
+// edge is irrelevant here and its quality is worse. 2.5-flash still works;
+// 3.5-flash is the current-gen successor.
+export type ContentModelId = "gemini-2.5-flash" | "gemini-3.5-flash";
+export const CONTENT_MODEL_IDS: ContentModelId[] = [
   "gemini-2.5-flash",
+  "gemini-3.5-flash",
+];
+
+// The models offered in the admin picker — the current (3.5) generation only.
+// 3.5-flash-lite is the cheaper default ($0.30/$2.50 per 1M, same as the old
+// 2.5-flash); 3.5-flash is the premium, several-times-pricier option. Note
+// flash-lite can't fully disable thinking — its budget floors at 512 tokens.
+export const CHAT_MODEL_IDS: ChatModelId[] = [
   "gemini-3.5-flash-lite",
   "gemini-3.5-flash",
 ];
@@ -32,9 +39,11 @@ export const CHAT_CONFIG_DEFAULTS = {
   // question gives consistent replies; raise for more varied phrasing.
   answerTemperature: 0.2,
   // Which model answers vs. runs the cheap auxiliary steps (rewrite + rerank).
-  // Default to 2.5-flash: still supported and the cheapest proven option.
-  answerModel: "gemini-2.5-flash" as ChatModelId,
-  auxModel: "gemini-2.5-flash" as ChatModelId,
+  // Default to 3.5-flash-lite: current-gen and the cheaper of the two options.
+  answerModel: "gemini-3.5-flash-lite" as ChatModelId,
+  auxModel: "gemini-3.5-flash-lite" as ChatModelId,
+  // Ingestion + offline generators. Default to 2.5-flash (current behavior).
+  contentModel: "gemini-2.5-flash" as ContentModelId,
   // Thinking budget (tokens, billed as output) for the answer. 0 = off — the
   // default, since the answer is grounded on already-retrieved passages and
   // rarely needs chain-of-thought. -1 = dynamic/auto; a positive value caps it.
@@ -49,6 +58,13 @@ export function knownModel(id: string | undefined | null): ChatModelId {
     : CHAT_CONFIG_DEFAULTS.answerModel;
 }
 
+/** Same coercion for the ingestion/generator (content) model. */
+export function knownContentModel(id: string | undefined | null): ContentModelId {
+  return id && (CONTENT_MODEL_IDS as readonly string[]).includes(id)
+    ? (id as ContentModelId)
+    : CHAT_CONFIG_DEFAULTS.contentModel;
+}
+
 /**
  * Normalize a thinking budget for the given model. The *-flash-lite models
  * reject a 0 budget ("invalid argument") — they can't fully disable thinking —
@@ -56,8 +72,9 @@ export function knownModel(id: string | undefined | null): ChatModelId {
  * through. Non-lite models accept 0 (thinking off) unchanged.
  */
 export function thinkingBudgetFor(modelId: string, requested: number): number {
-  if (modelId.includes("flash-lite") && requested >= 0 && requested < 512) {
-    return 512;
-  }
-  return requested;
+  // Must be an INT32 token count — a fractional value errors at the API, so
+  // round defensively before anything else.
+  const b = Math.round(requested);
+  if (modelId.includes("flash-lite") && b >= 0 && b < 512) return 512;
+  return b;
 }

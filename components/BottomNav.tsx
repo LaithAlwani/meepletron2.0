@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useQuery } from "convex/react";
-import { LayoutGrid, MessageCircle, Hand } from "lucide-react";
+import { LayoutGrid, MessageCircle, Crown } from "lucide-react";
 import { api } from "@/convex/_generated/api";
 import { AvatarImg } from "@/components/ui/Avatar";
 import { cn } from "@/lib/cn";
@@ -11,7 +11,7 @@ import { cn } from "@/lib/cn";
 const TABS = [
   { href: "/boardgames", label: "Library", icon: LayoutGrid },
   { href: "/chats", label: "Chats", icon: MessageCircle },
-  { href: "/first-player", label: "First player", icon: Hand },
+  { href: "/first-player", label: "First player", icon: Crown },
 ];
 
 /**

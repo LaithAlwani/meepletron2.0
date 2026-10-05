@@ -22,7 +22,17 @@ import {
   type RetrievedChunk,
 } from "./lib/prompts";
 
-export const CHAT_MODEL = google("gemini-2.5-flash");
+/**
+ * The admin-configured model for the cold path — rulebook PDF ingestion and the
+ * offline FAQ/glossary/reminder generators. Returns the resolved model plus its
+ * id (for usage logging). Reads the live config each call.
+ */
+export async function resolveContentModel(
+  ctx: ActionCtx,
+): Promise<{ model: ReturnType<typeof google>; modelId: string }> {
+  const config = await ctx.runQuery(internal.chat.getActiveConfig, {});
+  return { model: google(config.contentModel), modelId: config.contentModel };
+}
 
 export type UsageRow = {
   purpose: "chat-answer" | "chat-rerank" | "chat-rewrite" | "chat-embed";

@@ -4,20 +4,49 @@ import { useState } from "react";
 import Link from "next/link";
 import {
   useQuery,
+  useMutation,
   Authenticated,
   Unauthenticated,
   AuthLoading,
 } from "convex/react";
-import { ChevronRight, MessageCircle } from "lucide-react";
+import { ChevronRight, MessageCircle, Trash2 } from "lucide-react";
 import { api } from "@/convex/_generated/api";
+import type { Id } from "@/convex/_generated/dataModel";
 import { MediaRow } from "@/components/boardgames/MediaRow";
 import { relativeTime } from "@/lib/format";
 import { buttonClasses } from "@/components/ui/Button";
 import { Skeleton } from "@/components/ui/Surface";
 import { PageTitle } from "@/components/ui/PageTitle";
 import { Die } from "@/components/ui/icons";
+import { useConfirm } from "@/components/ui/Confirm";
+import { useToast } from "@/components/ui/Toast";
+import { friendlyError } from "@/lib/friendlyError";
 import { useMediaQuery } from "@/lib/useMediaQuery";
 import { ChatPane } from "@/components/chat/ChatPane";
+
+/** Confirm + delete one chat; returns whether it was actually deleted. */
+function useDeleteChat() {
+  const del = useMutation(api.chat.deleteChat);
+  const confirm = useConfirm();
+  const toast = useToast();
+  return async (chatId: Id<"chats">, title: string): Promise<boolean> => {
+    const ok = await confirm({
+      title: "Delete this chat?",
+      message: `This permanently deletes your chat about ${title} and all its messages. This can't be undone.`,
+      confirmText: "Delete",
+      danger: true,
+    });
+    if (!ok) return false;
+    try {
+      await del({ chatId });
+      toast("Chat deleted", "success");
+      return true;
+    } catch (e) {
+      toast(friendlyError(e, "Couldn't delete the chat"), "error");
+      return false;
+    }
+  };
+}
 
 function Narrow({ children }: { children: React.ReactNode }) {
   return (
@@ -89,6 +118,7 @@ function ChatsSkeleton() {
 /** Mobile / narrow: a simple list; each row opens the game's full chat page. */
 function ChatsList() {
   const chats = useQuery(api.chat.listMyChats);
+  const deleteChat = useDeleteChat();
 
   if (chats === undefined) return <ChatsSkeleton />;
 
@@ -118,9 +148,18 @@ function ChatsList() {
           subtitle={c.lastMessage}
           meta={relativeTime(c.lastMessageAt)}
           trailing={
-            c.gameSlug ? (
-              <ChevronRight className="h-4 w-4 shrink-0 text-subtle" />
-            ) : undefined
+            <div className="flex shrink-0 items-center gap-0.5">
+              <button
+                onClick={() => deleteChat(c._id, c.gameTitle)}
+                aria-label={`Delete chat about ${c.gameTitle}`}
+                className="flex h-9 w-9 items-center justify-center rounded-lg text-subtle transition-colors hover:bg-surface-2 hover:text-red-500 dark:hover:text-red-400"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+              {c.gameSlug && (
+                <ChevronRight className="h-4 w-4 text-subtle" />
+              )}
+            </div>
           }
         />
       ))}
@@ -132,6 +171,7 @@ function ChatsList() {
 function TwoPane() {
   const chats = useQuery(api.chat.listMyChats);
   const [selected, setSelected] = useState<string | null>(null);
+  const deleteChat = useDeleteChat();
 
   // Fill the viewport below the sticky desktop header.
   const heightCls = "h-[calc(100dvh-3.75rem)]";
@@ -175,42 +215,60 @@ function TwoPane() {
           {chats.map((c) => {
             const active = !!c.gameSlug && c.gameSlug === activeSlug;
             return (
-              <button
+              <div
                 key={c._id}
-                onClick={() => c.gameSlug && setSelected(c.gameSlug)}
-                disabled={!c.gameSlug}
-                className={`flex w-full items-center gap-3 rounded-xl p-2 text-left transition-colors ${
+                className={`group flex items-center rounded-xl transition-colors ${
                   active ? "bg-accent/10" : "hover:bg-surface-2"
-                } ${!c.gameSlug ? "cursor-default opacity-60" : ""}`}
+                } ${!c.gameSlug ? "opacity-60" : ""}`}
               >
-                <span className="h-11 w-11 shrink-0 overflow-hidden rounded-lg bg-surface-2">
-                  {c.thumbnailUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={c.thumbnailUrl}
-                      alt=""
-                      className="h-full w-full object-cover"
-                    />
-                  ) : (
-                    <span className="flex h-full w-full items-center justify-center text-subtle">
-                      <Die className="h-5 w-5" />
+                <button
+                  onClick={() => c.gameSlug && setSelected(c.gameSlug)}
+                  disabled={!c.gameSlug}
+                  className={`flex min-w-0 flex-1 items-center gap-3 p-2 text-left ${
+                    !c.gameSlug ? "cursor-default" : ""
+                  }`}
+                >
+                  <span className="h-11 w-11 shrink-0 overflow-hidden rounded-lg bg-surface-2">
+                    {c.thumbnailUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={c.thumbnailUrl}
+                        alt=""
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <span className="flex h-full w-full items-center justify-center text-subtle">
+                        <Die className="h-5 w-5" />
+                      </span>
+                    )}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="flex items-center justify-between gap-2">
+                      <span className="truncate text-sm font-bold">
+                        {c.gameTitle}
+                      </span>
+                      <span className="shrink-0 text-[11px] text-subtle">
+                        {relativeTime(c.lastMessageAt)}
+                      </span>
                     </span>
-                  )}
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="flex items-center justify-between gap-2">
-                    <span className="truncate text-sm font-bold">
-                      {c.gameTitle}
-                    </span>
-                    <span className="shrink-0 text-[11px] text-subtle">
-                      {relativeTime(c.lastMessageAt)}
+                    <span className="mt-0.5 block truncate text-xs text-muted">
+                      {c.lastMessage}
                     </span>
                   </span>
-                  <span className="mt-0.5 block truncate text-xs text-muted">
-                    {c.lastMessage}
-                  </span>
-                </span>
-              </button>
+                </button>
+                <button
+                  onClick={async () => {
+                    const wasActive = c.gameSlug === selected;
+                    const gone = await deleteChat(c._id, c.gameTitle);
+                    // If the open chat was deleted, fall back to the newest one.
+                    if (gone && wasActive) setSelected(null);
+                  }}
+                  aria-label={`Delete chat about ${c.gameTitle}`}
+                  className="mr-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-subtle opacity-0 transition-opacity hover:bg-surface-2 hover:text-red-500 focus-visible:opacity-100 group-hover:opacity-100 dark:hover:text-red-400"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </div>
             );
           })}
         </div>

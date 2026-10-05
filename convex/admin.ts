@@ -3,23 +3,9 @@ import { query, internalMutation } from "./_generated/server";
 import { requireAdmin } from "./lib/auth";
 import { finite } from "./lib/num";
 import { monthKey, foldTokens, type TokensByModel } from "./lib/stats";
-
-// Approximate USD pricing per 1M tokens. Update as provider pricing changes.
-const PRICING: Record<string, { input: number; output: number }> = {
-  "gemini-2.5-flash": { input: 0.3, output: 2.5 },
-  "gemini-2.5-flash-lite": { input: 0.1, output: 0.4 }, // retired; kept for old usage rows
-  "gemini-3.5-flash": { input: 1.5, output: 9.0 },
-  "gemini-3.5-flash-lite": { input: 0.3, output: 2.5 },
-  "gemini-embedding-001": { input: 0.15, output: 0 },
-};
+import { rowCost } from "./lib/pricing";
 
 const USAGE_SAMPLE = 20000;
-
-function rowCost(model: string, promptTokens: number, completionTokens: number) {
-  const p = PRICING[model];
-  if (!p) return 0;
-  return (finite(promptTokens) / 1e6) * p.input + (finite(completionTokens) / 1e6) * p.output;
-}
 
 const SCAN_CAP = 20000;
 
@@ -255,7 +241,11 @@ export const ingestionCosts = query({
       const promptTokens = finite(u?.promptTokens);
       const completionTokens = finite(u?.completionTokens);
       const tokens = finite(u?.totalTokens) || promptTokens + completionTokens;
-      const cost = rowCost("gemini-2.5-flash", promptTokens, completionTokens);
+      const cost = rowCost(
+        d.parseModel ?? "gemini-2.5-flash",
+        promptTokens,
+        completionTokens,
+      );
       const rb = await ctx.db.get("rulebooks", d.rulebookId);
       rows.push({
         id: d._id as string,

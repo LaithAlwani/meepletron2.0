@@ -17,6 +17,7 @@ import {
 import { chunkMarkdown } from "./lib/chunker";
 import { embedDocuments } from "./lib/embedding";
 import { readMediaBytes } from "./r2";
+import { resolveContentModel } from "./rag";
 
 const CHUNK_INSERT_BATCH = 100;
 const EMBED_COMMIT_BATCH = 50;
@@ -27,9 +28,10 @@ async function extractMarkdown(
   endPage: number,
   knownIcons: string[],
   knownSections: string[],
+  modelId: string,
 ) {
   const { text, usage, finishReason } = await generateText({
-    model: google("gemini-2.5-flash"),
+    model: google(modelId),
     // Faithful transcription of dense/multi-column rulebook pages benefits from
     // Gemini's "thinking" — leave it on (dynamic budget) for quality. Give a
     // generous output cap so a page-heavy batch isn't silently truncated.
@@ -133,6 +135,7 @@ export const processBatch = internalAction({
       { draftId, expectedIndex: state.nextBatchIndex },
     );
     try {
+      const { modelId } = await resolveContentModel(ctx);
       const bytes = await readMediaBytes(ctx, state.storageKey, state.storageId);
       if (!bytes) throw new Error("Rulebook file is missing");
       const slice = await extractPageRange(
@@ -147,6 +150,7 @@ export const processBatch = internalAction({
         batch.endPage,
         state.iconTokens,
         state.sectionHeadings,
+        modelId,
       );
       const cleaned = postProcessMarkdown(
         markdown,
@@ -171,6 +175,7 @@ export const processBatch = internalAction({
           p,
           state.iconTokens,
           state.sectionHeadings,
+          modelId,
         );
         totalUsage.promptTokens += r.usage.promptTokens;
         totalUsage.completionTokens += r.usage.completionTokens;
@@ -191,6 +196,7 @@ export const processBatch = internalAction({
         newIconTokens: extractIconTokens(merged),
         newSectionHeadings: extractSectionHeadings(merged),
         usage: totalUsage,
+        model: modelId,
       });
 
       await ctx.scheduler.runAfter(0, internal.ingestion.processBatch, {

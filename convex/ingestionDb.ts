@@ -129,6 +129,7 @@ export const saveBatch = internalMutation({
     newIconTokens: v.array(v.string()),
     newSectionHeadings: v.array(v.string()),
     usage: usageValidator,
+    model: v.string(),
   },
   handler: async (ctx, args) => {
     const draft = await ctx.db.get("migrationDrafts", args.draftId);
@@ -167,6 +168,7 @@ export const saveBatch = internalMutation({
       nextBatchIndex: args.index + 1,
       iconTokens,
       sectionHeadings,
+      parseModel: args.model,
       geminiUsage: {
         promptTokens: prev.promptTokens + args.usage.promptTokens,
         completionTokens: prev.completionTokens + args.usage.completionTokens,
@@ -176,14 +178,14 @@ export const saveBatch = internalMutation({
 
     await ctx.db.insert("usageLog", {
       purpose: "parse",
-      model: "gemini-2.5-flash",
+      model: args.model,
       promptTokens: args.usage.promptTokens,
       completionTokens: args.usage.completionTokens,
       totalTokens: args.usage.totalTokens,
     });
     await recordUsage(ctx, [
       {
-        model: "gemini-2.5-flash",
+        model: args.model,
         promptTokens: args.usage.promptTokens,
         completionTokens: args.usage.completionTokens,
       },

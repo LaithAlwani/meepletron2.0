@@ -58,6 +58,7 @@ import type * as lib_num from "../lib/num.js";
 import type * as lib_pdf from "../lib/pdf.js";
 import type * as lib_playTypes from "../lib/playTypes.js";
 import type * as lib_postTypes from "../lib/postTypes.js";
+import type * as lib_pricing from "../lib/pricing.js";
 import type * as lib_prompts from "../lib/prompts.js";
 import type * as lib_purge from "../lib/purge.js";
 import type * as lib_r2keys from "../lib/r2keys.js";
@@ -139,6 +140,7 @@ declare const fullApi: ApiFromModules<{
   "lib/pdf": typeof lib_pdf;
   "lib/playTypes": typeof lib_playTypes;
   "lib/postTypes": typeof lib_postTypes;
+  "lib/pricing": typeof lib_pricing;
   "lib/prompts": typeof lib_prompts;
   "lib/purge": typeof lib_purge;
   "lib/r2keys": typeof lib_r2keys;

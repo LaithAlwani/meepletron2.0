@@ -148,12 +148,16 @@ function Sources({
   // label each chip with its source so you can tell which manual it's from.
   const multiSource = new Set(annotations.map((a) => a.bgTitle)).size > 1;
 
-  // Bring the passage into view when opened (e.g. from an inline [n] tap).
+  // Bring the passage into view only when the user opens/switches a citation —
+  // key off the primitive `openN`, NOT the `open` object. The reactive query
+  // hands back fresh annotation objects on every update (streaming, a new
+  // message, lastMessageAt ticking…), so depending on `open` re-ran this on
+  // every render and kept yanking the page back to the open passage.
   useEffect(() => {
-    if (open && cardRef.current) {
+    if (openN != null && cardRef.current) {
       cardRef.current.scrollIntoView({ behavior: "smooth", block: "nearest" });
     }
-  }, [open]);
+  }, [openN]);
 
   return (
     <div className="mt-3 border-t border-border pt-2">

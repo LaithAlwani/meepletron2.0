@@ -3,7 +3,12 @@
 import { useEffect, useState } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { CHAT_MODEL_IDS, type ChatModelId } from "@/convex/lib/chatConfig";
+import {
+  CHAT_MODEL_IDS,
+  CONTENT_MODEL_IDS,
+  type ChatModelId,
+  type ContentModelId,
+} from "@/convex/lib/chatConfig";
 
 const knobs = [
   {
@@ -51,9 +56,13 @@ const knobs = [
 ];
 
 const MODEL_LABELS: Record<ChatModelId, string> = {
-  "gemini-2.5-flash": "Flash 2.5 — current default ($0.30/$2.50 per 1M)",
-  "gemini-3.5-flash-lite": "Flash-Lite 3.5 — newer, same price ($0.30/$2.50)",
+  "gemini-3.5-flash-lite": "Flash-Lite 3.5 — default ($0.30/$2.50 per 1M)",
   "gemini-3.5-flash": "Flash 3.5 — premium, ~5× cost ($1.50/$9.00)",
+};
+
+const CONTENT_MODEL_LABELS: Record<ContentModelId, string> = {
+  "gemini-2.5-flash": "Flash 2.5 — default ($0.30/$2.50 per 1M)",
+  "gemini-3.5-flash": "Flash 3.5 — current-gen ($1.50/$9.00 per 1M)",
 };
 
 const modelKnobs = [
@@ -73,6 +82,7 @@ type NumberKey = (typeof knobs)[number]["key"];
 type Config = Record<NumberKey, number> & {
   answerModel: ChatModelId;
   auxModel: ChatModelId;
+  contentModel: ContentModelId;
 };
 
 export default function SiteConfigPage() {
@@ -97,6 +107,7 @@ export default function SiteConfigPage() {
         answerThinkingBudget: config.answerThinkingBudget,
         answerModel: config.answerModel,
         auxModel: config.auxModel,
+        contentModel: config.contentModel,
       }),
     );
     return () => cancelAnimationFrame(id);
@@ -144,6 +155,34 @@ export default function SiteConfigPage() {
         </label>
       ))}
 
+      <label className="block">
+        <span className="mb-1 block text-sm font-medium">
+          Ingestion &amp; content model
+        </span>
+        <select
+          value={form.contentModel}
+          onChange={(e) => {
+            setSaved(false);
+            setForm({
+              ...form,
+              contentModel: e.target.value as ContentModelId,
+            });
+          }}
+          className="w-full rounded-lg border border-border bg-surface px-3 py-2 outline-none focus:ring-2 focus:ring-ring"
+        >
+          {CONTENT_MODEL_IDS.map((id) => (
+            <option key={id} value={id}>
+              {CONTENT_MODEL_LABELS[id]}
+            </option>
+          ))}
+        </select>
+        <span className="mt-1 block text-xs text-muted">
+          Rulebook PDF parsing + FAQ/glossary/reminder generation. Low-volume and
+          quality-critical — use a full Flash model (not Lite). Only affects
+          future ingestions/regenerations.
+        </span>
+      </label>
+
       {knobs.map((k) => (
         <label key={k.key} className="block">
           <span className="mb-1 block text-sm font-medium">{k.label}</span>
@@ -153,7 +192,11 @@ export default function SiteConfigPage() {
             value={form[k.key]}
             onChange={(e) => {
               setSaved(false);
-              setForm({ ...form, [k.key]: Number(e.target.value) });
+              // Integer-stepped knobs (step 1) must stay whole numbers — a
+              // fractional thinking budget errors at the Gemini API.
+              const raw = Number(e.target.value);
+              const val = k.step === 1 ? Math.round(raw) : raw;
+              setForm({ ...form, [k.key]: val });
             }}
             className="w-full rounded-lg border border-border bg-surface px-3 py-2 outline-none focus:ring-2 focus:ring-ring"
           />

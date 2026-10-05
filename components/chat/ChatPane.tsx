@@ -502,10 +502,15 @@ function ChatView({
                       {((m.inputTokens ?? 0) + (m.outputTokens ?? 0)).toLocaleString()}{" "}
                       total · ~$
                       {(
+                        // Use the stored per-model cost; fall back to the old
+                        // flat flash rate only for messages saved before it.
+                        m.costUsd ??
                         ((m.inputTokens ?? 0) * 0.3 +
                           (m.outputTokens ?? 0) * 2.5) /
-                        1e6
+                          1e6
                       ).toFixed(4)}
+                      {m.answerModel &&
+                        ` · ${m.answerModel.replace(/^gemini-/, "")}`}
                     </p>
                   )}
               </Fragment>
