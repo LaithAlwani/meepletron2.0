@@ -4,9 +4,10 @@ import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { streamText } from "ai";
+import { google } from "@ai-sdk/google";
 import { auth } from "./auth";
 import { finite } from "./lib/num";
-import { CHAT_MODEL, buildAnswer } from "./rag";
+import { buildAnswer } from "./rag";
 import { createIconTokenStripper } from "./lib/prompts";
 
 const http = httpRouter();
@@ -118,13 +119,20 @@ const chat = httpAction(async (ctx, request) => {
   const messages = history as { role: "user" | "assistant"; content: string }[];
 
   // Retrieve + rerank + assemble the grounded prompt (shared with the FAQ generator).
-  const { system, annotations, usage, empty, answerTemperature } =
-    await buildAnswer(ctx, {
-      rulebookIds: selectedRulebookIds,
-      query,
-      history: messages,
-      sourceTitles,
-    });
+  const {
+    system,
+    annotations,
+    usage,
+    empty,
+    answerTemperature,
+    answerModel,
+    answerThinkingBudget,
+  } = await buildAnswer(ctx, {
+    rulebookIds: selectedRulebookIds,
+    query,
+    history: messages,
+    sourceTitles,
+  });
 
   // No relevant rulebook content → tell the user, and NEVER let the model
   // answer from its own knowledge.
@@ -142,12 +150,16 @@ const chat = httpAction(async (ctx, request) => {
     );
   }
 
-  // Stream the grounded answer; persist on completion.
+  // Stream the grounded answer; persist on completion. Model + thinking budget
+  // come from the admin site-config (default: flash with thinking off).
   const result = streamText({
-    model: CHAT_MODEL,
+    model: google(answerModel),
     system,
     messages,
     temperature: answerTemperature,
+    providerOptions: {
+      google: { thinkingConfig: { thinkingBudget: answerThinkingBudget } },
+    },
   });
 
   const encoder = new TextEncoder();
@@ -175,7 +187,7 @@ const chat = httpAction(async (ctx, request) => {
         const outTok = finite(answerUsage.outputTokens);
         usage.push({
           purpose: "chat-answer",
-          model: "gemini-2.5-flash",
+          model: answerModel,
           promptTokens: inTok,
           completionTokens: outTok,
           totalTokens: finite(answerUsage.totalTokens) || inTok + outTok,

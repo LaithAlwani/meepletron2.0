@@ -12,6 +12,7 @@ import { getCurrentUser, requireUser, requireAdmin } from "./lib/auth";
 import { finite } from "./lib/num";
 import { thumbUrl } from "./lib/gameCover";
 import { recordMessages, recordUsage } from "./lib/stats";
+import { CHAT_CONFIG_DEFAULTS } from "./lib/chatConfig";
 
 /** Daily token budgets: guests get a smaller allowance to nudge sign-up. */
 export const DAILY_TOKEN_LIMIT = 100_000;
@@ -484,18 +485,7 @@ export const getActiveConfig = internalQuery({
   handler: async (ctx) => {
     const rows = await ctx.db.query("siteConfig").order("desc").take(1);
     // Defaults fill any missing fields (e.g. an older row without newer knobs).
-    const defaults = {
-      v2TopK: 20,
-      v2ScoreThreshold: 0.05,
-      // Rerank more of what we retrieve, and hand the answer a few more passages
-      // — so a borderline-but-correct chunk (e.g. an action described in one big
-      // block) isn't sliced out before the reranker/answer ever sees it.
-      rerankTopN: 5,
-      historyMessageLimit: 6,
-      rerankCandidates: 18,
-      answerTemperature: 0.2,
-    };
-    return { ...defaults, ...rows[0] };
+    return { ...CHAT_CONFIG_DEFAULTS, ...rows[0] };
   },
 });
 

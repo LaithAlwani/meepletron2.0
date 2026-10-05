@@ -7,6 +7,7 @@ import { monthKey, foldTokens, type TokensByModel } from "./lib/stats";
 // Approximate USD pricing per 1M tokens. Update as provider pricing changes.
 const PRICING: Record<string, { input: number; output: number }> = {
   "gemini-2.5-flash": { input: 0.3, output: 2.5 },
+  "gemini-2.5-flash-lite": { input: 0.1, output: 0.4 },
   "gemini-embedding-001": { input: 0.15, output: 0 },
 };
 

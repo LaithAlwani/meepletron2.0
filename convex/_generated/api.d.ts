@@ -44,6 +44,7 @@ import type * as lib_bggStats from "../lib/bggStats.js";
 import type * as lib_bggSyncTypes from "../lib/bggSyncTypes.js";
 import type * as lib_bggThing from "../lib/bggThing.js";
 import type * as lib_bggXml from "../lib/bggXml.js";
+import type * as lib_chatConfig from "../lib/chatConfig.js";
 import type * as lib_chunker from "../lib/chunker.js";
 import type * as lib_embedding from "../lib/embedding.js";
 import type * as lib_extraction from "../lib/extraction.js";
@@ -124,6 +125,7 @@ declare const fullApi: ApiFromModules<{
   "lib/bggSyncTypes": typeof lib_bggSyncTypes;
   "lib/bggThing": typeof lib_bggThing;
   "lib/bggXml": typeof lib_bggXml;
+  "lib/chatConfig": typeof lib_chatConfig;
   "lib/chunker": typeof lib_chunker;
   "lib/embedding": typeof lib_embedding;
   "lib/extraction": typeof lib_extraction;

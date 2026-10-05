@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
+import { CHAT_MODEL_IDS, type ChatModelId } from "@/convex/lib/chatConfig";
 
 const knobs = [
   {
@@ -41,9 +42,37 @@ const knobs = [
     help: "Randomness of the final answer (0–2). Lower = the same question gives more consistent replies; higher = more varied wording.",
     step: 0.1,
   },
+  {
+    key: "answerThinkingBudget" as const,
+    label: "Answer thinking budget",
+    help: "Gemini reasoning tokens for the answer (billed as output). 0 = off (cheapest, recommended — answers are grounded on retrieved passages), -1 = dynamic/auto, or a token cap up to 24576.",
+    step: 1,
+  },
 ];
 
-type Config = Record<(typeof knobs)[number]["key"], number>;
+const MODEL_LABELS: Record<ChatModelId, string> = {
+  "gemini-2.5-flash": "Flash 2.5 — higher quality",
+  "gemini-2.5-flash-lite": "Flash-Lite 2.5 — ~6× cheaper output",
+};
+
+const modelKnobs = [
+  {
+    key: "answerModel" as const,
+    label: "Answer model",
+    help: "Model that writes the final answer. The quality-sensitive one — test Flash-Lite before committing.",
+  },
+  {
+    key: "auxModel" as const,
+    label: "Auxiliary model (rewrite + rerank)",
+    help: "Model for the cheap mechanical steps. Flash-Lite here is low-risk.",
+  },
+];
+
+type NumberKey = (typeof knobs)[number]["key"];
+type Config = Record<NumberKey, number> & {
+  answerModel: ChatModelId;
+  auxModel: ChatModelId;
+};
 
 export default function SiteConfigPage() {
   const config = useQuery(api.siteConfig.get);
@@ -52,8 +81,11 @@ export default function SiteConfigPage() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
+  // Seed the form once the config loads. Deferred a frame so we don't call
+  // setState synchronously inside the effect body.
   useEffect(() => {
-    if (config && !form) {
+    if (!config || form) return;
+    const id = requestAnimationFrame(() =>
       setForm({
         v2TopK: config.v2TopK,
         v2ScoreThreshold: config.v2ScoreThreshold,
@@ -61,8 +93,12 @@ export default function SiteConfigPage() {
         rerankTopN: config.rerankTopN,
         historyMessageLimit: config.historyMessageLimit,
         answerTemperature: config.answerTemperature,
-      });
-    }
+        answerThinkingBudget: config.answerThinkingBudget,
+        answerModel: config.answerModel,
+        auxModel: config.auxModel,
+      }),
+    );
+    return () => cancelAnimationFrame(id);
   }, [config, form]);
 
   if (!form) return <p className="text-muted">Loading…</p>;
@@ -82,9 +118,30 @@ export default function SiteConfigPage() {
   return (
     <div className="max-w-lg space-y-4">
       <p className="text-sm text-muted">
-        Tune how the chat retrieves and reranks rulebook chunks. Changes apply to
-        new messages immediately.
+        Tune how the chat retrieves, reranks, and answers. Changes apply to new
+        messages immediately.
       </p>
+
+      {modelKnobs.map((k) => (
+        <label key={k.key} className="block">
+          <span className="mb-1 block text-sm font-medium">{k.label}</span>
+          <select
+            value={form[k.key]}
+            onChange={(e) => {
+              setSaved(false);
+              setForm({ ...form, [k.key]: e.target.value as ChatModelId });
+            }}
+            className="w-full rounded-lg border border-border bg-surface px-3 py-2 outline-none focus:ring-2 focus:ring-ring"
+          >
+            {CHAT_MODEL_IDS.map((id) => (
+              <option key={id} value={id}>
+                {MODEL_LABELS[id]}
+              </option>
+            ))}
+          </select>
+          <span className="mt-1 block text-xs text-muted">{k.help}</span>
+        </label>
+      ))}
 
       {knobs.map((k) => (
         <label key={k.key} className="block">

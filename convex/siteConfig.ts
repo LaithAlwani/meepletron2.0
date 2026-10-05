@@ -1,20 +1,14 @@
 import { v } from "convex/values";
 import { query, mutation, internalMutation } from "./_generated/server";
 import { requireAdmin } from "./lib/auth";
+import { CHAT_CONFIG_DEFAULTS } from "./lib/chatConfig";
 
-const DEFAULTS = {
-  // Retrieve a generous candidate set — the reranker reads the text and picks
-  // the best few, so more candidates improves recall for casual phrasing.
-  v2TopK: 20,
-  v2ScoreThreshold: 0.05,
-  rerankTopN: 5,
-  historyMessageLimit: 6,
-  // How many of the top-scoring candidates actually reach the reranker.
-  rerankCandidates: 18,
-  // Sampling temperature for the final answer. Low by default so the same
-  // question gives consistent replies; raise for more varied phrasing.
-  answerTemperature: 0.2,
-};
+const modelValidator = v.union(
+  v.literal("gemini-2.5-flash"),
+  v.literal("gemini-2.5-flash-lite"),
+);
+
+const DEFAULTS = CHAT_CONFIG_DEFAULTS;
 
 /** The current RAG-tuning knobs (admin). Defaults fill any missing fields. */
 export const get = query({
@@ -35,6 +29,9 @@ export const update = mutation({
     historyMessageLimit: v.number(),
     rerankCandidates: v.number(),
     answerTemperature: v.number(),
+    answerModel: modelValidator,
+    auxModel: modelValidator,
+    answerThinkingBudget: v.number(),
   },
   handler: async (ctx, args) => {
     await requireAdmin(ctx);
@@ -44,7 +41,10 @@ export const update = mutation({
       args.historyMessageLimit < 1 ||
       args.rerankCandidates < 1 ||
       args.answerTemperature < 0 ||
-      args.answerTemperature > 2
+      args.answerTemperature > 2 ||
+      // -1 (dynamic) or 0 (off) or a sane positive cap. Gemini's max is 24576.
+      args.answerThinkingBudget < -1 ||
+      args.answerThinkingBudget > 24576
     ) {
       throw new Error("Invalid config values");
     }
@@ -66,6 +66,9 @@ export const internalUpdate = internalMutation({
     historyMessageLimit: v.optional(v.number()),
     rerankCandidates: v.optional(v.number()),
     answerTemperature: v.optional(v.number()),
+    answerModel: v.optional(modelValidator),
+    auxModel: v.optional(modelValidator),
+    answerThinkingBudget: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     const existing = await ctx.db.query("siteConfig").order("desc").take(1);

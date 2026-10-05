@@ -53,10 +53,12 @@ async function rewriteQuery(
   query: string,
   history: { role: string; content: string }[],
   usage: UsageRow[],
+  model: ReturnType<typeof google>,
+  modelId: string,
 ): Promise<string> {
   try {
     const { text, usage: u } = await generateText({
-      model: CHAT_MODEL,
+      model,
       prompt: buildRewritePrompt(history, query),
       temperature: 0,
       providerOptions: { google: { thinkingConfig: { thinkingBudget: 0 } } },
@@ -66,7 +68,7 @@ async function rewriteQuery(
     const ot = finite(u.outputTokens);
     usage.push({
       purpose: "chat-rewrite",
-      model: "gemini-2.5-flash",
+      model: modelId,
       promptTokens: it,
       completionTokens: ot,
       totalTokens: finite(u.totalTokens) || it + ot,
@@ -86,13 +88,15 @@ async function rerankChunks(
   chunks: (RetrievedChunk & { chunkId: Id<"chunks"> })[],
   n: number,
   usage: UsageRow[],
+  model: ReturnType<typeof google>,
+  modelId: string,
 ): Promise<(RetrievedChunk & { chunkId: Id<"chunks"> })[]> {
   if (chunks.length === 0) return [];
   if (chunks.length <= n) return chunks.slice(0, n);
 
   try {
     const { object, usage: rerankUsage } = await generateObject({
-      model: CHAT_MODEL,
+      model,
       schema: z.object({ indices: z.array(z.number()) }),
       prompt: buildRerankPrompt(query, chunks, n),
       temperature: 0,
@@ -106,7 +110,7 @@ async function rerankChunks(
     const rOutTok = finite(rerankUsage.outputTokens);
     usage.push({
       purpose: "chat-rerank",
-      model: "gemini-2.5-flash",
+      model: modelId,
       promptTokens: rInTok,
       completionTokens: rOutTok,
       totalTokens: finite(rerankUsage.totalTokens) || rInTok + rOutTok,
@@ -131,6 +135,10 @@ export type BuildAnswerResult = {
   usage: UsageRow[];
   empty: boolean;
   answerTemperature: number;
+  // The caller (http.ts) runs the actual answer stream, so hand it the model
+  // id + thinking budget resolved from config.
+  answerModel: string;
+  answerThinkingBudget: number;
 };
 
 /**
@@ -155,6 +163,10 @@ export async function buildAnswer(
   const config = await ctx.runQuery(internal.chat.getActiveConfig, {});
 
   const answerTemperature = config.answerTemperature;
+  // Cheap auxiliary steps (rewrite + rerank) run on the configured aux model;
+  // the answer model + thinking budget are handed back to the caller.
+  const auxModel = google(config.auxModel);
+  const auxModelId = config.auxModel;
   // Pools were too small (v2TopK=8, rerankTopN≈1): on a miss the answer chunk
   // sat just outside the top 8, and the model got a single passage of grounding.
   // Floor them so retrieval has room; the vector-search cost is the index scan,
@@ -226,6 +238,8 @@ export async function buildAnswer(
       candidates.slice(0, config.rerankCandidates),
       rerankTopN,
       usage,
+      auxModel,
+      auxModelId,
     );
     console.log(
       `[rag:${label}] ranked=${JSON.stringify(
@@ -236,7 +250,7 @@ export async function buildAnswer(
   };
 
   // 1. Primary pass: rewrite the question, then retrieve at the normal threshold.
-  const searchQuery = await rewriteQuery(query, history, usage);
+  const searchQuery = await rewriteQuery(query, history, usage, auxModel, auxModelId);
   console.log(
     `[rag] q=${JSON.stringify(query)} rewritten=${JSON.stringify(searchQuery)} histLen=${history.length}`,
   );
@@ -270,6 +284,8 @@ export async function buildAnswer(
       usage,
       empty: true,
       answerTemperature,
+      answerModel: config.answerModel,
+      answerThinkingBudget: config.answerThinkingBudget,
     };
   }
 
@@ -292,5 +308,13 @@ export async function buildAnswer(
   }));
 
   const system = buildSystemPrompt(sourceTitles, formatContext(ranked, legend));
-  return { system, annotations, usage, empty: false, answerTemperature };
+  return {
+    system,
+    annotations,
+    usage,
+    empty: false,
+    answerTemperature,
+    answerModel: config.answerModel,
+    answerThinkingBudget: config.answerThinkingBudget,
+  };
 }

@@ -518,6 +518,25 @@ export default defineSchema({
     // Sampling temperature for the final grounded answer (optional; default on
     // read). Lower = more consistent replies for the same question.
     answerTemperature: v.optional(v.number()),
+    // Which Gemini model answers the question, and which runs the cheap
+    // auxiliary steps (query rewrite + rerank). flash-lite is cheaper; the
+    // answer is the quality-sensitive one. Optional; defaults applied on read.
+    answerModel: v.optional(
+      v.union(
+        v.literal("gemini-2.5-flash"),
+        v.literal("gemini-2.5-flash-lite"),
+      ),
+    ),
+    auxModel: v.optional(
+      v.union(
+        v.literal("gemini-2.5-flash"),
+        v.literal("gemini-2.5-flash-lite"),
+      ),
+    ),
+    // Gemini "thinking" budget for the answer, in tokens (billed as output).
+    // 0 = off (cheapest), -1 = dynamic/auto, or a positive cap. The rewrite and
+    // rerank steps keep their own fixed budgets.
+    answerThinkingBudget: v.optional(v.number()),
     // DEPRECATED, unused. HyDE retrieval was removed; this bare optional lingers
     // so a schema push doesn't fail on config rows that still carry it.
     hydeEnabled: v.optional(v.boolean()),
