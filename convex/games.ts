@@ -1217,11 +1217,31 @@ export const chatSources = query({
 // Admin CRUD
 // ---------------------------------------------------------------------------
 
-/** All games (base + expansions), for the admin list. */
+/** One row of the admin games list — just the fields the row, the filters and
+ *  the ingest badges need, and nothing heavy (no description, no searchText). */
+async function adminRow(ctx: QueryCtx, g: Doc<"games">) {
+  const rulebooks = await ctx.db
+    .query("rulebooks")
+    .withIndex("by_game", (q) => q.eq("gameId", g._id))
+    // Only chat rulebooks are ingestable; "download" add-ons are not.
+    .collect();
+  const files = rulebooks.filter((r) => (r.kind ?? "rulebook") !== "download");
+  return {
+    _id: g._id,
+    title: g.title,
+    slug: g.slug,
+    isExpansion: g.isExpansion,
+    isStub: !!g.isStub,
+    thumbnailUrl: await thumbUrl(ctx, g),
+    fileCount: files.length,
+    ingestedCount: files.filter((r) => r.isIngested).length,
+  };
+}
+
 /**
- * Lightweight list of every game for the admin index — just the fields the
- * list row + search + ingest filters need (no heavy metadata/searchText). The
- * page renders/searches/filters/pages this client-side.
+ * The admin games index: every game (base + expansions), newest first, which
+ * the page then filters and pages through client-side. Searching is *not*
+ * client-side — it goes through `adminSearch`, because this list is capped.
  */
 export const adminList = query({
   args: { includeStubs: v.optional(v.boolean()) },
@@ -1237,27 +1257,89 @@ export const adminList = query({
           .withIndex("by_isStub_and_isExpansion", (q) => q.eq("isStub", false))
           .order("desc")
           .take(1000);
-    return await Promise.all(
-      games.map(async (g) => {
-        const rulebooks = await ctx.db
-          .query("rulebooks")
-          .withIndex("by_game", (q) => q.eq("gameId", g._id))
-          // Only chat rulebooks are ingestable; "download" add-ons are not.
-          .collect();
-        const files = rulebooks.filter((r) => (r.kind ?? "rulebook") !== "download");
-        const ingested = files.filter((r) => r.isIngested).length;
-        return {
-          _id: g._id,
-          title: g.title,
-          slug: g.slug,
-          isExpansion: g.isExpansion,
-          isStub: !!g.isStub,
-          thumbnailUrl: await thumbUrl(ctx, g),
-          fileCount: files.length,
-          ingestedCount: ingested,
-        };
-      }),
+    return await Promise.all(games.map((g) => adminRow(ctx, g)));
+  },
+});
+
+/**
+ * Admin search across the whole catalogue.
+ *
+ * Runs on the server, through the same `search_text` index the public search
+ * uses, so the admin list turns up what players see: matches on designers,
+ * publishers, categories and mechanics as well as the title, ranked by
+ * relevance and tolerant of a typo. The old client-side filter could only
+ * substring-match the title/slug of the 1000 rows `adminList` had loaded, so
+ * anything older than that window was unfindable.
+ *
+ * Stubs are searched too (the admin list hides them, but they're exactly what
+ * you need to find in order to promote one). They carry no `searchText` by
+ * design, so they can't come from the full-text index — hence the separate
+ * title-prefix pass over the stub rows.
+ */
+export const adminSearch = query({
+  args: { term: v.string(), limit: v.optional(v.number()) },
+  handler: async (ctx, { term, limit }) => {
+    await requireAdmin(ctx);
+    const trimmed = term.trim();
+    if (!trimmed) return [];
+    const max = Math.max(1, Math.min(limit ?? 100, 500));
+
+    const hits = await ctx.db
+      .query("games")
+      .withSearchIndex("search_text", (q) =>
+        q.search("searchText", trimmed).eq("isStub", false),
+      )
+      .take(max * 3);
+
+    // Same relevance guard as `searchPaginated`: the index is typo-tolerant,
+    // which on short queries drags in unrelated games ("wall" -> "ball"). Keep
+    // rows that contain every typed term somewhere. The slug is part of the
+    // haystack so admin can still paste one in, as the old filter allowed.
+    const terms = trimmed.toLowerCase().split(/\s+/).filter(Boolean);
+    const matches = (hay: string) => terms.every((t) => hay.includes(t));
+    const found = hits.filter((g) =>
+      matches(`${g.searchText ?? ""} ${g.title} ${g.slug}`.toLowerCase()),
     );
+
+    // Stubs, by title prefix (an index range, so this stays cheap however many
+    // stubs the collection syncs have piled up).
+    const prefix = trimmed.toLowerCase();
+    const stubs = await ctx.db
+      .query("games")
+      .withIndex("by_lib_title", (q) =>
+        q
+          .eq("isStub", true)
+          .gte("sortTitle", prefix)
+          .lt("sortTitle", prefix + "\uffff"),
+      )
+      .take(50);
+
+    return await Promise.all(
+      [...found, ...stubs].slice(0, max).map((g) => adminRow(ctx, g)),
+    );
+  },
+});
+
+/**
+ * Every base game as a `{ _id, title, year }` option, for the "Base game"
+ * picker on the admin game form. Title-sorted and media-free: the picker only
+ * renders names, but it has to cover the whole catalogue — any base game can be
+ * an expansion's parent, and a picker that omits one silently blanks itself.
+ */
+export const baseGameOptions = query({
+  args: {},
+  handler: async (ctx) => {
+    await requireAdmin(ctx);
+    const games = await ctx.db
+      .query("games")
+      // Title order comes from the index, so the picker is A-Z for free. The
+      // cap is a backstop against an unbounded read; the catalogue is far
+      // under it, and a base game past it could still be set via BGG fill.
+      .withIndex("by_lib_title", (q) => q.eq("isStub", false))
+      .take(5000);
+    return games
+      .filter((g) => !g.isExpansion)
+      .map((g) => ({ _id: g._id, title: g.title, year: g.year }));
   },
 });
 

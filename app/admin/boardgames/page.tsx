@@ -19,6 +19,7 @@ type AdminGame = {
   title: string;
   slug: string;
   isExpansion: boolean;
+  isStub: boolean;
   thumbnailUrl: string | null;
   fileCount: number;
   ingestedCount: number;
@@ -30,6 +31,16 @@ function ingestStatus(g: { fileCount: number; ingestedCount: number }): IngestSt
 }
 
 const PAGE = 20;
+
+/** Hold a value back until it stops changing for `ms` — one query per pause. */
+function useDebounced<T>(value: T, ms: number): T {
+  const [settled, setSettled] = useState(value);
+  useEffect(() => {
+    const t = setTimeout(() => setSettled(value), ms);
+    return () => clearTimeout(t);
+  }, [value, ms]);
+  return settled;
+}
 
 /**
  * Like useState, but persists the value to sessionStorage under `key` so the
@@ -63,7 +74,6 @@ function usePersistentState<T>(key: string, initial: T): [T, (v: T) => void] {
 }
 
 export default function AdminGamesPage() {
-  const games = useQuery(api.games.adminList, {}) as AdminGame[] | undefined;
   const deleteGame = useMutation(api.games.deleteGame);
   const confirm = useConfirm();
   const toast = useToast();
@@ -78,6 +88,38 @@ export default function AdminGamesPage() {
     "all",
   );
   const [visible, setVisible] = useState(PAGE);
+
+  // Searching runs server-side, over the same full-text index the public search
+  // uses — the browser only ever holds `adminList`'s first 1000 rows, so a
+  // client-side filter could never find a game outside that window (and only
+  // ever matched the title/slug, never a designer or publisher).
+  const q = search.trim();
+  const searching = q.length >= 2;
+  const debounced = useDebounced(q, 200);
+  const settled = debounced === q;
+
+  // The plain list stays subscribed while searching: it's what the page falls
+  // back to when the box is cleared, and it's where the header tallies come
+  // from, so dropping it would only make clearing the search flicker.
+  const all = useQuery(api.games.adminList, {}) as AdminGame[] | undefined;
+  const hits = useQuery(
+    api.games.adminSearch,
+    searching && settled ? { term: debounced } : "skip",
+  ) as AdminGame[] | undefined;
+
+  // Whichever set is in play; `undefined` means "still loading". A one-letter
+  // query isn't worth a full-text round trip (and matches half the catalogue),
+  // so it narrows the loaded list the way the whole box used to.
+  const games = useMemo(() => {
+    if (searching) return settled ? hits : undefined;
+    if (!q) return all;
+    const needle = q.toLowerCase();
+    return all?.filter(
+      (g) =>
+        g.title.toLowerCase().includes(needle) ||
+        g.slug.toLowerCase().includes(needle),
+    );
+  }, [searching, settled, hits, all, q]);
 
   async function handleDelete(id: Id<"games">, title: string) {
     const ok = await confirm({
@@ -96,17 +138,7 @@ export default function AdminGamesPage() {
     }
   }
 
-  const q = search.trim().toLowerCase();
-  const bySearch = useMemo(
-    () =>
-      (games ?? []).filter(
-        (g) =>
-          !q ||
-          g.title.toLowerCase().includes(q) ||
-          g.slug.toLowerCase().includes(q),
-      ),
-    [games, q],
-  );
+  const bySearch = useMemo(() => games ?? [], [games]);
   const matchesType = (g: AdminGame) =>
     typeFilter === "all" ||
     (typeFilter === "base" ? !g.isExpansion : g.isExpansion);
@@ -132,8 +164,8 @@ export default function AdminGamesPage() {
     none: bySearch.filter((g) => matchesType(g) && ingestStatus(g) === "none").length,
   };
 
-  const baseCount = games?.filter((g) => !g.isExpansion).length ?? 0;
-  const expCount = games?.filter((g) => g.isExpansion).length ?? 0;
+  const baseCount = all?.filter((g) => !g.isExpansion).length ?? 0;
+  const expCount = all?.filter((g) => g.isExpansion).length ?? 0;
 
   // Reset the window whenever the filtered set changes.
   useEffect(() => {
@@ -166,7 +198,7 @@ export default function AdminGamesPage() {
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="font-display text-lg font-bold">All games</h2>
-          {games && (
+          {all && (
             <p className="mt-0.5 text-xs text-muted">
               <span className="font-medium text-foreground">{baseCount}</span> base
               {" · "}
@@ -194,7 +226,7 @@ export default function AdminGamesPage() {
         />
       </div>
 
-      {games && (
+      {all && (
         <div className="mb-4 flex gap-2">
           <FilterSelect
             ariaLabel="Filter by type"
@@ -214,7 +246,11 @@ export default function AdminGamesPage() {
       {games === undefined ? (
         <p className="text-muted">Loading…</p>
       ) : filtered.length === 0 ? (
-        <p className="text-muted">No games match these filters.</p>
+        <p className="text-muted">
+          {searching
+            ? `No games match “${q}”.`
+            : "No games match these filters."}
+        </p>
       ) : (
         <>
           <ul className="space-y-2">
@@ -426,6 +462,11 @@ function GameRow({ game, onDelete }: { game: AdminGame; onDelete: () => void }) 
             {game.isExpansion && (
               <span className="rounded-full bg-surface-2 px-2 py-0.5 text-[11px] text-muted">
                 Expansion
+              </span>
+            )}
+            {game.isStub && (
+              <span className="rounded-full bg-sky-500/10 px-2 py-0.5 text-[11px] font-medium text-sky-600 dark:text-sky-400">
+                Stub
               </span>
             )}
             <IngestBadge

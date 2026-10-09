@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery, useAction } from "convex/react";
 import { Download } from "lucide-react";
 import { api } from "@/convex/_generated/api";
@@ -42,7 +42,12 @@ export type GameFormValues = {
   bgg?: BggStats;
 };
 
-export type GameFormInitial = Partial<GameFormValues> & { title?: string };
+export type GameFormInitial = Partial<GameFormValues> & {
+  title?: string;
+  /** The resolved parent `games.getById` returns, used to label the picker's
+   *  current selection even before the option list has loaded. */
+  parent?: { _id: Id<"games">; title: string } | null;
+};
 
 const csv = (arr?: string[]) => (arr ?? []).join(", ");
 // Accept comma- OR newline-separated values.
@@ -86,7 +91,7 @@ export function GameForm({
   // Called with BGG's cover URL when filling — the page compresses + stores it.
   onBggImage?: (url: string) => void | Promise<void>;
 }) {
-  const baseGames = useQuery(api.games.list);
+  const baseGames = useQuery(api.games.baseGameOptions);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -117,7 +122,31 @@ export function GameForm({
   );
   const [bggId, setBggId] = useState(initial?.bggId ?? "");
   const [bggStats, setBggStats] = useState<BggStats | undefined>(initial?.bgg);
+
   const [filling, setFilling] = useState(false);
+
+  /**
+   * The base games the picker offers, always including the one currently set.
+   * A `<select>` whose value matches no `<option>` renders as if nothing were
+   * chosen, which is what made an expansion's base game look unset: the old
+   * option list was the first 200 base games by creation date, so most parents
+   * simply weren't in it. The fallback also covers the list still loading, and
+   * a parent that's an unenriched stub.
+   */
+  const parentOptions = useMemo(() => {
+    const opts = (baseGames ?? []).map((g) => ({
+      id: g._id as string,
+      label: g.year ? `${g.title} (${g.year})` : g.title,
+    }));
+    if (parentId && !opts.some((o) => o.id === parentId)) {
+      opts.unshift({
+        id: parentId,
+        label: initial?.parent?.title ?? "Current base game",
+      });
+    }
+    return opts;
+  }, [baseGames, parentId, initial?.parent?.title]);
+
   // What BGG lists as expansions of this game, newest fill first. Ticking is
   // the whole point: BGG's list mixes real expansions with promos, so the admin
   // picks rather than a threshold guessing.
@@ -408,9 +437,9 @@ export function GameForm({
             className={inputClass}
           >
             <option value="">— Select base game —</option>
-            {baseGames?.map((g) => (
-              <option key={g._id} value={g._id}>
-                {g.title}
+            {parentOptions.map((o) => (
+              <option key={o.id} value={o.id}>
+                {o.label}
               </option>
             ))}
           </select>
