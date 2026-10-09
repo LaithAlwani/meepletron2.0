@@ -6,44 +6,40 @@ import { ArrowRight, LayoutGrid, MessageCircle } from "lucide-react";
 import { buttonClasses } from "@/components/ui/buttonStyles";
 
 /**
- * Home-page call-to-action. During SSR and for signed-out visitors it renders
- * the sign-up CTAs (so the landing stays crawlable); once the client confirms a
- * signed-in session it swaps to app entry points (browse the library / chats).
- * `closing` renders the compact single-button variant used by the
- * closing card.
+ * Home-page call-to-action.
+ *
+ * SEO: the signed-out sign-up CTAs are ALWAYS in the server-rendered HTML
+ * (crawlable). While auth is still resolving on the client they stay in the DOM
+ * but are visually hidden behind a spinner — so a signed-in visitor never sees
+ * the sign-up text flash before it swaps to the app entry points. Only once the
+ * session is confirmed do we commit to a state. `closing` renders the compact
+ * single-button variant used by the closing card.
  */
 export function HomeCta({ closing = false }: { closing?: boolean }) {
-  const { isAuthenticated } = useConvexAuth();
+  const { isLoading, isAuthenticated } = useConvexAuth();
 
-  if (isAuthenticated) {
-    return (
-      <div className="mt-7 flex flex-wrap items-center justify-center gap-3">
-        <Link href="/boardgames" className={buttonClasses("primary", "lg")}>
-          <LayoutGrid className="h-4.5 w-4.5" />
-          Browse the library
+  const signedIn = (
+    <div className="mt-7 flex flex-wrap items-center justify-center gap-3">
+      <Link href="/boardgames" className={buttonClasses("primary", "lg")}>
+        <LayoutGrid className="h-4.5 w-4.5" />
+        Browse the library
+      </Link>
+      {!closing && (
+        <Link href="/chats" className={buttonClasses("ghost", "lg")}>
+          <MessageCircle className="h-4.5 w-4.5" />
+          Chats
         </Link>
-        {!closing && (
-          <Link href="/chats" className={buttonClasses("ghost", "lg")}>
-            <MessageCircle className="h-4.5 w-4.5" />
-            Chats
-          </Link>
-        )}
-      </div>
-    );
-  }
+      )}
+    </div>
+  );
 
-  // Signed out (and SSR / crawlers) — unchanged from the original landing.
-  if (closing) {
-    return (
-      <div className="mt-5 flex flex-wrap items-center justify-center gap-3">
-        <Link href="/auth" className={buttonClasses("primary", "lg")}>
-          Create free account
-        </Link>
-      </div>
-    );
-  }
-
-  return (
+  const signedOut = closing ? (
+    <div className="mt-5 flex flex-wrap items-center justify-center gap-3">
+      <Link href="/auth" className={buttonClasses("primary", "lg")}>
+        Create free account
+      </Link>
+    </div>
+  ) : (
     <>
       <div className="animate-in mt-7 flex flex-wrap items-center justify-center gap-3">
         <Link href="/auth" className={buttonClasses("primary", "lg")}>
@@ -61,5 +57,30 @@ export function HomeCta({ closing = false }: { closing?: boolean }) {
         <ArrowRight className="h-4 w-4" />
       </Link>
     </>
+  );
+
+  if (!isLoading) return isAuthenticated ? signedIn : signedOut;
+
+  // Auth still resolving: keep the signed-out CTAs in the DOM (crawlable +
+  // reserves the layout) but hidden, with button-shaped pulse placeholders over
+  // the button row — so the sign-up text never flashes for a signed-in visitor.
+  return (
+    <div className="relative">
+      <div aria-hidden className="invisible">
+        {signedOut}
+      </div>
+      <div
+        className={`absolute inset-0 flex items-start justify-center ${
+          closing ? "pt-5" : "pt-7"
+        }`}
+      >
+        <div className="flex flex-wrap items-center justify-center gap-3">
+          <div className="h-12 w-48 animate-pulse rounded-xl bg-surface-2" />
+          {!closing && (
+            <div className="h-12 w-28 animate-pulse rounded-xl bg-surface-2" />
+          )}
+        </div>
+      </div>
+    </div>
   );
 }

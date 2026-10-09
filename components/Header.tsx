@@ -93,21 +93,11 @@ export function Header() {
         <div className="ml-auto hidden items-center gap-1.5 sm:flex">
           <NavSearch />
           <AuthLoading>
-            <div className="h-9 w-9 animate-pulse rounded-full bg-surface-2" />
+            {/* Placeholder sized like the sign-in / profile button it resolves
+                into, so the bar doesn't shift when auth lands. */}
+            <div className="h-9 w-28 animate-pulse rounded-xl bg-surface-2" />
           </AuthLoading>
-          <Unauthenticated>
-            <Link
-              href="/profile"
-              aria-label="Profile"
-              title="Profile"
-              className="flex items-center rounded-xl p-1 transition-colors hover:bg-surface-2"
-            >
-              <span className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full bg-surface-2 text-muted">
-                <AvatarImg />
-              </span>
-            </Link>
-            {signIn}
-          </Unauthenticated>
+          <Unauthenticated>{signIn}</Unauthenticated>
           <Authenticated>
             {isGuest ? (
               signIn
