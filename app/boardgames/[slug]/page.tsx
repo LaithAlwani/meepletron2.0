@@ -400,17 +400,34 @@ export default function GameDetailPage({
 
               <div className="mt-5 flex flex-wrap gap-2.5">
                 {ingestedCount > 0 ? (
-                  <Link
-                    href={`/boardgames/${game.slug}/how-to-play`}
-                    className={buttonClasses("primary", "md")}
-                  >
-                    <BookOpen className="h-4 w-4" />
-                    How to play
-                  </Link>
+                  <>
+                    {/* Desktop only — on mobile the floating chat Fab covers
+                        this, so hide it there to avoid a duplicate. The wrapper
+                        owns the responsive display (nav:contents makes it vanish
+                        so the button is the flex item) — that way it never
+                        fights the button's own `inline-flex`. */}
+                    <span className="hidden nav:contents">
+                      <Link
+                        href={chatHref}
+                        className={buttonClasses("primary", "md")}
+                      >
+                        <MessageCircle className="h-4 w-4" />
+                        Chat about the rules
+                      </Link>
+                    </span>
+                    <Link
+                      href={`/boardgames/${game.slug}/how-to-play`}
+                      className={buttonClasses("ghost", "md")}
+                    >
+                      <BookOpen className="h-4 w-4" />
+                      How to play
+                    </Link>
+                  </>
                 ) : (
-                  <span className="inline-flex items-center rounded-xl border border-border bg-surface-2 px-4 py-2.5 text-sm text-muted">
-                    No rulebook
-                  </span>
+                  <RequestRulebookButton
+                    gameId={gameId}
+                    className={buttonClasses("primary", "md")}
+                  />
                 )}
                 <Link
                   href={`/tuckbox?gameId=${gameId}`}
@@ -515,6 +532,7 @@ export default function GameDetailPage({
           href={chatHref}
           icon={MessageCircle}
           label="Chat about the rules"
+          className="nav:hidden"
         />
       )}
 

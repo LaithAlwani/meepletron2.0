@@ -40,6 +40,16 @@ import { useBackNav } from "@/components/ui/BackButton";
 
 const SITE_URL = process.env.NEXT_PUBLIC_CONVEX_SITE_URL!;
 
+/** Advance an index past the next word + its trailing whitespace, so the smooth
+ *  reveal grows one word at a time (keeps citation markers like [2] intact). */
+function nextWordEnd(s: string, from: number): number {
+  let i = from;
+  while (i < s.length && /\s/.test(s[i])) i++; // leading whitespace
+  while (i < s.length && !/\s/.test(s[i])) i++; // the word itself
+  while (i < s.length && /\s/.test(s[i])) i++; // trailing whitespace
+  return i;
+}
+
 const SKELETON_ROWS: { side: "l" | "r"; w: string }[] = [
   { side: "l", w: "w-64" },
   { side: "r", w: "w-40" },
@@ -184,6 +194,14 @@ function ChatView({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [resourcesOpen, setResourcesOpen] = useState(false);
+  // Timer for the word-by-word streaming reveal (cleared on unmount).
+  const smoothTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      if (smoothTimerRef.current) clearTimeout(smoothTimerRef.current);
+    },
+    [],
+  );
 
   const game = useQuery(api.games.getById, { gameId });
   const sources = useQuery(api.games.chatSources, { gameId });
@@ -208,6 +226,11 @@ function ChatView({
     null,
   );
   const nearBottomRef = useRef(true);
+  // The top of the streaming answer — scrolled to the top of the view once, when
+  // the answer starts, so the reader begins at the start and the rest writes
+  // below (no bottom-chasing). `wasStreamingRef` makes that fire once per answer.
+  const answerAnchorRef = useRef<HTMLDivElement>(null);
+  const wasStreamingRef = useRef(false);
   const signingIn = useRef(false);
   const moduleApplied = useRef(false);
   const qApplied = useRef(false);
@@ -281,18 +304,42 @@ function ChatView({
       const prev = restoreRef.current;
       el.scrollTop = el.scrollHeight - prev.scrollHeight + prev.scrollTop;
       restoreRef.current = null;
-    } else if (lastId !== lastIdRef.current && nearBottomRef.current) {
+    } else if (
+      lastId !== lastIdRef.current &&
+      nearBottomRef.current &&
+      // Don't jump to the bottom when the just-sent question lands mid-stream —
+      // the answer-anchor effect positions the view instead (reading-first).
+      streaming === null
+    ) {
       el.scrollTop = el.scrollHeight;
     }
     firstIdRef.current = firstId;
     lastIdRef.current = lastId;
-  }, [messages]);
+  }, [messages, streaming]);
 
-  // Keep pinned to the bottom while streaming, if the user is near the bottom.
+  // Reading-first: when a new answer starts streaming, scroll its TOP near the
+  // top of the view ONCE, then leave the scroll alone (no bottom-chasing) so the
+  // reader starts at the beginning and scrolls down at their own pace. Deferred
+  // a frame so the just-sent question has rendered first.
   useLayoutEffect(() => {
-    if (streaming === null || !nearBottomRef.current) return;
-    const el = scrollRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
+    if (streaming === null) {
+      wasStreamingRef.current = false;
+      return;
+    }
+    if (wasStreamingRef.current) return; // only the first frame of this answer
+    wasStreamingRef.current = true;
+    requestAnimationFrame(() => {
+      const el = scrollRef.current;
+      const anchor = answerAnchorRef.current;
+      if (!el || !anchor) return;
+      el.scrollTop = Math.max(
+        0,
+        el.scrollTop +
+          anchor.getBoundingClientRect().top -
+          el.getBoundingClientRect().top -
+          12,
+      );
+    });
   }, [streaming]);
 
   function handleScroll() {
@@ -314,6 +361,36 @@ function ChatView({
     await postMessage({ chatId, content: text });
     setBusy(true);
     setStreaming("");
+
+    // Decouple the on-screen reveal from network arrival: the reader accumulates
+    // into `buf`, and a steady timer reveals it one word at a time (catching up
+    // when the model runs ahead). Gives the smooth typewriter cadence of the
+    // landing demo instead of painting ragged network bursts. `reveal` resolves
+    // once everything received has been shown, so we finalize after it drains.
+    const buf = { text: "", done: false };
+    let shown = 0;
+    const reveal = new Promise<void>((resolve) => {
+      const step = () => {
+        const full = buf.text;
+        if (shown < full.length) {
+          // Reveal more words per tick the further behind we are, so a fast model
+          // never leaves the reveal lagging.
+          const behind = full.length - shown;
+          const perTick = behind > 240 ? 6 : behind > 100 ? 3 : behind > 40 ? 2 : 1;
+          for (let i = 0; i < perTick && shown < full.length; i++) {
+            shown = nextWordEnd(full, shown);
+          }
+          setStreaming(full.slice(0, shown));
+        }
+        if (shown >= full.length && buf.done) {
+          resolve();
+          return;
+        }
+        smoothTimerRef.current = setTimeout(step, 56);
+      };
+      step();
+    });
+
     try {
       const res = await fetch(`${SITE_URL}/chat`, {
         method: "POST",
@@ -335,16 +412,19 @@ function ChatView({
       }
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
-      let acc = "";
       for (;;) {
         const { done, value } = await reader.read();
         if (done) break;
-        acc += decoder.decode(value, { stream: true });
-        setStreaming(acc);
+        buf.text += decoder.decode(value, { stream: true });
       }
     } catch {
       setError("Network error. Please try again.");
     } finally {
+      // Let the reveal drain everything received, then hand off to the saved
+      // message so the last words don't get cut as the bubble swaps out.
+      buf.done = true;
+      await reveal;
+      if (smoothTimerRef.current) clearTimeout(smoothTimerRef.current);
       setStreaming(null);
       setBusy(false);
     }
@@ -557,11 +637,15 @@ function ChatView({
             );
           })}
           {streaming !== null && (
-            <div className="msg-in flex justify-start">
+            <div className="msg-in flex flex-col items-start">
+              {/* Marks the top of the answer; the reading-first effect scrolls
+                  this to the top of the view when the answer begins. */}
+              <div ref={answerAnchorRef} aria-hidden className="h-0 w-0" />
               <div className="max-w-[90%] rounded-2xl rounded-bl-sm border border-border bg-surface px-4 py-3 text-sm leading-relaxed">
                 {streaming ? (
                   <span className="whitespace-pre-wrap">
                     {stripIconBrackets(streaming)}
+                    <span className="ml-0.5 inline-block h-[1.05em] w-0.5 animate-pulse bg-accent align-text-bottom" />
                   </span>
                 ) : (
                   <ThinkingIndicator />

@@ -27,14 +27,11 @@ export const OPENAI_LUNA_ID = "gpt-6-luna";
 // model→provider resolver (convex/lib/aiModels.ts derives from this). Adding a
 // row here wires the model into the picker AND prices it (no silent $0). Prices
 // marked TBD are placeholders until the provider's real rate is filled in.
+// Order here is the order shown in the in-chat picker (top → bottom): admin-only
+// Flash 3.6, then Flash-Lite, GPT-6 Luna, GPT-4o mini, and Haiku (the default)
+// at the bottom. Non-admins don't see Flash 3.6, so for them it's Flash-Lite →
+// Luna → 4o mini → Haiku.
 export const CHAT_MODELS = [
-  {
-    id: "gemini-3.5-flash-lite",
-    provider: "google",
-    label: "Flash-Lite 3.5 — Gemini, default ($0.30/$2.50 per 1M)",
-    input: 0.3,
-    output: 2.5,
-  },
   {
     id: "gemini-3.6-flash",
     provider: "google",
@@ -44,8 +41,28 @@ export const CHAT_MODELS = [
     adminOnly: true, // pricey — hidden from the in-chat picker for non-admins
   },
   {
-    // TODO: confirm the exact AI-SDK id via the probe once keys are on Convex
-    // (owner said "Haiku 5.5"; fall back to claude-haiku-4-5 if 5.5 404s).
+    id: "gemini-3.5-flash-lite",
+    provider: "google",
+    label: "Flash-Lite 3.5 — Gemini ($0.30/$2.50 per 1M)",
+    input: 0.3,
+    output: 2.5,
+  },
+  {
+    // Pricing is the owner-provided ~$0.10 in / $0.75 out (confirm exact rates).
+    id: OPENAI_LUNA_ID,
+    provider: "openai",
+    label: "ChatGPT 6 Luna — OpenAI (~$0.10/$0.75 per 1M)",
+    input: 0.1,
+    output: 0.75,
+  },
+  {
+    id: "gpt-4o-mini",
+    provider: "openai",
+    label: "GPT-4o mini — OpenAI ($0.15/$0.60 per 1M)",
+    input: 0.15,
+    output: 0.6,
+  },
+  {
     // Price is the base tier ($0.10/$0.50 up to 100K-token prompts; Anthropic
     // charges 5× beyond 100K — our rulebook prompts stay well under, and rowCost
     // is flat, so the base tier is what we bill).
@@ -54,25 +71,6 @@ export const CHAT_MODELS = [
     label: "Claude Haiku 5.5 — Anthropic ($0.10/$0.50 per 1M, ≤100K)",
     input: 0.1,
     output: 0.5,
-  },
-  {
-    // Accessible on the current OpenAI project today (gpt-4o-mini). Cheap, good
-    // for A/B against Flash-Lite while gpt-6-luna access is pending.
-    id: "gpt-4o-mini",
-    provider: "openai",
-    label: "GPT-4o mini — OpenAI ($0.15/$0.60 per 1M)",
-    input: 0.15,
-    output: 0.6,
-  },
-  {
-    // Valid OpenAI model id, but the project must be granted access to it
-    // (Dashboard → project → model access) or calls fail with "does not have
-    // access". Pricing is the owner-provided ~$0.10 in / $0.75 out (confirm).
-    id: OPENAI_LUNA_ID,
-    provider: "openai",
-    label: "ChatGPT 6 Luna — OpenAI (needs project access; ~$0.10/$0.75)",
-    input: 0.1,
-    output: 0.75,
   },
 ] as const satisfies readonly ChatModelEntry[];
 
