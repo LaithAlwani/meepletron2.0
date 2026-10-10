@@ -49,6 +49,11 @@ function encodeJpeg(original: Uint8Array, maxWidth: number): Uint8Array | null {
  * (no CORS), compresses it (downscale to <=800px + JPEG q82 via WASM Photon),
  * keeps whichever is smaller, and stores only that in Convex storage.
  */
+/** The R2 component throws this when a key's metadata row already exists. */
+function isAlreadyStored(e: unknown): boolean {
+  return e instanceof Error && /already exists/i.test(e.message);
+}
+
 export const setGameCoverFromUrl = action({
   args: { gameId: v.id("games"), url: v.string() },
   handler: async (ctx, { gameId, url }) => {
@@ -82,11 +87,23 @@ export const setGameCoverFromUrl = action({
       outBytes = coverJpeg;
       outType = "image/jpeg";
     }
-    const storageKey = await r2.store(ctx, Buffer.from(outBytes), {
-      key: gameCoverKey(slug),
-      type: outType,
-      cacheControl: "public, max-age=31536000, immutable",
-    });
+    // The cover key is deterministic (one per game slug), so re-filling a game
+    // whose cover is already stored hits "Metadata already exists". That's not a
+    // failure — the image is already there — so reuse the existing key and
+    // report it instead of erroring out of the whole fill.
+    const coverKey = gameCoverKey(slug);
+    let alreadyExists = false;
+    let storageKey = coverKey;
+    try {
+      storageKey = await r2.store(ctx, Buffer.from(outBytes), {
+        key: coverKey,
+        type: outType,
+        cacheControl: "public, max-age=31536000, immutable",
+      });
+    } catch (e) {
+      if (!isAlreadyStored(e)) throw e;
+      alreadyExists = true;
+    }
 
     // Thumbnail: a small dedicated crop for grids/lists. Only store a separate
     // object when we could actually decode + shrink it; otherwise the cover is
@@ -94,11 +111,17 @@ export const setGameCoverFromUrl = action({
     let thumbnailKey: string | undefined;
     const thumbJpeg = encodeJpeg(original, THUMB_WIDTH);
     if (thumbJpeg && thumbJpeg.byteLength < outBytes.byteLength) {
-      thumbnailKey = await r2.store(ctx, Buffer.from(thumbJpeg), {
-        key: gameThumbKey(slug),
-        type: "image/jpeg",
-        cacheControl: "public, max-age=31536000, immutable",
-      });
+      const thumbKey = gameThumbKey(slug);
+      thumbnailKey = thumbKey;
+      try {
+        await r2.store(ctx, Buffer.from(thumbJpeg), {
+          key: thumbKey,
+          type: "image/jpeg",
+          cacheControl: "public, max-age=31536000, immutable",
+        });
+      } catch (e) {
+        if (!isAlreadyStored(e)) throw e;
+      }
     }
 
     // Reuse the admin-gated mutation (auth propagates from this action).
@@ -107,6 +130,7 @@ export const setGameCoverFromUrl = action({
       storageKey,
       thumbnailKey,
     });
+    return { alreadyExists };
   },
 });
 

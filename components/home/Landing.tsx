@@ -61,37 +61,40 @@ export function Landing() {
     <div className="relative overflow-hidden">
       <HeroBackdrop />
 
-      {/* Hero — leads with the AI rules expert. */}
-      <section className="mx-auto max-w-5xl px-4 pb-8 pt-16 text-center sm:pt-24">
-        <Image
-          src="/logo.webp"
-          alt="Meepletron"
-          width={128}
-          height={160}
-          priority
-          quality={90}
-          className="animate-in mx-auto h-14 w-auto"
-        />
-        <p className="animate-in mt-5 inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-[0.2em] text-accent">
-          <MessageCircleQuestion className="h-4 w-4" />
-          AI board game rules expert
-        </p>
-        <h1 className="animate-in font-display mt-3 text-balance text-4xl font-extrabold tracking-tight sm:text-5xl">
-          Ask any board game rule — answered from the rulebook.
-        </h1>
-        <p className="animate-in mx-auto mt-4 max-w-xl text-balance text-base text-muted sm:text-lg">
-          Meepletron reads the game&apos;s actual rulebook and answers in
-          seconds, quoting the exact rule and the section it came from. Not a
-          guess from a general AI — an answer you can check at the table.
-        </p>
-        <HomeCta />
-      </section>
+      {/* Hero — leads with the AI rules expert. On desktop the live example
+          sits to the right of the pitch; on mobile it stacks beneath it. */}
+      <section className="mx-auto max-w-6xl px-4 pb-14 pt-16 sm:pt-24">
+        <div className="grid items-center gap-10 lg:grid-cols-2 lg:gap-12">
+          <div className="text-center">
+            <Image
+              src="/logo.webp"
+              alt="Meepletron"
+              width={128}
+              height={160}
+              priority
+              quality={90}
+              className="animate-in mx-auto h-14 w-auto"
+            />
+            <p className="animate-in mt-5 inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-[0.2em] text-accent">
+              <MessageCircleQuestion className="h-4 w-4" />
+              AI board game rules expert
+            </p>
+            <h1 className="animate-in font-display mt-3 text-balance text-4xl font-extrabold tracking-tight sm:text-5xl">
+              Ask any board game rule — answered from the rulebook.
+            </h1>
+            <p className="animate-in mx-auto mt-4 max-w-xl text-balance text-base text-muted sm:text-lg">
+              Meepletron reads the game&apos;s actual rulebook and answers in
+              seconds, quoting the exact rule and the section it came from. Not a
+              guess from a general AI — an answer you can check at the table.
+            </p>
+            <HomeCta />
+          </div>
 
-      {/* Proof — the thing itself, before any claims about it. */}
-      <section className="mx-auto max-w-5xl px-4 pb-14">
-        <Reveal>
-          <AnswerDemo />
-        </Reveal>
+          {/* Proof — the thing itself, before any claims about it. */}
+          <Reveal>
+            <AnswerDemo />
+          </Reveal>
+        </div>
       </section>
 
       {/* How the accuracy is actually achieved. */}

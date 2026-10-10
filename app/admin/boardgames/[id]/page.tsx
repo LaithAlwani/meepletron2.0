@@ -61,15 +61,19 @@ export default function EditGamePage({
       <section>
         <GameForm
           initial={game}
-          gameId={gameId}
           submitLabel="Save changes"
           onSubmit={async (values) => {
             await updateGame({ gameId, ...values });
           }}
           onBggImage={async (url) => {
             try {
-              await setCoverFromUrl({ gameId, url });
-              toast("Cover imported from BGG", "success");
+              const r = await setCoverFromUrl({ gameId, url });
+              toast(
+                r.alreadyExists
+                  ? "Cover already saved — kept the existing image"
+                  : "Cover imported from BGG",
+                "success",
+              );
             } catch {
               toast("Couldn't import the BGG cover", "error");
             }

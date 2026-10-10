@@ -1816,110 +1816,15 @@ export const ensureStubForBgg = internalMutation({
   },
 });
 
-/**
- * Record the expansions BGG lists for a base game.
- *
- * Creates a stub for any expansion we don't have yet and links every one to its
- * parent; existing rows are linked in place, never overwritten, and nothing is
- * ever deleted — an expansion BGG later drops may still have a rulebook, chunks
- * or chat history hanging off it. Stamps `expansionsHash` so an unchanged BGG
- * list costs nothing on the next pass.
- */
-export const linkExpansions = internalMutation({
-  args: {
-    parentId: v.id("games"),
-    expansions: v.array(v.object({ bggId: v.string(), title: v.string() })),
-    hash: v.string(),
-  },
-  handler: async (
-    ctx,
-    { parentId, expansions, hash },
-  ): Promise<{ created: number; linked: number }> => {
-    const parent = await ctx.db.get("games", parentId);
-    if (!parent) return { created: 0, linked: 0 };
-
-    let created = 0;
-    let linked = 0;
-    for (const exp of expansions) {
-      const existing = await ctx.db
-        .query("games")
-        .withIndex("by_bgg_id", (q) => q.eq("bggId", exp.bggId))
-        .first();
-
-      if (existing) {
-        if (existing._id === parentId) continue; // BGG self-link; ignore
-        // Only fill in what's missing — a curated expansion may already be
-        // linked to a different (equally valid) base game.
-        const patch: { isExpansion?: boolean; parentId?: Id<"games"> } = {};
-        if (!existing.isExpansion) patch.isExpansion = true;
-        if (!existing.parentId) patch.parentId = parentId;
-        if (Object.keys(patch).length > 0) {
-          await ctx.db.patch("games", existing._id, patch);
-          linked++;
-        }
-        continue;
-      }
-
-      await ctx.db.insert("games", {
-        title: exp.title,
-        slug: await slugifyUnique(ctx, exp.title),
-        isExpansion: true,
-        parentId,
-        isStub: true,
-        bggId: exp.bggId,
-        designers: [],
-        artists: [],
-        publishers: [],
-        categories: [],
-        gameMechanics: [],
-        ...sortKeys({ title: exp.title }),
-      });
-      created++;
-    }
-
-    await ctx.db.patch("games", parentId, {
-      expansionsHash: hash,
-      ...(expansions.length > 0 ? { hasExpansions: true } : {}),
-    });
-    return { created, linked };
-  },
-});
-
-/** Which of these BGG ids we already have a game for. */
-export const knownBggIds = internalQuery({
-  args: { bggIds: v.array(v.string()) },
-  handler: async (ctx, { bggIds }): Promise<string[]> => {
-    const out: string[] = [];
-    for (const bggId of bggIds) {
-      const g = await ctx.db
-        .query("games")
-        .withIndex("by_bgg_id", (q) => q.eq("bggId", bggId))
-        .first();
-      if (g) out.push(bggId);
-    }
-    return out;
-  },
-});
-
 /** BGG ids for a set of games, for the batched stats refresh. */
 export const bggIdsFor = internalQuery({
   args: { gameIds: v.array(v.id("games")) },
   handler: async (ctx, { gameIds }) => {
-    const out: {
-      gameId: Id<"games">;
-      bggId: string;
-      isExpansion: boolean;
-      expansionsHash: string | null;
-    }[] = [];
+    const out: { gameId: Id<"games">; bggId: string }[] = [];
     for (const gameId of gameIds) {
       const g = await ctx.db.get("games", gameId);
       if (!g?.bggId) continue;
-      out.push({
-        gameId,
-        bggId: g.bggId,
-        isExpansion: g.isExpansion,
-        expansionsHash: g.expansionsHash ?? null,
-      });
+      out.push({ gameId, bggId: g.bggId });
     }
     return out;
   },
@@ -1933,7 +1838,9 @@ export const gameByBggId = internalQuery({
       .query("games")
       .withIndex("by_bgg_id", (q) => q.eq("bggId", bggId))
       .first();
-    return g ? { _id: g._id, slug: g.slug, isStub: g.isStub === true } : null;
+    return g
+      ? { _id: g._id, slug: g.slug, title: g.title, isStub: g.isStub === true }
+      : null;
   },
 });
 
@@ -1958,10 +1865,19 @@ export async function purgeGame(ctx: MutationCtx, game: Doc<"games">) {
     await ctx.db.delete("rulebooks", rb._id);
   }
 
-  // Chats + messages for this game (admin op — a filtered scan is acceptable).
+  // Detail content kept off the game doc.
+  for (const gc of await ctx.db
+    .query("gameContent")
+    .withIndex("by_game", (q) => q.eq("gameId", gameId))
+    .take(50)) {
+    await ctx.db.delete("gameContent", gc._id);
+  }
+
+  // Chats + messages for this game (index-served so a bulk prune doesn't
+  // re-scan the whole chats table per game).
   const chats = await ctx.db
     .query("chats")
-    .filter((q) => q.eq(q.field("gameId"), gameId))
+    .withIndex("by_game", (q) => q.eq("gameId", gameId))
     .take(500);
   let delUser = 0;
   let delAi = 0;
@@ -1979,7 +1895,9 @@ export async function purgeGame(ctx: MutationCtx, game: Doc<"games">) {
   }
   await recordMessages(ctx, { user: -delUser, ai: -delAi });
 
-  // Free cover + thumbnail objects (R2 keys or legacy blobs; dedupe).
+  // Free cover + thumbnail objects (R2 keys or legacy blobs; dedupe). All
+  // best-effort via deleteMedia, so a stale/already-removed object can't abort
+  // the cascade mid-prune.
   const covers = new Set<string>();
   if (game.imageKey) covers.add(game.imageKey);
   if (game.thumbnailKey) covers.add(game.thumbnailKey);
@@ -1987,7 +1905,7 @@ export async function purgeGame(ctx: MutationCtx, game: Doc<"games">) {
   const blobs = new Set<Id<"_storage">>();
   if (game.imageId) blobs.add(game.imageId);
   if (game.thumbnailId) blobs.add(game.thumbnailId);
-  for (const id of blobs) await ctx.storage.delete(id);
+  for (const id of blobs) await deleteMedia(ctx, null, id);
   await ctx.db.delete("games", gameId);
 
   // If this was an expansion, recompute its parent's hasExpansions flag — but

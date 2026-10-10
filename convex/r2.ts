@@ -44,8 +44,18 @@ export async function deleteMedia(
   key: string | null | undefined,
   storageId: Id<"_storage"> | null | undefined,
 ): Promise<void> {
-  if (key) await r2.deleteObject(ctx, key);
-  else if (storageId) await ctx.storage.delete(storageId);
+  // Best-effort: a stale key/id (object already gone — common for legacy blobs
+  // migrated to R2) must not abort the caller (e.g. a bulk game prune).
+  try {
+    if (key) await r2.deleteObject(ctx, key);
+    else if (storageId) await ctx.storage.delete(storageId);
+  } catch (e) {
+    console.warn(
+      `deleteMedia: skipped ${key ?? storageId} — ${
+        e instanceof Error ? e.message : String(e)
+      }`,
+    );
+  }
 }
 
 /**

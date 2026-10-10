@@ -78,14 +78,11 @@ const inputClass =
 
 export function GameForm({
   initial,
-  gameId,
   submitLabel,
   onSubmit,
   onBggImage,
 }: {
   initial?: GameFormInitial;
-  /** Set when editing a saved game — enables recording its BGG expansions. */
-  gameId?: Id<"games">;
   submitLabel: string;
   onSubmit: (values: GameFormValues) => Promise<void>;
   // Called with BGG's cover URL when filling — the page compresses + stores it.
@@ -124,6 +121,13 @@ export function GameForm({
   const [bggStats, setBggStats] = useState<BggStats | undefined>(initial?.bgg);
 
   const [filling, setFilling] = useState(false);
+  // The base game a BGG fill resolved to (when this id is an expansion whose
+  // parent we already have), so the selector can label it even if it's not in
+  // the loaded base-game list.
+  const [filledParent, setFilledParent] = useState<{
+    id: string;
+    title: string;
+  } | null>(null);
 
   /**
    * The base games the picker offers, always including the one currently set.
@@ -141,63 +145,16 @@ export function GameForm({
     if (parentId && !opts.some((o) => o.id === parentId)) {
       opts.unshift({
         id: parentId,
-        label: initial?.parent?.title ?? "Current base game",
+        label:
+          (filledParent?.id === parentId ? filledParent.title : undefined) ??
+          initial?.parent?.title ??
+          "Current base game",
       });
     }
     return opts;
-  }, [baseGames, parentId, initial?.parent?.title]);
-
-  // What BGG lists as expansions of this game, newest fill first. Ticking is
-  // the whole point: BGG's list mixes real expansions with promos, so the admin
-  // picks rather than a threshold guessing.
-  type ExpansionOption = {
-    bggId: string;
-    name: string;
-    inLibrary: boolean;
-    ratingCount: number;
-    year: string | null;
-    suggested: boolean;
-  };
-  const [expansions, setExpansions] = useState<ExpansionOption[] | null>(null);
-  const [expansionsHash, setExpansionsHash] = useState("");
-  const [picked, setPicked] = useState<Set<string>>(new Set());
+  }, [baseGames, parentId, initial?.parent?.title, filledParent]);
 
   const fetchInfo = useAction(api.bgg.fetchGameInfo);
-  const recordExpansions = useAction(api.bgg.recordExpansions);
-  const [recording, setRecording] = useState(false);
-  const [recorded, setRecorded] = useState<string | null>(null);
-
-  async function handleRecordExpansions() {
-    if (!gameId || !expansions) return;
-    setError(null);
-    setRecording(true);
-    try {
-      const chosen = expansions
-        .filter((e) => picked.has(e.bggId))
-        .map((e) => ({ bggId: e.bggId, title: e.name }));
-      const r = await recordExpansions({
-        gameId,
-        expansions: chosen,
-        hash: expansionsHash,
-      });
-      setRecorded(
-        `Added ${r.created}, linked ${r.linked} of ${chosen.length} selected.`,
-      );
-    } catch (err) {
-      setError(friendlyError(err, "Couldn't record expansions."));
-    } finally {
-      setRecording(false);
-    }
-  }
-
-  function togglePicked(bggId: string) {
-    setPicked((prev) => {
-      const next = new Set(prev);
-      if (next.has(bggId)) next.delete(bggId);
-      else next.add(bggId);
-      return next;
-    });
-  }
 
   async function handleFill() {
     setError(null);
@@ -219,17 +176,14 @@ export function GameForm({
       if (d.gameMechanics?.length) setGameMechanics(csv(d.gameMechanics));
       if (d.bggId) setBggId(d.bggId);
       if (d.bgg) setBggStats(d.bgg);
+      // BGG knows whether this is an expansion; reflect it and, when we already
+      // have the base game it expands, pre-select it in the base-game dropdown.
+      setIsExpansion(d.isExpansion);
+      if (d.parent) {
+        setParentId(d.parent.id);
+        setFilledParent(d.parent);
+      }
       if (d.imageUrl && onBggImage) await onBggImage(d.imageUrl);
-      const found = d.expansions ?? [];
-      setExpansions(found);
-      setExpansionsHash(d.expansionsHash ?? "");
-      // Pre-tick what the nightly pass would have taken; the admin adjusts.
-      setPicked(
-        new Set(
-          found.filter((e) => e.suggested && !e.inLibrary).map((e) => e.bggId),
-        ),
-      );
-      setRecorded(null);
     } catch (err) {
       setError(friendlyError(err, "Couldn't fetch from BGG."));
     } finally {
@@ -298,116 +252,6 @@ export function GameForm({
         <p className="mt-1 text-xs text-muted">
           Fills the fields below plus rating, weight, and the player-count poll.
         </p>
-
-        {expansions && (
-          <div className="mt-3 rounded-lg border border-border bg-surface p-3">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <p className="text-xs font-semibold">
-                {expansions.length === 0
-                  ? "BGG lists no expansions for this game."
-                  : `BGG lists ${expansions.length} expansion${
-                      expansions.length === 1 ? "" : "s"
-                    } — ${
-                      expansions.filter((e) => e.inLibrary).length
-                    } already here.`}
-              </p>
-              {expansions.length > 0 && (
-                <div className="flex items-center gap-2 text-[11px]">
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setPicked(
-                        new Set(
-                          expansions
-                            .filter((e) => !e.inLibrary)
-                            .map((e) => e.bggId),
-                        ),
-                      )
-                    }
-                    className="font-semibold text-accent hover:underline"
-                  >
-                    Select all
-                  </button>
-                  <span className="text-subtle">·</span>
-                  <button
-                    type="button"
-                    onClick={() => setPicked(new Set())}
-                    className="font-semibold text-accent hover:underline"
-                  >
-                    None
-                  </button>
-                </div>
-              )}
-            </div>
-
-            {expansions.length > 0 && (
-              <>
-                <ul className="mt-2 flex max-h-56 flex-col gap-0.5 overflow-y-auto">
-                  {expansions.map((e) => (
-                    <li key={e.bggId}>
-                      <label
-                        className={`flex items-center gap-2 rounded px-1 py-1 text-xs ${
-                          e.inLibrary
-                            ? "opacity-60"
-                            : "cursor-pointer hover:bg-surface-2"
-                        }`}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={e.inLibrary || picked.has(e.bggId)}
-                          disabled={e.inLibrary}
-                          onChange={() => togglePicked(e.bggId)}
-                          className="h-3.5 w-3.5 shrink-0 accent-[var(--accent)]"
-                        />
-                        <span className="min-w-0 flex-1 truncate">
-                          {e.name}
-                          {e.year ? (
-                            <span className="text-subtle"> ({e.year})</span>
-                          ) : null}
-                        </span>
-                        {e.inLibrary ? (
-                          <span className="shrink-0 rounded bg-accent-2/15 px-1.5 py-px text-[10px] font-bold uppercase text-accent-2">
-                            in library
-                          </span>
-                        ) : (
-                          <span
-                            className="shrink-0 tabular-nums text-[11px] text-subtle"
-                            title="BGG ratings — promos have very few"
-                          >
-                            {e.ratingCount.toLocaleString()}
-                          </span>
-                        )}
-                      </label>
-                    </li>
-                  ))}
-                </ul>
-
-                {gameId ? (
-                  <div className="mt-2 flex flex-wrap items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={handleRecordExpansions}
-                      disabled={recording || picked.size === 0}
-                      className="rounded-lg border border-border bg-surface px-2.5 py-1.5 text-xs font-medium transition-colors hover:bg-surface-2 disabled:opacity-50"
-                    >
-                      {recording
-                        ? "Adding…"
-                        : `Add ${picked.size} selected`}
-                    </button>
-                    <span className="text-[11px] text-subtle">
-                      {recorded ??
-                        "Ticked by default: the ones with enough ratings to be real expansions rather than promos."}
-                    </span>
-                  </div>
-                ) : (
-                  <p className="mt-2 text-[11px] text-subtle">
-                    Save the game first to add its expansions.
-                  </p>
-                )}
-              </>
-            )}
-          </div>
-        )}
       </div>
 
       <Field label="Title">

@@ -34,10 +34,15 @@ export function CoverUploader({
     setBusy(true);
     setError(null);
     try {
-      await setCoverFromUrl({ gameId, url: trimmed });
+      const r = await setCoverFromUrl({ gameId, url: trimmed });
       setUrl("");
       setEditing(false);
-      toast("Cover updated", "success");
+      toast(
+        r.alreadyExists
+          ? "Cover already saved — kept the existing image"
+          : "Cover updated",
+        "success",
+      );
     } catch (e) {
       setError(friendlyError(e, "Couldn't set the cover from that URL."));
     } finally {

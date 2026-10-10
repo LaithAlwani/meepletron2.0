@@ -306,7 +306,10 @@ export default defineSchema({
     lastMessageAt: v.number(),
   })
     .index("by_user", ["userId"])
-    .index("by_user_and_game", ["userId", "gameId"]),
+    .index("by_user_and_game", ["userId", "gameId"])
+    // All chats for a game — used by the game-delete cascade (an unindexed
+    // filter scan would re-read the whole chats table per deleted game).
+    .index("by_game", ["gameId"]),
 
   favorites: defineTable({
     userId: v.id("users"),

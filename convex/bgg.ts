@@ -6,13 +6,14 @@ import {
   internalQuery,
 } from "./_generated/server";
 import { internal } from "./_generated/api";
-import type { Id } from "./_generated/dataModel";
 import { bggStatsValidator } from "./lib/bggStats";
 import { bggSortKeys } from "./lib/gameSort";
+import type { Id } from "./_generated/dataModel";
 import {
   parseItem,
   parseFullItem,
-  parseExpansionLinks,
+  parseItemType,
+  parseExpansionParents,
   decodeEntities,
 } from "./lib/bggThing";
 
@@ -170,25 +171,6 @@ const THING_CHUNK = 20;
 /** Gap between requests within a run, so a batch isn't a burst. */
 const REFRESH_STAGGER_MS = 3000;
 
-/**
- * Expansions below this many BGG ratings aren't recorded.
- *
- * BGG's expansion list is exhaustive, not curated: a popular game lists every
- * promo card and fan item next to its real expansions. Recording all of them
- * would bury the handful people play — and because `bggSync.enrichStubs`
- * self-drains, every one created would also pull its own BGG fetch. The rating
- * count is the cheapest signal that separates the two, and it arrives in the
- * same batched call that qualifies them.
- */
-const MIN_EXPANSION_RATINGS = 30;
-/** Ceiling on how many links we'll qualify for one game (Carcassonne has 200+). */
-const MAX_EXPANSION_LINKS = 100;
-
-/** Stable fingerprint of a BGG expansion-id set, order-independent. */
-function expansionsFingerprint(ids: string[]): string {
-  return [...ids].sort().join(",");
-}
-
 /** Split a list into fixed-size chunks. */
 function chunk<T>(xs: T[], size: number): T[][] {
   const out: T[][] = [];
@@ -289,10 +271,9 @@ export const refreshStale = internalAction({
  * A game missing from the response still gets stamped via `markChecked`, so a
  * permanently unresolvable id can't occupy a slot in every run.
  *
- * Expansion reconciliation used to be queued from here, which grew the
- * catalogue on its own. It's now admin-only — an admin adds a game's
- * expansions deliberately via the "Fill from BGG" picker (`recordExpansions`),
- * so nothing creates expansion games in the background anymore.
+ * This only refreshes stats — it never creates expansion games. Expansions are
+ * added manually like any other game (mark "This is an expansion" and pick the
+ * base game in the admin form).
  */
 export const refreshChunk = internalAction({
   args: { gameIds: v.array(v.id("games")) },
@@ -469,56 +450,21 @@ export const backfillCovers = internalAction({
  * Admin: fetch a game's metadata + stats from BGG by id, to prefill the game
  * form. Returns the parsed fields (does not save) plus the stats object.
  */
-/**
- * Record a game's BGG expansions now, instead of waiting for the nightly
- * refresh to reach it (admin).
- *
- * Runs the same qualification the cron does — batched /thing calls, keeping
- * links that clear MIN_EXPANSION_RATINGS plus anything already in the library —
- * so an admin pressing the button gets exactly what the cron would have
- * recorded, just sooner.
- */
-export const recordExpansions = action({
-  args: {
-    gameId: v.id("games"),
-    /** Exactly what to record — the admin's ticked boxes, not a guess. */
-    expansions: v.array(v.object({ bggId: v.string(), title: v.string() })),
-    /**
-     * Fingerprint of the *full* BGG list the picker was built from, so the
-     * nightly pass treats this list as dealt with and doesn't re-add the ones
-     * that were deliberately left unticked.
-     */
-    hash: v.string(),
-  },
-  handler: async (
-    ctx,
-    { gameId, expansions, hash },
-  ): Promise<{ created: number; linked: number }> => {
-    await ctx.runQuery(internal.users.ensureAdmin, {});
-    const targets: {
-      gameId: Id<"games">;
-      bggId: string;
-      isExpansion: boolean;
-      expansionsHash: string | null;
-    }[] = await ctx.runQuery(internal.games.bggIdsFor, { gameIds: [gameId] });
-    const target = targets[0];
-    if (!target) throw new ConvexError("That game has no BGG id.");
-    if (target.isExpansion) {
-      throw new ConvexError("Expansions don't have expansions of their own.");
-    }
-
-    // No ratings bar here: the admin's selection *is* the filter.
-    return await ctx.runMutation(internal.games.linkExpansions, {
-      parentId: gameId,
-      expansions,
-      hash,
-    });
-  },
-});
-
 export const fetchGameInfo = action({
   args: { bggId: v.string() },
-  handler: async (ctx, { bggId }) => {
+  // Explicit return type: the parent lookup runs a cross-file runQuery whose
+  // result feeds the return, which otherwise makes the handler type circular.
+  handler: async (
+    ctx,
+    { bggId },
+  ): Promise<
+    ReturnType<typeof parseFullItem> & {
+      bggId: string;
+      bgg: ReturnType<typeof parseItem> & { fetchedAt: number };
+      isExpansion: boolean;
+      parent: { id: Id<"games">; title: string } | null;
+    }
+  > => {
     await ctx.runQuery(internal.users.ensureAdmin, {});
     const id = bggId.trim();
     if (!/^\d+$/.test(id)) throw new ConvexError("Enter a numeric BGG id.");
@@ -542,59 +488,37 @@ export const fetchGameInfo = action({
     const itemMatch = xml.match(/<item [\s\S]*?<\/item>/);
     if (!itemMatch) throw new ConvexError("No game found for that BGG id.");
     const block = itemMatch[0];
-    // The expansion links ride along with the item we already fetched, so the
-    // admin can see what BGG lists without another round trip. Reported only —
-    // the refresh cron is what actually records them.
-    const links = parseExpansionLinks(block).slice(0, MAX_EXPANSION_LINKS);
-    const knownIds: string[] = await ctx.runQuery(internal.games.knownBggIds, {
-      bggIds: links.map((l) => l.bggId),
-    });
-    const known = new Set(knownIds);
 
-    // Rating counts for the picker. BGG's list mixes real expansions with
-    // promos, and the rating count is what tells them apart at a glance — so
-    // it's worth the extra batched calls (one per 20) on an admin action.
-    const stats = new Map<string, { ratingCount: number; year?: string }>();
-    for (const group of chunk(links, THING_CHUNK)) {
-      const items = itemsById(
-        await fetchThing(
-          group.map((g) => g.bggId),
-          true,
-        ),
-      );
-      for (const l of group) {
-        const b = items.get(l.bggId);
-        if (!b) continue;
-        stats.set(l.bggId, {
-          ratingCount: parseItem(b).ratingCount ?? 0,
-          year: parseFullItem(b).year,
+    // If BGG lists this as an expansion, flag it and — if we already have the
+    // base game it expands (matched by BGG id) — hand back our game's id so the
+    // form can tick "expansion" and pre-select the base game. Only the first
+    // base game we actually have is used; expansions rarely list more than one.
+    const isExpansion = parseItemType(block) === "boardgameexpansion";
+    let parent: { id: Id<"games">; title: string } | null = null;
+    if (isExpansion) {
+      for (const p of parseExpansionParents(block)) {
+        // Annotated to break the cross-file runQuery type circularity.
+        const found: {
+          _id: Id<"games">;
+          slug: string;
+          title: string;
+          isStub: boolean;
+        } | null = await ctx.runQuery(internal.games.gameByBggId, {
+          bggId: p.bggId,
         });
+        if (found) {
+          parent = { id: found._id, title: found.title };
+          break;
+        }
       }
     }
-
-    const expansions = links
-      .map((l) => ({
-        bggId: l.bggId,
-        name: l.name,
-        inLibrary: known.has(l.bggId),
-        ratingCount: stats.get(l.bggId)?.ratingCount ?? 0,
-        year: stats.get(l.bggId)?.year ?? null,
-        // What the nightly pass would take on its own — the picker's default.
-        suggested:
-          known.has(l.bggId) ||
-          (stats.get(l.bggId)?.ratingCount ?? 0) >= MIN_EXPANSION_RATINGS,
-      }))
-      // Most-rated first: the real expansions rise, promos sink.
-      .sort((a, b) => b.ratingCount - a.ratingCount);
 
     return {
       ...parseFullItem(block),
       bggId: id,
       bgg: { ...parseItem(block), fetchedAt: Date.now() },
-      expansions,
-      // Fingerprint of the full list, handed back so a later record() can stamp
-      // the same one and stop the nightly pass re-adding unticked entries.
-      expansionsHash: expansionsFingerprint(links.map((l) => l.bggId)),
+      isExpansion,
+      parent,
     };
   },
 });
