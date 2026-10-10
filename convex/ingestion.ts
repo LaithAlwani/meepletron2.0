@@ -5,7 +5,12 @@ import { action, internalAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { generateText } from "ai";
 import { google } from "@ai-sdk/google";
-import { getPdfPageCount, planBatches, extractPageRange } from "./lib/pdf";
+import {
+  getPdfPageCount,
+  planBatches,
+  pagesPerBatchFor,
+  extractPageRange,
+} from "./lib/pdf";
 import {
   buildExtractionPrompt,
   postProcessMarkdown,
@@ -87,7 +92,11 @@ export const startIngestion = action({
     if (!bytes) throw new Error("Rulebook file is missing");
 
     const totalPages = await getPdfPageCount(bytes);
-    const batchPlan = planBatches(totalPages);
+    // Size batches to the file: an image-heavy PDF (e.g. a 60MB manual) gets
+    // fewer pages per slice so each stays under Gemini's inline cap, instead of
+    // a fixed 5 that overflows. Light PDFs keep the normal 5.
+    const pagesPerBatch = pagesPerBatchFor(bytes.byteLength, totalPages);
+    const batchPlan = planBatches(totalPages, pagesPerBatch);
 
     const draftId = await ctx.runMutation(internal.ingestionDb.createDraft, {
       rulebookId,
