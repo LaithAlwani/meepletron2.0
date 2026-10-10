@@ -36,6 +36,7 @@ import type * as http from "../http.js";
 import type * as images from "../images.js";
 import type * as ingestion from "../ingestion.js";
 import type * as ingestionDb from "../ingestionDb.js";
+import type * as lib_aiModels from "../lib/aiModels.js";
 import type * as lib_annotations from "../lib/annotations.js";
 import type * as lib_auth from "../lib/auth.js";
 import type * as lib_bggCrypto from "../lib/bggCrypto.js";
@@ -118,6 +119,7 @@ declare const fullApi: ApiFromModules<{
   images: typeof images;
   ingestion: typeof ingestion;
   ingestionDb: typeof ingestionDb;
+  "lib/aiModels": typeof lib_aiModels;
   "lib/annotations": typeof lib_annotations;
   "lib/auth": typeof lib_auth;
   "lib/bggCrypto": typeof lib_bggCrypto;

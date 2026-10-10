@@ -3,9 +3,7 @@ import { query, mutation, internalMutation } from "./_generated/server";
 import { requireAdmin } from "./lib/auth";
 import {
   CHAT_CONFIG_DEFAULTS,
-  CHAT_MODEL_IDS,
   CONTENT_MODEL_IDS,
-  knownModel,
   knownContentModel,
 } from "./lib/chatConfig";
 
@@ -21,8 +19,6 @@ export const get = query({
     const merged = { ...DEFAULTS, ...rows[0] };
     return {
       ...merged,
-      answerModel: knownModel(merged.answerModel),
-      auxModel: knownModel(merged.auxModel),
       contentModel: knownContentModel(merged.contentModel),
       answerThinkingBudget: Math.round(merged.answerThinkingBudget),
     };
@@ -38,19 +34,16 @@ export const update = mutation({
     historyMessageLimit: v.number(),
     rerankCandidates: v.number(),
     answerTemperature: v.number(),
-    answerModel: v.string(),
-    auxModel: v.string(),
     answerThinkingBudget: v.number(),
     contentModel: v.string(),
   },
   handler: async (ctx, args) => {
     await requireAdmin(ctx);
-    const models = CHAT_MODEL_IDS as readonly string[];
     const contentModels = CONTENT_MODEL_IDS as readonly string[];
     if (
       args.v2TopK < 1 ||
       args.rerankTopN < 1 ||
-      args.historyMessageLimit < 1 ||
+      args.historyMessageLimit < 0 ||
       args.rerankCandidates < 1 ||
       args.answerTemperature < 0 ||
       args.answerTemperature > 2 ||
@@ -59,8 +52,6 @@ export const update = mutation({
       !Number.isInteger(args.answerThinkingBudget) ||
       args.answerThinkingBudget < -1 ||
       args.answerThinkingBudget > 24576 ||
-      !models.includes(args.answerModel) ||
-      !models.includes(args.auxModel) ||
       !contentModels.includes(args.contentModel)
     ) {
       throw new Error("Invalid config values");
@@ -83,8 +74,6 @@ export const internalUpdate = internalMutation({
     historyMessageLimit: v.optional(v.number()),
     rerankCandidates: v.optional(v.number()),
     answerTemperature: v.optional(v.number()),
-    answerModel: v.optional(v.string()),
-    auxModel: v.optional(v.string()),
     answerThinkingBudget: v.optional(v.number()),
     contentModel: v.optional(v.string()),
   },

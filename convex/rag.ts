@@ -7,11 +7,11 @@
 import { internal } from "./_generated/api";
 import type { ActionCtx } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
-import { google } from "@ai-sdk/google";
-import { generateText, generateObject } from "ai";
+import { generateText, generateObject, type LanguageModel } from "ai";
 import { z } from "zod";
 import { embedQuery, EMBEDDING_MODEL_ID } from "./lib/embedding";
-import { thinkingBudgetFor } from "./lib/chatConfig";
+import { resolveChatModel, chatProviderOptions } from "./lib/aiModels";
+import { DEFAULT_CHAT_MODEL } from "./lib/chatConfig";
 import { finite } from "./lib/num";
 import {
   buildRerankPrompt,
@@ -29,9 +29,12 @@ import {
  */
 export async function resolveContentModel(
   ctx: ActionCtx,
-): Promise<{ model: ReturnType<typeof google>; modelId: string }> {
+): Promise<{ model: LanguageModel; modelId: string }> {
   const config = await ctx.runQuery(internal.chat.getActiveConfig, {});
-  return { model: google(config.contentModel), modelId: config.contentModel };
+  return {
+    model: resolveChatModel(config.contentModel),
+    modelId: config.contentModel,
+  };
 }
 
 export type UsageRow = {
@@ -64,7 +67,7 @@ async function rewriteQuery(
   query: string,
   history: { role: string; content: string }[],
   usage: UsageRow[],
-  model: ReturnType<typeof google>,
+  model: LanguageModel,
   modelId: string,
 ): Promise<string> {
   try {
@@ -72,9 +75,7 @@ async function rewriteQuery(
       model,
       prompt: buildRewritePrompt(history, query),
       temperature: 0,
-      providerOptions: {
-        google: { thinkingConfig: { thinkingBudget: thinkingBudgetFor(modelId, 0) } },
-      },
+      providerOptions: chatProviderOptions(modelId, { thinkingBudget: 0 }),
     });
     const rewritten = text.trim();
     const it = finite(u.inputTokens);
@@ -101,7 +102,7 @@ async function rerankChunks(
   chunks: (RetrievedChunk & { chunkId: Id<"chunks"> })[],
   n: number,
   usage: UsageRow[],
-  model: ReturnType<typeof google>,
+  model: LanguageModel,
   modelId: string,
 ): Promise<(RetrievedChunk & { chunkId: Id<"chunks"> })[]> {
   if (chunks.length === 0) return [];
@@ -113,13 +114,11 @@ async function rerankChunks(
       schema: z.object({ indices: z.array(z.number()) }),
       prompt: buildRerankPrompt(query, chunks, n),
       temperature: 0,
-      // Reasoning on (bounded): choosing which passage actually answers the
-      // question — e.g. the "take a researcher card" action vs. a card that
-      // merely mentions "researcher card" — is exactly the judgement that a
-      // little thinking gets right where keyword overlap alone misleads.
-      providerOptions: {
-        google: { thinkingConfig: { thinkingBudget: thinkingBudgetFor(modelId, 512) } },
-      },
+      // Reasoning on (bounded, Gemini only): choosing which passage actually
+      // answers the question — e.g. the "take a researcher card" action vs. a
+      // card that merely mentions "researcher card" — is exactly the judgement
+      // that a little thinking gets right where keyword overlap alone misleads.
+      providerOptions: chatProviderOptions(modelId, { thinkingBudget: 512 }),
     });
     const rInTok = finite(rerankUsage.inputTokens);
     const rOutTok = finite(rerankUsage.outputTokens);
@@ -167,21 +166,28 @@ export async function buildAnswer(
     query,
     history,
     sourceTitles,
+    modelOverride,
   }: {
     rulebookIds: Id<"rulebooks">[];
     query: string;
     history: { role: "user" | "assistant"; content: string }[];
     sourceTitles: string[];
+    // The user's in-chat model pick (already role-validated by the caller). When
+    // set, it drives BOTH the answer and the aux steps; otherwise the admin
+    // site-config answer/aux models are used.
+    modelOverride?: string;
   },
 ): Promise<BuildAnswerResult> {
   const usage: UsageRow[] = [];
   const config = await ctx.runQuery(internal.chat.getActiveConfig, {});
 
   const answerTemperature = config.answerTemperature;
-  // Cheap auxiliary steps (rewrite + rerank) run on the configured aux model;
-  // the answer model + thinking budget are handed back to the caller.
-  const auxModel = google(config.auxModel);
-  const auxModelId = config.auxModel;
+  // The user's in-chat pick drives BOTH the answer and the aux (rewrite +
+  // rerank) steps (one switch). No global answer/aux config — fall back to the
+  // fixed default when the request didn't carry an (allowed) pick.
+  const answerModelId = modelOverride ?? DEFAULT_CHAT_MODEL;
+  const auxModelId = modelOverride ?? DEFAULT_CHAT_MODEL;
+  const auxModel = resolveChatModel(auxModelId);
   // Pools were too small (v2TopK=8, rerankTopN≈1): on a miss the answer chunk
   // sat just outside the top 8, and the model got a single passage of grounding.
   // Floor them so retrieval has room; the vector-search cost is the index scan,
@@ -299,7 +305,7 @@ export async function buildAnswer(
       usage,
       empty: true,
       answerTemperature,
-      answerModel: config.answerModel,
+      answerModel: answerModelId,
       answerThinkingBudget: config.answerThinkingBudget,
     };
   }
@@ -329,7 +335,7 @@ export async function buildAnswer(
     usage,
     empty: false,
     answerTemperature,
-    answerModel: config.answerModel,
+    answerModel: answerModelId,
     answerThinkingBudget: config.answerThinkingBudget,
   };
 }

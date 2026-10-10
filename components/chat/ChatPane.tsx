@@ -25,6 +25,11 @@ import { dayLabel } from "@/lib/format";
 import { MessageBubble } from "@/components/chat/MessageBubble";
 import { stripIconBrackets } from "@/components/chat/GroundedMarkdown";
 import { ChatInput } from "@/components/chat/ChatInput";
+import { ModelPicker } from "@/components/chat/ModelPicker";
+import {
+  chatModelsForRole,
+  DEFAULT_CHAT_MODEL,
+} from "@/convex/lib/chatConfig";
 import { ResourcesSideNav, LayersIcon } from "@/components/chat/ResourcesSideNav";
 import { GuestBanner } from "@/components/chat/GuestBanner";
 import { ThinkingIndicator } from "@/components/chat/ThinkingIndicator";
@@ -138,6 +143,41 @@ function ChatView({
   const isGuest = me?.isAnonymous === true;
   const isAdmin = me?.role === "admin";
   const budget = useQuery(api.users.myBudget);
+
+  // Answer-model picker: the models this viewer may choose, their explicit pick
+  // (persisted per-browser), and the effective model to send + show. Falls back
+  // to the site default (role-adjusted), then a safe non-admin default.
+  const modelOptions = useMemo(() => chatModelsForRole(isAdmin), [isAdmin]);
+  const modelDefault = useQuery(api.chat.chatModelDefault, {});
+  const [pickedModel, setPickedModel] = useState<string | null>(null);
+  useEffect(() => {
+    // Deferred a frame (localStorage is client-only; keeps SSR + first render
+    // identical and avoids a setState-in-effect-body hydration cascade).
+    const id = requestAnimationFrame(() => {
+      try {
+        setPickedModel(localStorage.getItem("meepletron-chat-model"));
+      } catch {
+        /* storage unavailable */
+      }
+    });
+    return () => cancelAnimationFrame(id);
+  }, []);
+  // Ignore a stored pick the viewer may no longer use (e.g. an admin-only model
+  // from a previous session), so the server never has to reject it.
+  const validPick =
+    pickedModel && modelOptions.some((m) => m.id === pickedModel)
+      ? pickedModel
+      : null;
+  const activeModel =
+    validPick ?? modelDefault?.defaultModel ?? DEFAULT_CHAT_MODEL;
+  const chooseModel = useCallback((id: string) => {
+    setPickedModel(id);
+    try {
+      localStorage.setItem("meepletron-chat-model", id);
+    } catch {
+      /* storage unavailable */
+    }
+  }, []);
 
   const [chatId, setChatId] = useState<Id<"chats"> | null>(null);
   const [streaming, setStreaming] = useState<string | null>(null);
@@ -281,7 +321,7 @@ function ChatView({
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ chatId }),
+        body: JSON.stringify({ chatId, model: activeModel }),
       });
       if (!res.ok || !res.body) {
         setError(
@@ -510,7 +550,7 @@ function ChatView({
                           1e6
                       ).toFixed(4)}
                       {m.answerModel &&
-                        ` · ${m.answerModel.replace(/^gemini-/, "")}`}
+                        ` · ${m.answerModel.replace(/^(gemini|claude)-/, "")}`}
                     </p>
                   )}
               </Fragment>
@@ -559,6 +599,14 @@ function ChatView({
                 )}
               </p>
             )}
+            <div className="mb-1.5 flex items-center">
+              <ModelPicker
+                models={modelOptions}
+                value={activeModel}
+                onChange={chooseModel}
+                disabled={busy}
+              />
+            </div>
             <ChatInput
               onSend={handleSend}
               disabled={!inputReady}

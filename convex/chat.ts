@@ -14,8 +14,8 @@ import { thumbUrl } from "./lib/gameCover";
 import { recordMessages, recordUsage } from "./lib/stats";
 import {
   CHAT_CONFIG_DEFAULTS,
-  knownModel,
   knownContentModel,
+  DEFAULT_CHAT_MODEL,
 } from "./lib/chatConfig";
 import { rowCost } from "./lib/pricing";
 
@@ -402,8 +402,10 @@ export const getStreamContext = internalQuery({
     const hasIngested = allowed.size > 0;
 
     const config = await ctx.db.query("siteConfig").order("desc").take(1);
-    // Floor at 1 so the current question is always fetched — a stored limit of
-    // 0 would otherwise return no messages and leave the query empty.
+    // A limit of 0 is valid — it means "no prior conversation." Floor the FETCH
+    // at 1 regardless so the current question itself is always retrieved (take(0)
+    // would return nothing and leave the query empty); with 0 that single row is
+    // just the current question, so the model gets no earlier turns.
     const historyLimit = Math.max(config[0]?.historyMessageLimit ?? 6, 1);
 
     const recent = await ctx.db
@@ -431,13 +433,31 @@ export const getStreamContext = internalQuery({
       if (g) sourceTitles.push(g.title);
     }
 
+    // Role gates which answer model the caller (http.ts) may honor from the
+    // request — a non-admin can't use an admin-only model via a crafted body.
+    const user = await ctx.db.get("users", userId);
+    const isAdmin = user?.role === "admin";
+
     return {
       selectedRulebookIds,
       hasIngested,
       query,
       history,
       sourceTitles,
+      isAdmin,
     };
+  },
+});
+
+/**
+ * The model the in-chat picker defaults to when the user hasn't chosen one.
+ * There's no global answer/aux config — it's a fixed default (Haiku for now),
+ * and non-admin-safe. Public — any signed-in user seeds their picker from it.
+ */
+export const chatModelDefault = query({
+  args: {},
+  handler: async (): Promise<{ defaultModel: string }> => {
+    return { defaultModel: DEFAULT_CHAT_MODEL };
   },
 });
 
@@ -522,8 +542,6 @@ export const getActiveConfig = internalQuery({
     const merged = { ...CHAT_CONFIG_DEFAULTS, ...rows[0] };
     return {
       ...merged,
-      answerModel: knownModel(merged.answerModel),
-      auxModel: knownModel(merged.auxModel),
       contentModel: knownContentModel(merged.contentModel),
       // Token count — coerce a stray fractional (e.g. a mis-typed 0.5) to int.
       answerThinkingBudget: Math.round(merged.answerThinkingBudget),

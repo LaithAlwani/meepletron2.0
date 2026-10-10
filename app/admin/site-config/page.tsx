@@ -4,9 +4,7 @@ import { useEffect, useState } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import {
-  CHAT_MODEL_IDS,
   CONTENT_MODEL_IDS,
-  type ChatModelId,
   type ContentModelId,
 } from "@/convex/lib/chatConfig";
 
@@ -38,7 +36,7 @@ const knobs = [
   {
     key: "historyMessageLimit" as const,
     label: "History message limit",
-    help: "How many recent messages are included as chat context (minimum 1 — the current question).",
+    help: "How many recent messages are included as chat context. 0 = no prior conversation (each question is answered fresh, from just the current question).",
     step: 1,
   },
   {
@@ -50,38 +48,18 @@ const knobs = [
   {
     key: "answerThinkingBudget" as const,
     label: "Answer thinking budget",
-    help: "Gemini reasoning tokens for the answer (billed as output). 0 = off (cheapest, recommended — answers are grounded on retrieved passages), -1 = dynamic/auto, or a token cap up to 24576. Note: Flash-Lite can't be 0 — it's auto-raised to 512.",
+    help: "Gemini reasoning tokens for the answer (billed as output). 0 = off (cheapest, recommended — answers are grounded on retrieved passages), -1 = dynamic/auto, or a token cap up to 24576. Note: Flash-Lite can't be 0 — it's auto-raised to 512. Only applies to Gemini answer models (ignored for Claude/OpenAI).",
     step: 1,
   },
 ];
-
-const MODEL_LABELS: Record<ChatModelId, string> = {
-  "gemini-3.5-flash-lite": "Flash-Lite 3.5 — default ($0.30/$2.50 per 1M)",
-  "gemini-3.6-flash": "Flash 3.6 — premium ($0.75/$3.75 promo, std $1.50/$7.50)",
-};
 
 const CONTENT_MODEL_LABELS: Record<ContentModelId, string> = {
   "gemini-2.5-flash": "Flash 2.5 — default ($0.30/$2.50 per 1M)",
   "gemini-3.6-flash": "Flash 3.6 — current-gen ($0.75/$3.75 promo, std $1.50/$7.50)",
 };
 
-const modelKnobs = [
-  {
-    key: "answerModel" as const,
-    label: "Answer model",
-    help: "Model that writes the final answer. The quality-sensitive one — test Flash-Lite before committing.",
-  },
-  {
-    key: "auxModel" as const,
-    label: "Auxiliary model (rewrite + rerank)",
-    help: "Model for the cheap mechanical steps. Flash-Lite here is low-risk.",
-  },
-];
-
 type NumberKey = (typeof knobs)[number]["key"];
 type Config = Record<NumberKey, number> & {
-  answerModel: ChatModelId;
-  auxModel: ChatModelId;
   contentModel: ContentModelId;
 };
 
@@ -105,8 +83,6 @@ export default function SiteConfigPage() {
         historyMessageLimit: config.historyMessageLimit,
         answerTemperature: config.answerTemperature,
         answerThinkingBudget: config.answerThinkingBudget,
-        answerModel: config.answerModel,
-        auxModel: config.auxModel,
         contentModel: config.contentModel,
       }),
     );
@@ -134,26 +110,12 @@ export default function SiteConfigPage() {
         messages immediately.
       </p>
 
-      {modelKnobs.map((k) => (
-        <label key={k.key} className="block">
-          <span className="mb-1 block text-sm font-medium">{k.label}</span>
-          <select
-            value={form[k.key]}
-            onChange={(e) => {
-              setSaved(false);
-              setForm({ ...form, [k.key]: e.target.value as ChatModelId });
-            }}
-            className="w-full rounded-lg border border-border bg-surface px-3 py-2 outline-none focus:ring-2 focus:ring-ring"
-          >
-            {CHAT_MODEL_IDS.map((id) => (
-              <option key={id} value={id}>
-                {MODEL_LABELS[id]}
-              </option>
-            ))}
-          </select>
-          <span className="mt-1 block text-xs text-muted">{k.help}</span>
-        </label>
-      ))}
+      <p className="rounded-lg border border-border bg-surface-2 px-3 py-2 text-xs text-muted">
+        The chat answer model is chosen per-user from the picker in the chat (it
+        drives both the answer and the rewrite/rerank steps). There&apos;s no
+        global answer/aux setting here anymore — the fields below tune retrieval
+        + the content/ingestion model only.
+      </p>
 
       <label className="block">
         <span className="mb-1 block text-sm font-medium">

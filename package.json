@@ -2,6 +2,10 @@
   "name": "meepletron2.0",
   "version": "0.1.0",
   "private": true,
+  "overrides": {
+    "@ai-sdk/provider": "4.0.26",
+    "@ai-sdk/provider-utils": "5.0.58"
+  },
   "scripts": {
     "dev": "concurrently -n convex,next -c blue,green \"convex dev\" \"next dev\"",
     "dev:lan": "concurrently -n convex,next -c blue,green \"convex dev\" \"next dev -H 0.0.0.0\"",
@@ -15,7 +19,9 @@
     "test:bgg-thing": "node --experimental-strip-types --no-warnings scripts/bggThing.test.mts"
   },
   "dependencies": {
+    "@ai-sdk/anthropic": "^4.0.78",
     "@ai-sdk/google": "^4.0.21",
+    "@ai-sdk/openai": "^4.0.91",
     "@auth/core": "^0.41.3",
     "@cf-wasm/photon": "^0.3.7",
     "@convex-dev/auth": "^0.0.94",

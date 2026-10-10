@@ -4,10 +4,10 @@ import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { streamText } from "ai";
-import { google } from "@ai-sdk/google";
 import { auth } from "./auth";
 import { finite } from "./lib/num";
-import { thinkingBudgetFor } from "./lib/chatConfig";
+import { resolveChatModel, chatProviderOptions } from "./lib/aiModels";
+import { isChatModelAllowed } from "./lib/chatConfig";
 import { buildAnswer } from "./rag";
 import { createIconTokenStripper } from "./lib/prompts";
 
@@ -75,9 +75,19 @@ const chat = httpAction(async (ctx, request) => {
     return new Response("Missing chatId", { status: 400, headers: corsHeaders(origin) });
   }
   const chatId = rawChatId as Id<"chats">;
+  const rawModel = (body as { model?: unknown })?.model;
+  const requestedModel = typeof rawModel === "string" ? rawModel : undefined;
 
-  const { selectedRulebookIds, hasIngested, query, history, sourceTitles } =
+  const { selectedRulebookIds, hasIngested, query, history, sourceTitles, isAdmin } =
     await ctx.runQuery(internal.chat.getStreamContext, { chatId, userId });
+
+  // Honor the user's in-chat model pick only if it's allowed for their role;
+  // otherwise fall through to the admin-configured default (modelOverride
+  // undefined). This is the server-side gate — never trust the client list.
+  const modelOverride =
+    requestedModel && isChatModelAllowed(requestedModel, isAdmin)
+      ? requestedModel
+      : undefined;
 
   if (!query) {
     return new Response("No question found", {
@@ -133,6 +143,7 @@ const chat = httpAction(async (ctx, request) => {
     query,
     history: messages,
     sourceTitles,
+    modelOverride,
   });
 
   // No relevant rulebook content → tell the user, and NEVER let the model
@@ -154,17 +165,13 @@ const chat = httpAction(async (ctx, request) => {
   // Stream the grounded answer; persist on completion. Model + thinking budget
   // come from the admin site-config (default: flash with thinking off).
   const result = streamText({
-    model: google(answerModel),
+    model: resolveChatModel(answerModel),
     system,
     messages,
     temperature: answerTemperature,
-    providerOptions: {
-      google: {
-        thinkingConfig: {
-          thinkingBudget: thinkingBudgetFor(answerModel, answerThinkingBudget),
-        },
-      },
-    },
+    providerOptions: chatProviderOptions(answerModel, {
+      thinkingBudget: answerThinkingBudget,
+    }),
   });
 
   const encoder = new TextEncoder();
