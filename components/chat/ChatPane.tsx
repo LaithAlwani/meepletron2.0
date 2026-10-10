@@ -26,6 +26,8 @@ import { MessageBubble } from "@/components/chat/MessageBubble";
 import { stripIconBrackets } from "@/components/chat/GroundedMarkdown";
 import { ChatInput } from "@/components/chat/ChatInput";
 import { ModelPicker } from "@/components/chat/ModelPicker";
+import { RequestRulebookButton } from "@/components/boardgames/RequestRulebookButton";
+import { buttonClasses } from "@/components/ui/Button";
 import {
   chatModelsForRole,
   isChatModelAllowed,
@@ -445,6 +447,9 @@ function ChatView({
 
   const groups = useMemo(() => sources ?? [], [sources]);
   const resourceCount = groups.reduce((n, g) => n + g.rulebooks.length, 0);
+  // This game family has no ingested rulebook (nothing to chat with). Only once
+  // the sources query has resolved — `sources` is undefined while loading.
+  const noManual = sources !== undefined && resourceCount === 0;
   const coverUrl = game?.imageUrl ?? game?.thumbnailUrl ?? null;
   // Show the skeleton while auth or the chat itself is still resolving — not just
   // once the first message page is loading. Otherwise, switching chats (which
@@ -584,24 +589,30 @@ function ChatView({
               </div>
               <div>
                 <p className="font-display text-lg font-bold">
-                  Ask about {game?.title ?? "this game"}
+                  {noManual
+                    ? "No rulebook yet"
+                    : `Ask about ${game?.title ?? "this game"}`}
                 </p>
                 <p className="text-sm text-muted">
-                  Tap a question to get started, or type your own.
+                  {noManual
+                    ? `We don't have ${game?.title ?? "this game"}'s rulebook in Meepletron yet, so there's nothing to chat with. Request it below and we'll add it.`
+                    : "Tap a question to get started, or type your own."}
                 </p>
               </div>
-              <div className="flex flex-wrap justify-center gap-2">
-                {SUGGESTED_QUESTIONS.map((q) => (
-                  <button
-                    key={q}
-                    onClick={() => askQuestion(q)}
-                    disabled={busy}
-                    className="rounded-full border border-border bg-surface px-3 py-1.5 text-sm transition-colors hover:bg-surface-2 disabled:opacity-50"
-                  >
-                    {q}
-                  </button>
-                ))}
-              </div>
+              {!noManual && (
+                <div className="flex flex-wrap justify-center gap-2">
+                  {SUGGESTED_QUESTIONS.map((q) => (
+                    <button
+                      key={q}
+                      onClick={() => askQuestion(q)}
+                      disabled={busy}
+                      className="rounded-full border border-border bg-surface px-3 py-1.5 text-sm transition-colors hover:bg-surface-2 disabled:opacity-50"
+                    >
+                      {q}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           )}
           {messages.map((m) => {
@@ -667,41 +678,58 @@ function ChatView({
         )}
 
           <div className="shrink-0 bg-background pb-4 pt-2">
-            <div className="mb-1.5 flex items-center justify-between gap-2">
-              <ModelPicker
-                models={modelOptions}
-                value={activeModel}
-                onChange={chooseModel}
-                isEnabled={canUse}
-                disabled={busy}
-              />
-              {budget && (
-                <p
-                  className={`shrink-0 pr-1 text-right text-[11px] font-medium ${
-                    !budget.unlimited && budget.remaining <= 5000
-                      ? "text-red-500"
-                      : "text-subtle"
-                  }`}
-                >
-                  {budget.unlimited
-                    ? "No limit"
-                    : `${budget.remaining.toLocaleString()} tokens left today`}
-                  {budget.isGuest && (
-                    <>
-                      {" · "}
-                      <Link href="/auth" className="text-accent hover:underline">
-                        Sign in for more
-                      </Link>
-                    </>
-                  )}
+            {noManual ? (
+              // Nothing to chat with — gate the input behind the normal rulebook
+              // request flow (RequestRulebookButton = deduped per user, surfaces
+              // in the admin Requests tab, emails the user when it's ready).
+              <div className="flex flex-col items-center gap-2 rounded-xl border border-border bg-surface px-4 py-3 text-center">
+                <p className="text-sm text-muted">
+                  This game doesn&apos;t have a rulebook yet.
                 </p>
-              )}
-            </div>
-            <ChatInput
-              onSend={handleSend}
-              disabled={!inputReady}
-              onFocus={ensureGuest}
-            />
+                <RequestRulebookButton
+                  gameId={gameId}
+                  className={buttonClasses("primary", "md")}
+                />
+              </div>
+            ) : (
+              <>
+                <div className="mb-1.5 flex items-center justify-between gap-2">
+                  <ModelPicker
+                    models={modelOptions}
+                    value={activeModel}
+                    onChange={chooseModel}
+                    isEnabled={canUse}
+                    disabled={busy}
+                  />
+                  {budget && (
+                    <p
+                      className={`shrink-0 pr-1 text-right text-[11px] font-medium ${
+                        !budget.unlimited && budget.remaining <= 5000
+                          ? "text-red-500"
+                          : "text-subtle"
+                      }`}
+                    >
+                      {budget.unlimited
+                        ? "No limit"
+                        : `${budget.remaining.toLocaleString()} tokens left today`}
+                      {budget.isGuest && (
+                        <>
+                          {" · "}
+                          <Link href="/auth" className="text-accent hover:underline">
+                            Sign in for more
+                          </Link>
+                        </>
+                      )}
+                    </p>
+                  )}
+                </div>
+                <ChatInput
+                  onSend={handleSend}
+                  disabled={!inputReady}
+                  onFocus={ensureGuest}
+                />
+              </>
+            )}
           </div>
         </div>
       </div>
