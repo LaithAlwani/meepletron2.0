@@ -20,7 +20,7 @@ import {
 import { rowCost } from "./lib/pricing";
 
 /** Daily token budgets: guests get a smaller allowance to nudge sign-up. */
-export const DAILY_TOKEN_LIMIT = 100_000;
+export const DAILY_TOKEN_LIMIT = 50_000;
 export const GUEST_TOKEN_LIMIT = 20_000;
 
 /** The daily token limit for a user, based on whether they're an anonymous guest. */
@@ -433,10 +433,12 @@ export const getStreamContext = internalQuery({
       if (g) sourceTitles.push(g.title);
     }
 
-    // Role gates which answer model the caller (http.ts) may honor from the
-    // request — a non-admin can't use an admin-only model via a crafted body.
+    // Gates which answer model the caller (http.ts) may honor from the request:
+    // a non-admin can't use an admin-only model, and a guest (not signed in) can
+    // only use the default model — via a crafted body or otherwise.
     const user = await ctx.db.get("users", userId);
     const isAdmin = user?.role === "admin";
+    const isGuest = user?.isAnonymous === true;
 
     return {
       selectedRulebookIds,
@@ -445,6 +447,7 @@ export const getStreamContext = internalQuery({
       history,
       sourceTitles,
       isAdmin,
+      isGuest,
     };
   },
 });

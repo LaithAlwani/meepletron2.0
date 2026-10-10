@@ -78,14 +78,21 @@ const chat = httpAction(async (ctx, request) => {
   const rawModel = (body as { model?: unknown })?.model;
   const requestedModel = typeof rawModel === "string" ? rawModel : undefined;
 
-  const { selectedRulebookIds, hasIngested, query, history, sourceTitles, isAdmin } =
-    await ctx.runQuery(internal.chat.getStreamContext, { chatId, userId });
+  const {
+    selectedRulebookIds,
+    hasIngested,
+    query,
+    history,
+    sourceTitles,
+    isAdmin,
+    isGuest,
+  } = await ctx.runQuery(internal.chat.getStreamContext, { chatId, userId });
 
-  // Honor the user's in-chat model pick only if it's allowed for their role;
-  // otherwise fall through to the admin-configured default (modelOverride
-  // undefined). This is the server-side gate — never trust the client list.
+  // Honor the user's in-chat model pick only if it's allowed for them (guests →
+  // default model only; admin-only models → admins); otherwise fall through to
+  // the default. This is the server-side gate — never trust the client list.
   const modelOverride =
-    requestedModel && isChatModelAllowed(requestedModel, isAdmin)
+    requestedModel && isChatModelAllowed(requestedModel, { isAdmin, isGuest })
       ? requestedModel
       : undefined;
 

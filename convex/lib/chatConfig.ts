@@ -35,15 +35,15 @@ export const CHAT_MODELS = [
   {
     id: "gemini-3.6-flash",
     provider: "google",
-    label: "Flash 3.6 — Gemini premium ($0.75/$3.75 promo, std $1.50/$7.50)",
-    input: 0.75,
+    label: "Flash 3.6 — Gemini",
+    input: 0.75, // std $1.50/$7.50; currently a 50% launch promo
     output: 3.75,
     adminOnly: true, // pricey — hidden from the in-chat picker for non-admins
   },
   {
     id: "gemini-3.5-flash-lite",
     provider: "google",
-    label: "Flash-Lite 3.5 — Gemini ($0.30/$2.50 per 1M)",
+    label: "Flash-Lite 3.5 — Gemini",
     input: 0.3,
     output: 2.5,
   },
@@ -51,24 +51,24 @@ export const CHAT_MODELS = [
     // Pricing is the owner-provided ~$0.10 in / $0.75 out (confirm exact rates).
     id: OPENAI_LUNA_ID,
     provider: "openai",
-    label: "ChatGPT 6 Luna — OpenAI (~$0.10/$0.75 per 1M)",
+    label: "ChatGPT 6 Luna — OpenAI",
     input: 0.1,
     output: 0.75,
   },
   {
     id: "gpt-4o-mini",
     provider: "openai",
-    label: "GPT-4o mini — OpenAI ($0.15/$0.60 per 1M)",
+    label: "GPT-4o mini — OpenAI",
     input: 0.15,
     output: 0.6,
   },
   {
-    // Price is the base tier ($0.10/$0.50 up to 100K-token prompts; Anthropic
-    // charges 5× beyond 100K — our rulebook prompts stay well under, and rowCost
-    // is flat, so the base tier is what we bill).
+    // Base tier ($0.10/$0.50 up to 100K-token prompts; Anthropic charges 5×
+    // beyond 100K — our rulebook prompts stay well under, and rowCost is flat,
+    // so the base tier is what we bill).
     id: "claude-haiku-5-5",
     provider: "anthropic",
-    label: "Claude Haiku 5.5 — Anthropic ($0.10/$0.50 per 1M, ≤100K)",
+    label: "Claude Haiku 5.5 — Anthropic",
     input: 0.1,
     output: 0.5,
   },
@@ -109,11 +109,21 @@ export function chatModelsForRole(isAdmin: boolean): readonly ChatModelEntry[] {
     : CHAT_MODEL_ENTRIES.filter((m) => !m.adminOnly);
 }
 
-/** Whether a viewer of this role may use a given model id — the server-side
- *  gate so a non-admin can't pick an admin-only model via a crafted request. */
-export function isChatModelAllowed(id: string, isAdmin: boolean): boolean {
+/**
+ * Whether a viewer may use a given model id — the gate shared by the in-chat
+ * picker (to enable/disable options) and the server (to reject a crafted
+ * request). Admin-only models need an admin; guests (not signed in) can only use
+ * the default model — every other model requires an account.
+ */
+export function isChatModelAllowed(
+  id: string,
+  { isAdmin, isGuest }: { isAdmin: boolean; isGuest: boolean },
+): boolean {
   const entry = CHAT_MODEL_ENTRIES.find((m) => m.id === id);
-  return !!entry && (isAdmin || !entry.adminOnly);
+  if (!entry) return false;
+  if (entry.adminOnly && !isAdmin) return false;
+  if (isGuest && id !== DEFAULT_CHAT_MODEL) return false;
+  return true;
 }
 
 // Models for the cold, quality-critical path: rulebook PDF ingestion and the

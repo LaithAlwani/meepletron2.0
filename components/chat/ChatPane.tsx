@@ -28,6 +28,7 @@ import { ChatInput } from "@/components/chat/ChatInput";
 import { ModelPicker } from "@/components/chat/ModelPicker";
 import {
   chatModelsForRole,
+  isChatModelAllowed,
   DEFAULT_CHAT_MODEL,
 } from "@/convex/lib/chatConfig";
 import { ResourcesSideNav, LayersIcon } from "@/components/chat/ResourcesSideNav";
@@ -172,12 +173,16 @@ function ChatView({
     });
     return () => cancelAnimationFrame(id);
   }, []);
-  // Ignore a stored pick the viewer may no longer use (e.g. an admin-only model
-  // from a previous session), so the server never has to reject it.
-  const validPick =
-    pickedModel && modelOptions.some((m) => m.id === pickedModel)
-      ? pickedModel
-      : null;
+  // Which models this viewer may actually pick (guests → default only; admin-only
+  // → admins). Drives both the picker's enabled state and the fallback below.
+  const canUse = useCallback(
+    (id: string) => isChatModelAllowed(id, { isAdmin, isGuest }),
+    [isAdmin, isGuest],
+  );
+  // Ignore a stored pick the viewer may no longer use (an admin-only model, or
+  // any non-default model once signed out), so the server never has to reject it
+  // and the picker never shows a locked model as selected.
+  const validPick = pickedModel && canUse(pickedModel) ? pickedModel : null;
   const activeModel =
     validPick ?? modelDefault?.defaultModel ?? DEFAULT_CHAT_MODEL;
   const chooseModel = useCallback((id: string) => {
@@ -662,34 +667,35 @@ function ChatView({
         )}
 
           <div className="shrink-0 bg-background pb-4 pt-2">
-            {budget && (
-              <p
-                className={`mb-1 pr-1 text-right text-[11px] font-medium ${
-                  !budget.unlimited && budget.remaining <= 5000
-                    ? "text-red-500"
-                    : "text-subtle"
-                }`}
-              >
-                {budget.unlimited
-                  ? "No limit"
-                  : `${budget.remaining.toLocaleString()} tokens left today`}
-                {budget.isGuest && (
-                  <>
-                    {" · "}
-                    <Link href="/auth" className="text-accent hover:underline">
-                      Sign in for more
-                    </Link>
-                  </>
-                )}
-              </p>
-            )}
-            <div className="mb-1.5 flex items-center">
+            <div className="mb-1.5 flex items-center justify-between gap-2">
               <ModelPicker
                 models={modelOptions}
                 value={activeModel}
                 onChange={chooseModel}
+                isEnabled={canUse}
                 disabled={busy}
               />
+              {budget && (
+                <p
+                  className={`shrink-0 pr-1 text-right text-[11px] font-medium ${
+                    !budget.unlimited && budget.remaining <= 5000
+                      ? "text-red-500"
+                      : "text-subtle"
+                  }`}
+                >
+                  {budget.unlimited
+                    ? "No limit"
+                    : `${budget.remaining.toLocaleString()} tokens left today`}
+                  {budget.isGuest && (
+                    <>
+                      {" · "}
+                      <Link href="/auth" className="text-accent hover:underline">
+                        Sign in for more
+                      </Link>
+                    </>
+                  )}
+                </p>
+              )}
             </div>
             <ChatInput
               onSend={handleSend}

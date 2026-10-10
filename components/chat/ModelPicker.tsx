@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Check, ChevronDown, Sparkles } from "lucide-react";
+import Link from "next/link";
+import { Check, ChevronDown, Lock, Sparkles } from "lucide-react";
 import { cn } from "@/lib/cn";
 
 /** Short name for the button (drops the " — provider ($…)" tail from the label). */
@@ -21,11 +22,14 @@ export function ModelPicker({
   value,
   onChange,
   disabled,
+  isEnabled = () => true,
 }: {
   models: readonly { id: string; label: string; provider: string }[];
   value: string;
   onChange: (id: string) => void;
   disabled?: boolean;
+  /** Which models the viewer may pick; the rest show "Sign in to use". */
+  isEnabled?: (id: string) => boolean;
 }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -69,6 +73,29 @@ export function ModelPicker({
           <ul className="max-h-72 overflow-y-auto py-1" data-lenis-prevent>
             {models.map((m) => {
               const active = m.id === value;
+              // Locked for this viewer (e.g. a guest) → show it, but as a
+              // sign-in prompt instead of a selectable option.
+              if (!isEnabled(m.id)) {
+                return (
+                  <li key={m.id} role="option" aria-selected={false} aria-disabled>
+                    <Link
+                      href="/auth"
+                      onClick={() => setOpen(false)}
+                      className="flex w-full items-start gap-2 px-3 py-2 text-left opacity-70 transition-colors hover:bg-surface-2 hover:opacity-100"
+                    >
+                      <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0 text-subtle" />
+                      <span className="min-w-0">
+                        <span className="block truncate text-sm font-medium text-foreground">
+                          {shortLabel(m.label)}
+                        </span>
+                        <span className="block truncate text-[11px] font-semibold text-accent">
+                          Sign in to use
+                        </span>
+                      </span>
+                    </Link>
+                  </li>
+                );
+              }
               return (
                 <li key={m.id} role="option" aria-selected={active}>
                   <button
