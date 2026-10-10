@@ -23,7 +23,7 @@ function LibraryInner() {
   // results row; "View all" carries it into the full grid.
   const q = useSearchParams().get("q") ?? undefined;
   const { term, searching, filters, setFilters, sort, setSort, clear, args, activeCount } =
-    useLibraryFilters(undefined, undefined, q);
+    useLibraryFilters(undefined, undefined, q, true);
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   // Restore page scroll when returning from a game's detail page.
@@ -51,7 +51,7 @@ function LibraryInner() {
 
   return (
     <div
-      className="mx-auto max-w-5xl px-4 pb-8 pt-3 nav:pt-8"
+      className="mx-auto max-w-site px-4 pb-8 pt-3 nav:pt-8"
       onClickCapture={(e) => {
         // Remember scroll before navigating to any card's detail page.
         if ((e.target as HTMLElement).closest("a")) save(results.length);

@@ -447,6 +447,58 @@ export const backfillCovers = internalAction({
 });
 
 /**
+ * Public: fetch a game's display info + stats from BGG by id, for the "request
+ * this game" preview page (a game we don't have locally yet). Read-only — saves
+ * nothing. Returns null on a bad id / BGG hiccup so the page can show a graceful
+ * fallback instead of erroring. No admin gate (unlike `fetchGameInfo`); it only
+ * reads public BGG data and never writes.
+ */
+export const preview = action({
+  args: { bggId: v.string() },
+  handler: async (
+    ctx,
+    { bggId },
+  ): Promise<
+    | (ReturnType<typeof parseFullItem> & {
+        bggId: string;
+        isExpansion: boolean;
+        rating: number | null;
+        ratingCount: number | null;
+        weight: number | null;
+      })
+    | null
+  > => {
+    const id = bggId.trim();
+    if (!/^\d+$/.test(id)) return null;
+    const token = process.env.BGG_API_TOKEN;
+    if (!token) return null;
+    const res = await fetch(
+      `https://boardgamegeek.com/xmlapi2/thing?id=${id}&stats=1`,
+      {
+        headers: {
+          "User-Agent": BGG_USER_AGENT,
+          Authorization: `Bearer ${token}`,
+        },
+      },
+    );
+    if (!res.ok) return null;
+    const xml = await res.text();
+    const itemMatch = xml.match(/<item [\s\S]*?<\/item>/);
+    if (!itemMatch) return null;
+    const block = itemMatch[0];
+    const stats = parseItem(block);
+    return {
+      ...parseFullItem(block),
+      bggId: id,
+      isExpansion: parseItemType(block) === "boardgameexpansion",
+      rating: stats.rating ?? null,
+      ratingCount: stats.ratingCount ?? null,
+      weight: stats.weight ?? null,
+    };
+  },
+});
+
+/**
  * Admin: fetch a game's metadata + stats from BGG by id, to prefill the game
  * form. Returns the parsed fields (does not save) plus the stats object.
  */

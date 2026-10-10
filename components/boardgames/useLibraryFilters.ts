@@ -42,11 +42,13 @@ export function toLibraryArgs(term: string, f: LibraryFilterState) {
 }
 
 export function countActiveFilters(f: LibraryFilterState): number {
+  // chatOnly is deliberately excluded: it has its own always-visible toggle
+  // (ChatReadyToggle + the drawer chip) and is on by default when browsing, so
+  // counting it would wrongly flip the page into "Results"/active-filters mode.
   return (
     (f.players ? 1 : 0) +
     (f.time ? 1 : 0) +
     (f.hasExpansions ? 1 : 0) +
-    (f.chatOnly ? 1 : 0) +
     f.categories.length +
     f.mechanics.length
   );
@@ -69,10 +71,17 @@ export function useLibraryFilters(
   // outlives the navigation that changed it, so the previous search's results
   // stay on screen.
   urlTerm?: string,
+  // Whether chat-ready starts on. The public browse (/boardgames, /all) passes
+  // true so it surfaces only games Meepletron can chat about; the personal
+  // collection lists leave it false so they show everything you own.
+  defaultChatOnly: boolean = false,
 ) {
   const KEY = storageKey;
   const term = urlTerm?.trim() ?? "";
-  const [filters, setFilters] = useState<LibraryFilterState>(EMPTY_FILTERS);
+  const [filters, setFilters] = useState<LibraryFilterState>(() => ({
+    ...EMPTY_FILTERS,
+    chatOnly: defaultChatOnly,
+  }));
   const [sort, setSort] = useState<GameSortKey>(defaultSort);
   const [hydrated, setHydrated] = useState(false);
 
@@ -88,7 +97,8 @@ export function useLibraryFilters(
             filters?: Partial<LibraryFilterState>;
             sort?: string;
           };
-          if (s.filters) setFilters({ ...EMPTY_FILTERS, ...s.filters });
+          if (s.filters)
+            setFilters({ ...EMPTY_FILTERS, chatOnly: defaultChatOnly, ...s.filters });
           if (s.sort && isGameSort(s.sort)) setSort(s.sort);
         }
       } catch {
@@ -97,7 +107,7 @@ export function useLibraryFilters(
       setHydrated(true);
     });
     return () => cancelAnimationFrame(id);
-  }, [KEY]);
+  }, [KEY, defaultChatOnly]);
 
   // Persist filters + sort after hydration (the term stays out of storage — it
   // lives in the URL).
@@ -121,7 +131,9 @@ export function useLibraryFilters(
     setFilters,
     sort,
     setSort,
-    clear: () => setFilters(EMPTY_FILTERS),
+    // "Clear all" returns to the baseline — which keeps chat-ready on when
+    // browsing (its own toggle flips it off), not reveal non-chat-ready games.
+    clear: () => setFilters({ ...EMPTY_FILTERS, chatOnly: defaultChatOnly }),
     args,
     activeCount,
     hydrated,

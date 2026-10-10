@@ -4,26 +4,27 @@
  * the runtime reader (`chat.getActiveConfig`) so the two can never drift. Plain
  * data/logic — no server imports — so it's safe to import from anywhere.
  */
-export type ChatModelId = "gemini-3.5-flash-lite" | "gemini-3.5-flash";
+export type ChatModelId = "gemini-3.5-flash-lite" | "gemini-3.6-flash";
 
 // Models for the cold, quality-critical path: rulebook PDF ingestion and the
 // offline FAQ/glossary/reminder generators. These are low-volume (per manual /
 // admin-triggered), so the full Flash models are the right pick — Lite's cost
 // edge is irrelevant here and its quality is worse. 2.5-flash still works;
-// 3.5-flash is the current-gen successor.
-export type ContentModelId = "gemini-2.5-flash" | "gemini-3.5-flash";
+// 3.6-flash is the current-gen successor (3.5-flash was deprecated).
+export type ContentModelId = "gemini-2.5-flash" | "gemini-3.6-flash";
 export const CONTENT_MODEL_IDS: ContentModelId[] = [
   "gemini-2.5-flash",
-  "gemini-3.5-flash",
+  "gemini-3.6-flash",
 ];
 
-// The models offered in the admin picker — the current (3.5) generation only.
-// 3.5-flash-lite is the cheaper default ($0.30/$2.50 per 1M, same as the old
-// 2.5-flash); 3.5-flash is the premium, several-times-pricier option. Note
-// flash-lite can't fully disable thinking — its budget floors at 512 tokens.
+// The models offered in the admin picker. 3.5-flash-lite is the cheaper default
+// ($0.30/$2.50 per 1M, same as the old 2.5-flash); 3.6-flash is the premium,
+// several-times-pricier option. Note flash-lite can't fully disable thinking —
+// its budget floors at 512 tokens. (There is no 3.6-flash-lite, so the Lite
+// tier stays on 3.5.)
 export const CHAT_MODEL_IDS: ChatModelId[] = [
   "gemini-3.5-flash-lite",
-  "gemini-3.5-flash",
+  "gemini-3.6-flash",
 ];
 
 export const CHAT_CONFIG_DEFAULTS = {

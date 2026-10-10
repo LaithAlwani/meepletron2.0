@@ -40,7 +40,7 @@ export default function ContactForm() {
 
   return (
     <section id="contact" className="px-4 py-20">
-      <div className="mx-auto max-w-5xl">
+      <div className="mx-auto max-w-site">
         <div className="grid grid-cols-1 overflow-hidden rounded-2xl border border-border-muted shadow-lg md:grid-cols-2">
           {/* Left panel */}
           <div className="relative flex flex-col justify-between overflow-hidden bg-accent p-10">

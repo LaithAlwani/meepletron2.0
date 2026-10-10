@@ -64,9 +64,9 @@ export function resolveTopBar(pathname: string): TopBarRoute | null {
       const status = statusBySlug(seg[2]);
       return status ? { title: status.title, back: "/boardgames" } : null;
     }
-    // /boardgames/import/<bggId>
-    if (seg[1] === "import" && seg[2]) {
-      return { title: "Add game", back: "/boardgames" };
+    // /boardgames/request/<bggId>
+    if (seg[1] === "request" && seg[2]) {
+      return { title: "Request game", back: "/boardgames" };
     }
     // /boardgames/<slug>/how-to-play
     if (seg[2] === "how-to-play") {

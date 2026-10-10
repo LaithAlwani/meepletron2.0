@@ -24,7 +24,7 @@ function AllBoardgamesInner() {
   // The nav search deep-links here as /boardgames/all?q=…
   const q = useSearchParams().get("q") ?? undefined;
   const { term, searching, filters, setFilters, sort, setSort, clear, args, activeCount } =
-    useLibraryFilters(undefined, undefined, q);
+    useLibraryFilters(undefined, undefined, q, true);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [view, setView] = useState<View>("grid");
 
@@ -84,7 +84,7 @@ function AllBoardgamesInner() {
   const loadingFirst = status === "LoadingFirstPage";
 
   return (
-    <div className="mx-auto max-w-5xl px-4 pb-8 pt-3 nav:pt-8">
+    <div className="mx-auto max-w-site px-4 pb-8 pt-3 nav:pt-8">
       {/* Header — on desktop the back link and title share the first line; the
           search + filters sit on the next, right-aligned (matches /boardgames).
           Mobile gets all of it from the top bar instead. */}

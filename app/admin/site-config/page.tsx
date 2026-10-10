@@ -57,12 +57,12 @@ const knobs = [
 
 const MODEL_LABELS: Record<ChatModelId, string> = {
   "gemini-3.5-flash-lite": "Flash-Lite 3.5 — default ($0.30/$2.50 per 1M)",
-  "gemini-3.5-flash": "Flash 3.5 — premium, ~5× cost ($1.50/$9.00)",
+  "gemini-3.6-flash": "Flash 3.6 — premium ($0.75/$3.75 promo, std $1.50/$7.50)",
 };
 
 const CONTENT_MODEL_LABELS: Record<ContentModelId, string> = {
   "gemini-2.5-flash": "Flash 2.5 — default ($0.30/$2.50 per 1M)",
-  "gemini-3.5-flash": "Flash 3.5 — current-gen ($1.50/$9.00 per 1M)",
+  "gemini-3.6-flash": "Flash 3.6 — current-gen ($0.75/$3.75 promo, std $1.50/$7.50)",
 };
 
 const modelKnobs = [

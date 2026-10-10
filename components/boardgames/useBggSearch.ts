@@ -35,14 +35,14 @@ export function bggDetail(h: BggHit): string {
 }
 
 /**
- * Where a BGG hit routes to: the import loader, which fetches + saves the game
- * and lands on its real detail page. The title/cover ride along so the loader
- * can show the game while it works.
+ * Where a BGG hit routes to: the "request this game" page, which previews the
+ * game (info + rating) and lets the user ask us to add it. The title/cover ride
+ * along so the page can show the game while the full details load.
  */
-export function bggImportHref(hit: BggHit): string {
+export function bggRequestHref(hit: BggHit): string {
   const params = new URLSearchParams({ title: hit.name });
   if (hit.thumbUrl) params.set("cover", hit.thumbUrl);
-  return `/boardgames/import/${hit.bggId}?${params.toString()}`;
+  return `/boardgames/request/${hit.bggId}?${params.toString()}`;
 }
 
 /**

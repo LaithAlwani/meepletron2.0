@@ -1,14 +1,15 @@
 import Link from "next/link";
-import { Users, Clock, Star } from "lucide-react";
+import { Users, Clock } from "lucide-react";
 import { formatPlayTime } from "@/lib/format";
 import { Die } from "@/components/ui/icons";
-import { bggImportHref, type BggHit } from "./useBggSearch";
+import { bggRequestHref, type BggHit } from "./useBggSearch";
 
 /**
  * A game we don't have locally yet, rendered to look exactly like a catalogue
- * card/row. Clicking routes to the import loader, which fetches + saves it and
- * lands on the real detail page. Deliberately indistinguishable from a library
- * game (no collection controls — there's no local id until it's saved).
+ * card/row. Clicking routes to the "request this game" page. Deliberately
+ * indistinguishable from a library game (no collection controls — there's no
+ * local id until it's requested/saved). The BGG avg rating is intentionally
+ * omitted here; it's shown on the request page instead.
  */
 export function PreviewCard({ hit, index = 0 }: { hit: BggHit; index?: number }) {
   const players =
@@ -19,7 +20,7 @@ export function PreviewCard({ hit, index = 0 }: { hit: BggHit; index?: number })
       : null;
   const time = formatPlayTime(hit.minPlayTime ?? undefined, hit.maxPlayTime ?? undefined);
   const cover = hit.thumbUrl;
-  const href = bggImportHref(hit);
+  const href = bggRequestHref(hit);
 
   return (
     <div
@@ -77,12 +78,6 @@ export function PreviewCard({ hit, index = 0 }: { hit: BggHit; index?: number })
               </span>
             )}
           </div>
-          {hit.rating != null && (
-            <span className="inline-flex shrink-0 items-center gap-0.5 text-[11px] font-bold text-accent">
-              <Star className="h-3 w-3 fill-current" />
-              {hit.rating.toFixed(1)}
-            </span>
-          )}
         </div>
       </div>
     </div>
@@ -102,7 +97,7 @@ export function PreviewRow({ hit }: { hit: BggHit }) {
     hit.year,
   ].filter(Boolean);
   const cover = hit.thumbUrl;
-  const href = bggImportHref(hit);
+  const href = bggRequestHref(hit);
 
   return (
     <div className="flex items-center gap-3 py-3">
@@ -127,18 +122,9 @@ export function PreviewRow({ hit }: { hit: BggHit }) {
         >
           {hit.name}
         </Link>
-        {(parts.length > 0 || hit.rating != null) && (
+        {parts.length > 0 && (
           <div className="mt-0.5 flex min-w-0 items-center gap-1.5 text-xs text-muted">
-            {parts.length > 0 && (
-              <span className="truncate">{parts.join(" · ")}</span>
-            )}
-            {hit.rating != null && (
-              <span className="inline-flex shrink-0 items-center gap-0.5">
-                {parts.length > 0 && <span aria-hidden>·</span>}
-                <Star className="h-3 w-3 fill-current" />
-                {hit.rating.toFixed(1)}
-              </span>
-            )}
+            <span className="truncate">{parts.join(" · ")}</span>
           </div>
         )}
       </div>

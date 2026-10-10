@@ -50,7 +50,7 @@ function useDeleteChat() {
 
 function Narrow({ children }: { children: React.ReactNode }) {
   return (
-    <div className="mx-auto max-w-5xl px-4 pb-8 pt-3 nav:pt-8">
+    <div className="mx-auto max-w-site px-4 pb-8 pt-3 nav:pt-8">
       <PageTitle className="mb-5 hidden nav:block">Chats</PageTitle>
       {children}
     </div>

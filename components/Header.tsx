@@ -64,7 +64,7 @@ export function Header() {
   // replace the top bar, giving more room to the content.
   return (
     <header className="sticky top-0 z-30 hidden border-b border-border bg-background/80 backdrop-blur nav:block">
-      <div className="mx-auto flex max-w-5xl items-center gap-3 px-4 py-3">
+      <div className="mx-auto flex max-w-site items-center gap-3 px-4 py-3">
         <Brand />
         <nav className="ml-2 hidden flex-1 items-center gap-1 sm:flex">
           {NAV.map((n) => {

@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { formatPlayTime } from "@/lib/format";
-import { bggImportHref, useBggSearch } from "./useBggSearch";
+import { bggRequestHref, useBggSearch } from "./useBggSearch";
 
 /** One row in the nav search dropdown — a library game or a BGG import. */
 export type Suggestion = {
@@ -115,8 +115,10 @@ export function useSearchSuggestions(term: string, max = MAX_SUGGESTIONS) {
       title: h.name,
       detail: detailLine({ ...h, year: h.year }),
       thumbUrl: h.thumbUrl,
-      rating: h.rating,
-      href: bggImportHref(h),
+      // BGG hits don't show their avg rating in search — it's shown on the
+      // request page the row links to.
+      rating: null,
+      href: bggRequestHref(h),
     })),
   ];
 

@@ -98,7 +98,7 @@ export function Landing() {
       </section>
 
       {/* How the accuracy is actually achieved. */}
-      <section className="mx-auto max-w-5xl px-4 pb-20">
+      <section className="mx-auto max-w-site px-4 pb-20">
         <Reveal className="mb-6 text-center">
           <h2 className="font-display text-2xl font-extrabold tracking-tight sm:text-3xl">
             Why the answers hold up
@@ -130,7 +130,7 @@ export function Landing() {
       </section>
 
       {/* Everything else for game night */}
-      <section className="mx-auto max-w-5xl px-4 pb-20">
+      <section className="mx-auto max-w-site px-4 pb-20">
         <Reveal className="mb-6 text-center">
           <h2 className="font-display text-2xl font-extrabold tracking-tight sm:text-3xl">
             Everything else for game night
@@ -175,7 +175,7 @@ export function Landing() {
       </section>
 
       {/* About — moved here from the old /about page. Always shown. */}
-      <section className="mx-auto max-w-5xl px-4 pb-16">
+      <section className="mx-auto max-w-site px-4 pb-16">
         <Reveal className="rounded-2xl border border-border bg-surface/60 p-6 backdrop-blur sm:p-8">
           <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-accent">
             Why it exists
@@ -197,7 +197,7 @@ export function Landing() {
         </Reveal>
       </section>
 
-      <div className="mx-auto max-w-5xl">
+      <div className="mx-auto max-w-site">
         <ContactForm />
       </div>
     </div>

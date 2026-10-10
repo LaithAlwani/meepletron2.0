@@ -128,7 +128,7 @@ const NAMED_ENTITIES: Record<string, string> = {
   ntilde: "ñ",
 };
 
-export function decodeEntities(s: string): string {
+function decodeOnce(s: string): string {
   return s
     .replace(/&#x([0-9a-fA-F]+);/g, (_, h) => String.fromCodePoint(parseInt(h, 16)))
     .replace(/&#(\d+);/g, (_, d) => String.fromCodePoint(Number(d)))
@@ -137,6 +137,22 @@ export function decodeEntities(s: string): string {
         ? NAMED_ENTITIES[name]
         : whole,
     );
+}
+
+export function decodeEntities(s: string): string {
+  // BGG double-encodes entities in descriptions: a bullet `&bull;` arrives as
+  // `&amp;bull;`, and `'` as `&amp;#039;`. A single decode pass only strips the
+  // outer `&amp;` and leaves `bull;` / `#039;` behind (the literal `&bull;` the
+  // user saw). So decode repeatedly until it stops changing — one pass for
+  // normal single-encoded text, two for the double-encoded cases. Capped so a
+  // pathological input can't loop forever.
+  let out = s;
+  for (let i = 0; i < 5; i++) {
+    const next = decodeOnce(out);
+    if (next === out) break;
+    out = next;
+  }
+  return out;
 }
 
 /** Parse the full editable metadata from a BGG /thing item block. */

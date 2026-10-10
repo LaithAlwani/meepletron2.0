@@ -79,6 +79,8 @@
   --font-display: var(--font-bricolage), var(--font-hanken), system-ui, sans-serif;
   --font-sans: var(--font-hanken), var(--font-geist-sans), system-ui, sans-serif;
   --font-mono: var(--font-geist-mono), monospace;
+  /* The site content width (navbar + pages). Enables `max-w-site`. */
+  --container-site: 1460px;
   /* Rounder corners to match the original design language (Tailwind v4's
      defaults are much tighter, which made cards/buttons look blocky). */
   --radius-sm: 0.5rem;

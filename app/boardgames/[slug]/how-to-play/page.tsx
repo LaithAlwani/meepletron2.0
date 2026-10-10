@@ -147,7 +147,7 @@ export default async function HowToPlayPage({
 
   return (
     <>
-      <div className="mx-auto max-w-5xl px-4 pb-8 pt-3 nav:pt-8">
+      <div className="mx-auto max-w-site px-4 pb-8 pt-3 nav:pt-8">
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}

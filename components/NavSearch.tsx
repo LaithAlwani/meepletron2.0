@@ -130,7 +130,7 @@ export function NavSearch({ overlay = false }: { overlay?: boolean }) {
       className={
         overlay
           ? "absolute left-0 right-0 top-full z-20"
-          : "absolute right-0 top-full z-20 mt-2 w-80"
+          : "absolute right-0 top-full z-20 mt-2 w-120"
       }
     />
   );
@@ -206,7 +206,7 @@ export function NavSearch({ overlay = false }: { overlay?: boolean }) {
         <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-subtle" />
         <input
           {...inputProps}
-          className="w-60 rounded-xl border border-border bg-surface py-2 pl-8 pr-3 text-sm outline-none transition-shadow focus:border-accent/50 focus:ring-2 focus:ring-ring/40"
+          className="w-120 max-w-[min(30rem,60vw)] rounded-xl border border-border bg-surface py-2 pl-8 pr-3 text-sm outline-none transition-shadow focus:border-accent/50 focus:ring-2 focus:ring-ring/40"
         />
         {dropdown}
       </form>
@@ -245,7 +245,15 @@ function SuggestionList({
         className,
       )}
     >
-      <ul id={id} role="listbox" aria-label="Game suggestions" className="max-h-96 overflow-y-auto">
+      {/* data-lenis-prevent: let the wheel scroll this list instead of Lenis
+          hijacking it to scroll the whole page. */}
+      <ul
+        id={id}
+        role="listbox"
+        aria-label="Game suggestions"
+        data-lenis-prevent
+        className="max-h-96 overflow-y-auto"
+      >
         {items.map((s, i) => (
           <li
             key={s.key}
@@ -289,7 +297,7 @@ function SuggestionList({
                   {s.source === "bgg" && (
                     <Download
                       className="h-3.5 w-3.5 shrink-0 text-subtle"
-                      aria-label="Not in the library yet — opens the importer"
+                      aria-label="Not in the library yet — opens a request page"
                     />
                   )}
                 </span>

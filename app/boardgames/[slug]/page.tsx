@@ -212,7 +212,7 @@ export default function GameDetailPage({
 
   if (game === undefined) {
     return (
-      <div className="mx-auto max-w-5xl px-4 pb-8 pt-3 nav:pt-8">
+      <div className="mx-auto max-w-site px-4 pb-8 pt-3 nav:pt-8">
         <div className="flex flex-col gap-6 sm:flex-row">
           <div className="mx-auto h-64 w-48 shrink-0 animate-pulse rounded-2xl bg-surface-2 sm:mx-0" />
           <div className="flex-1 space-y-3">
@@ -226,7 +226,7 @@ export default function GameDetailPage({
   }
   if (game === null) {
     return (
-      <div className="mx-auto max-w-5xl px-4 py-16 text-center text-muted">
+      <div className="mx-auto max-w-site px-4 py-16 text-center text-muted">
         Game not found.
       </div>
     );
@@ -256,7 +256,7 @@ export default function GameDetailPage({
 
       {/* Hero — light + warm */}
       <section className="border-b border-border-muted">
-        <div className="mx-auto max-w-5xl px-4 pb-6 pt-3 nav:pt-5">
+        <div className="mx-auto max-w-site px-4 pb-6 pt-3 nav:pt-5">
           <nav
             className="mb-5 hidden items-center gap-1.5 text-sm text-muted nav:flex"
             aria-label="Breadcrumb"
@@ -426,7 +426,7 @@ export default function GameDetailPage({
       </section>
 
       {/* Content */}
-      <div className="mx-auto max-w-5xl px-4 pb-8 pt-3 nav:pt-8">
+      <div className="mx-auto max-w-site px-4 pb-8 pt-3 nav:pt-8">
         {(game.designers.length > 0 ||
           game.artists.length > 0 ||
           game.publishers.length > 0 ||

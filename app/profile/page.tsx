@@ -59,7 +59,7 @@ function ProfileRedirect() {
 
   // No username yet — show the account/settings panel so they can set one.
   return (
-    <div className="mx-auto max-w-5xl px-4 pb-8 pt-3 nav:pt-8">
+    <div className="mx-auto max-w-site px-4 pb-8 pt-3 nav:pt-8">
       <h1 className="font-display mb-6 hidden nav:block text-2xl font-extrabold tracking-tight">
         Your account
       </h1>
@@ -93,7 +93,7 @@ const FEATURES: { icon: LucideIcon; title: string; body: string }[] = [
 
 function SignedOutTeaser() {
   return (
-    <div className="mx-auto max-w-5xl px-4 pb-10 pt-3 nav:pt-10">
+    <div className="mx-auto max-w-site px-4 pb-10 pt-3 nav:pt-10">
       {/* Faux profile header — a peek at the real thing */}
       <div className="flex items-center gap-5 sm:gap-8">
         <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-full bg-surface-2 text-subtle sm:h-24 sm:w-24">

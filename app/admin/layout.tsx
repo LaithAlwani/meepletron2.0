@@ -29,7 +29,7 @@ export default function AdminLayout({
 
   if (me === undefined) {
     return (
-      <div className="mx-auto max-w-5xl px-4 py-16 text-center text-muted">
+      <div className="mx-auto max-w-site px-4 py-16 text-center text-muted">
         Loading…
       </div>
     );
@@ -53,7 +53,7 @@ export default function AdminLayout({
   }
 
   return (
-    <div className="mx-auto max-w-5xl px-4 py-8">
+    <div className="mx-auto max-w-site px-4 py-8">
       <div className="mb-6">
         <h1 className="font-display text-2xl font-extrabold tracking-tight">
           Admin
