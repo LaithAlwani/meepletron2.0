@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Landing } from "@/components/home/Landing";
 
 const description =
-  "Meepletron is an AI board game rules expert: ask any rules question and get an answer pulled from that game's actual rulebook, cited by page — not guessed from a general AI. Plus a game library, plays feed, stats and top-games lists.";
+  "Meepletron is an AI board game rules expert: ask any rules question and get an answer pulled from that game's actual rulebook, cited by page — not guessed from a general AI. Plus a game library, your collection and a first-player picker.";
 
 export const metadata: Metadata = {
   title: { absolute: "Meepletron — AI board game rules, answered from the rulebook" },

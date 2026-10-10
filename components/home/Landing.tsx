@@ -1,10 +1,6 @@
 import Image from "next/image";
 import {
-  Dices,
-  BarChart3,
-  Trophy,
   Package,
-  Users,
   Crown,
   BookOpenCheck,
   Quote,
@@ -44,37 +40,18 @@ const ACCURACY: { icon: LucideIcon; title: string; body: string }[] = [
   },
 ];
 
-// Everything around the table, once the rules argument is settled.
+// What's live alongside the rules expert. Keep this honest — a card here is a
+// promise the signed-up visitor can hold us to on their first session.
 const FEATURES: { icon: LucideIcon; title: string; body: string }[] = [
-  {
-    icon: Dices,
-    title: "Log your plays",
-    body: "Competitive, co-op, teams, rounds or one-vs-all — record the scores, which expansions were on the table, photos from the night, and players who aren't on Meepletron yet.",
-  },
-  {
-    icon: BarChart3,
-    title: "Stats that build themselves",
-    body: "Win rates, most-played games, head-to-head records and your play history — charted from the plays you log, with nothing extra to fill in.",
-  },
-  {
-    icon: Trophy,
-    title: "Top Games lists",
-    body: "Drag your favourites into a ranked list, see it as a row of covers, and share it — or keep several lists for different moods and player counts.",
-  },
   {
     icon: Package,
     title: "Your collection",
-    body: "Owned, wishlist, previously owned and up for sale, in one place — or sync the whole thing from BoardGameGeek in Settings and let it keep itself current.",
-  },
-  {
-    icon: Users,
-    title: "Play with friends",
-    body: "Add the people you play with, tag them in plays, and comment on each other's game nights as they get logged.",
+    body: "Keep what you own, your wishlist, what you've parted with and what's up for sale — or sync the whole thing from BoardGameGeek in Settings and let it stay current on its own.",
   },
   {
     icon: Crown,
     title: "Settle who goes first",
-    body: "A first-player picker for when nobody can agree, so the night starts instead of stalling.",
+    body: "A first-player picker for when nobody can agree, so the night starts instead of stalling on the oldest argument in board games.",
   },
 ];
 
@@ -156,11 +133,14 @@ export function Landing() {
             Everything else for game night
           </h2>
           <p className="mx-auto mt-2 max-w-md text-sm text-muted">
-            The rules expert is just the start — Meepletron keeps the rest of
-            your table together too.
+            The rules expert is the heart of it — here&apos;s what else is
+            ready to use today.
           </p>
         </Reveal>
-        <Stagger as="ul" className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <Stagger
+          as="ul"
+          className="mx-auto grid max-w-3xl gap-3 sm:grid-cols-2"
+        >
           {FEATURES.map((f) => {
             const Icon = f.icon;
             return (
@@ -180,12 +160,12 @@ export function Landing() {
         </Stagger>
 
         {/* Closing CTA */}
-        <Reveal className="mt-8 rounded-2xl border border-accent/30 bg-accent/8 p-6 text-center sm:p-8">
+        <Reveal className="mx-auto mt-8 max-w-3xl rounded-2xl border border-accent/30 bg-accent/8 p-6 text-center sm:p-8">
           <p className="font-display text-xl font-extrabold sm:text-2xl">
-            Settle the rules, then keep the whole game night
+            Stop passing the rulebook around
           </p>
           <p className="mx-auto mt-1.5 max-w-md text-sm text-muted">
-            Free to join. Your plays, stats and lists are yours to keep.
+            Free to join. Ask your first rules question in under a minute.
           </p>
           <HomeCta closing />
         </Reveal>
@@ -206,9 +186,9 @@ export function Landing() {
               check before anyone argues about it.
             </p>
             <p>
-              Once the game night was covered, the rest followed naturally: a
-              place to log what you played, keep your collection, and settle who
-              goes first, with the people you play with.
+              Once the rules were covered, the rest followed naturally: a place
+              to keep the collection you play from, and to settle who goes
+              first when nobody can agree.
             </p>
           </div>
         </Reveal>
