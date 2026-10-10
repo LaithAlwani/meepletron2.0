@@ -4,40 +4,77 @@ import {
   BarChart3,
   Trophy,
   Package,
+  Users,
+  Crown,
+  BookOpenCheck,
+  Quote,
+  ListTree,
+  Layers,
   MessageCircleQuestion,
   type LucideIcon,
 } from "lucide-react";
 import { Reveal, Stagger, StaggerItem } from "@/components/motion/Reveal";
 import { HeroBackdrop } from "@/components/home/HeroBackdrop";
 import { HomeCta } from "@/components/home/HomeCta";
+import { AnswerDemo } from "@/components/home/AnswerDemo";
 import ContactForm from "@/components/ContactForm";
 
-// The AI rules expert is the hero; these are everything else around the table.
+// Why an answer can be trusted — the actual mechanics, not adjectives. This is
+// the part that separates Meepletron from asking a general chatbot.
+const ACCURACY: { icon: LucideIcon; title: string; body: string }[] = [
+  {
+    icon: BookOpenCheck,
+    title: "It reads the rulebook",
+    body: "Answers are built from the manual indexed for that specific game — not from half-remembered forum posts. Ask about a rule the book doesn't cover and it says so instead of inventing one.",
+  },
+  {
+    icon: Quote,
+    title: "Every answer shows its work",
+    body: "Each claim carries a numbered citation. Tap it and the passage opens inline, with the section it came from, so you can check the wording before anyone argues about it.",
+  },
+  {
+    icon: ListTree,
+    title: "Parsed, not just skimmed",
+    body: "Ingestion keeps the rulebook's structure — sections, headings, pages, tables and the symbols the rules lean on — so a question lands on the right rule, not merely a paragraph that looks right.",
+  },
+  {
+    icon: Layers,
+    title: "Expansions included",
+    body: "Play with expansions and their manuals are searched too. Each citation is labelled with the book it came from, so you always know which one the answer is quoting.",
+  },
+];
+
+// Everything around the table, once the rules argument is settled.
 const FEATURES: { icon: LucideIcon; title: string; body: string }[] = [
   {
     icon: Dices,
     title: "Log your plays",
-    body: "Record every game night — scores, winners, photos and who was at the table.",
+    body: "Competitive, co-op, teams, rounds or one-vs-all — record the scores, which expansions were on the table, photos from the night, and players who aren't on Meepletron yet.",
   },
   {
     icon: BarChart3,
-    title: "Track your stats",
-    body: "Win rates, most-played games and your play history, updated automatically.",
+    title: "Stats that build themselves",
+    body: "Win rates, most-played games, head-to-head records and your play history — charted from the plays you log, with nothing extra to fill in.",
   },
   {
     icon: Trophy,
     title: "Top Games lists",
-    body: "Rank your all-time favourites into lists worth sharing.",
+    body: "Drag your favourites into a ranked list, see it as a row of covers, and share it — or keep several lists for different moods and player counts.",
   },
   {
     icon: Package,
     title: "Your collection",
-    body: "Keep what you own, your wishlist, and what's up for sale in one place.",
+    body: "Owned, wishlist, previously owned and up for sale, in one place — or sync the whole thing from BoardGameGeek in Settings and let it keep itself current.",
   },
   {
-    icon: Dices,
+    icon: Users,
     title: "Play with friends",
-    body: "Add friends, tag them in plays, and see the game nights they share.",
+    body: "Add the people you play with, tag them in plays, and comment on each other's game nights as they get logged.",
+  },
+  {
+    icon: Crown,
+    title: "Settle who goes first",
+    body: "A first-player picker for when nobody can agree, so the night starts instead of stalling.",
   },
 ];
 
@@ -48,7 +85,7 @@ export function Landing() {
       <HeroBackdrop />
 
       {/* Hero — leads with the AI rules expert. */}
-      <section className="mx-auto max-w-5xl px-4 pb-10 pt-16 text-center sm:pt-24">
+      <section className="mx-auto max-w-5xl px-4 pb-8 pt-16 text-center sm:pt-24">
         <Image
           src="/logo.webp"
           alt="Meepletron"
@@ -66,12 +103,50 @@ export function Landing() {
           Ask any board game rule — answered from the rulebook.
         </h1>
         <p className="animate-in mx-auto mt-4 max-w-xl text-balance text-base text-muted sm:text-lg">
-          Meepletron reads the game&apos;s actual rulebook and answers your
-          question in seconds — quoting the exact rule with the page it came
-          from, not a guess from a general AI. Plus a game library, a plays
-          feed, stats and top-games lists for everything else around the table.
+          Meepletron reads the game&apos;s actual rulebook and answers in
+          seconds, quoting the exact rule and the section it came from. Not a
+          guess from a general AI — an answer you can check at the table.
         </p>
         <HomeCta />
+      </section>
+
+      {/* Proof — the thing itself, before any claims about it. */}
+      <section className="mx-auto max-w-5xl px-4 pb-14">
+        <Reveal>
+          <AnswerDemo />
+        </Reveal>
+      </section>
+
+      {/* How the accuracy is actually achieved. */}
+      <section className="mx-auto max-w-5xl px-4 pb-20">
+        <Reveal className="mb-6 text-center">
+          <h2 className="font-display text-2xl font-extrabold tracking-tight sm:text-3xl">
+            Why the answers hold up
+          </h2>
+          <p className="mx-auto mt-2 max-w-lg text-sm text-muted">
+            Ask a general chatbot a rules question and you get a confident
+            answer with nothing behind it. Meepletron is built the other way
+            round — the source comes first, and the answer has to come from it.
+          </p>
+        </Reveal>
+        <Stagger as="ul" className="grid gap-3 sm:grid-cols-2">
+          {ACCURACY.map((a) => {
+            const Icon = a.icon;
+            return (
+              <StaggerItem
+                as="li"
+                key={a.title}
+                className="rounded-2xl border border-accent/25 bg-surface/80 p-5 backdrop-blur"
+              >
+                <div className="mb-2.5 flex h-10 w-10 items-center justify-center rounded-xl bg-accent/12 text-accent">
+                  <Icon className="h-5 w-5" />
+                </div>
+                <p className="font-display font-bold">{a.title}</p>
+                <p className="mt-1 text-sm text-muted">{a.body}</p>
+              </StaggerItem>
+            );
+          })}
+        </Stagger>
       </section>
 
       {/* Everything else for game night */}
@@ -132,8 +207,8 @@ export function Landing() {
             </p>
             <p>
               Once the game night was covered, the rest followed naturally: a
-              place to keep your collection and settle who goes first, with the
-              people you play with.
+              place to log what you played, keep your collection, and settle who
+              goes first, with the people you play with.
             </p>
           </div>
         </Reveal>

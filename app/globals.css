@@ -285,6 +285,23 @@ body::before {
   animation: msg-in 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
+/* Typing caret for the landing's worked example. Reduce-motion neutralizes the
+   blink via the global animation gate below, leaving a steady caret. */
+@keyframes demo-caret {
+  0%,
+  45% {
+    opacity: 1;
+  }
+  55%,
+  100% {
+    opacity: 0;
+  }
+}
+.demo-caret {
+  border-right: 2px solid currentColor;
+  animation: demo-caret 1s step-end infinite;
+}
+
 /* Fully hide the scrollbar (used where we drive scrolling with buttons/touch). */
 .no-scrollbar {
   scrollbar-width: none;

@@ -9,7 +9,19 @@ import type { Doc } from "@/convex/_generated/dataModel";
 import { usePreferences } from "@/lib/usePreferences";
 import { timeOfDay } from "@/lib/format";
 
-type Annotation = NonNullable<Doc<"messages">["annotations"]>[number];
+/**
+ * Just the citation fields the Sources block renders — a structural subset of a
+ * stored annotation, so a caller without real document ids (the landing page's
+ * worked example) can hand it literals instead of casting.
+ */
+export type SourceRef = {
+  n: number;
+  bgTitle: string;
+  breadcrumb?: string;
+  page?: number;
+  variantName?: string;
+  text: string;
+};
 
 function MessageActions({ message }: { message: Doc<"messages"> }) {
   const rate = useMutation(api.chat.rateMessage);
@@ -69,7 +81,7 @@ function MessageActions({ message }: { message: Doc<"messages"> }) {
 
 /* ---------- citations ---------- */
 
-function sourceLabel(ann: Annotation) {
+function sourceLabel(ann: SourceRef) {
   return (
     [ann.breadcrumb, ann.page ? `p.${ann.page}` : null]
       .filter(Boolean)
@@ -131,13 +143,13 @@ function highlightPassage(passage: string, answer: string): React.ReactNode {
 }
 
 /** The "Sources" block: chips that toggle an inline passage from the rulebook. */
-function Sources({
+export function Sources({
   annotations,
   answer,
   openN,
   setOpenN,
 }: {
-  annotations: Annotation[];
+  annotations: SourceRef[];
   answer: string;
   openN: number | null;
   setOpenN: (n: number | null) => void;
