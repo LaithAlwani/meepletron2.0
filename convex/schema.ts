@@ -54,9 +54,9 @@ export default defineSchema({
     // blob, read as a fallback until the R2 backfill completes, then dropped.
     avatarKey: v.optional(v.string()),
     avatarStorageId: v.optional(v.id("_storage")),
-    // The last ≤5 avatars the user uploaded (most-recent first) for quick reuse.
-    // A 6th upload evicts + deletes the oldest. `avatarKeys` = R2 keys (new),
-    // `avatarHistory` = legacy Convex blob ids (fallback until backfilled).
+    // The saved avatars the user can reuse (most-recent first), capped at 3.
+    // Uploading past the cap is refused until one is deleted. `avatarKeys` = R2
+    // keys (new), `avatarHistory` = legacy Convex blob ids (fallback until backfilled).
     avatarKeys: v.optional(v.array(v.string())),
     avatarHistory: v.optional(v.array(v.id("_storage"))),
     // What the user chooses to expose on their public /user/<username> page.

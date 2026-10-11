@@ -202,22 +202,29 @@ export const generateAvatarUploadUrl = mutation({
   },
 });
 
+/** Hard cap on how many avatar photos a user may keep saved at once. */
+const MAX_SAVED_AVATARS = 3;
+
 /**
  * Set the avatar from a freshly-uploaded (already client-compressed) image.
- * Pushes its R2 key onto the recents history, keeping the last 5 and deleting
- * whatever a 6th upload evicts.
+ * Pushes its R2 key onto the recents history. A user may keep at most
+ * {@link MAX_SAVED_AVATARS} photos — a brand-new upload past the cap is refused
+ * so they delete one first (the already-uploaded orphan is cleaned up).
  */
 export const setAvatar = mutation({
   args: { key: v.string() },
   handler: async (ctx, { key }) => {
     const user = await requireUser(ctx);
     const prev = user.avatarKeys ?? [];
-    const merged = [key, ...prev.filter((k) => k !== key)];
-    const history = merged.slice(0, 5);
-    for (const evicted of merged.slice(5)) await deleteMedia(ctx, evicted, null);
+    if (!prev.includes(key) && prev.length >= MAX_SAVED_AVATARS) {
+      await deleteMedia(ctx, key, null);
+      throw new ConvexError(
+        `You can save up to ${MAX_SAVED_AVATARS} photos — delete one before adding another.`,
+      );
+    }
     await ctx.db.patch("users", user._id, {
       avatarKey: key,
-      avatarKeys: history,
+      avatarKeys: [key, ...prev.filter((k) => k !== key)],
       // Drop any legacy Convex avatar now that an R2 one is set.
       avatarStorageId: undefined,
     });
@@ -237,6 +244,26 @@ export const useRecentAvatar = mutation({
       avatarKey: key,
       avatarKeys: [key, ...history.filter((k) => k !== key)],
       avatarStorageId: undefined,
+    });
+  },
+});
+
+/**
+ * Delete a saved photo from the recents history AND from storage. If the
+ * deleted photo was the current avatar, fall back to the newest remaining one
+ * (or clear the avatar when none are left).
+ */
+export const deleteRecentAvatar = mutation({
+  args: { key: v.string() },
+  handler: async (ctx, { key }) => {
+    const user = await requireUser(ctx);
+    const history = user.avatarKeys ?? [];
+    if (!history.includes(key)) return;
+    const remaining = history.filter((k) => k !== key);
+    await deleteMedia(ctx, key, null);
+    await ctx.db.patch("users", user._id, {
+      avatarKeys: remaining,
+      ...(user.avatarKey === key ? { avatarKey: remaining[0] } : {}),
     });
   },
 });

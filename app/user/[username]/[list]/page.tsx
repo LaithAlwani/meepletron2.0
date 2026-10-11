@@ -2,6 +2,7 @@
 
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useQuery, usePaginatedQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Skeleton } from "@/components/ui/Surface";
@@ -35,6 +36,7 @@ export default function CollectionListPage({
   params: Promise<{ username: string; list: string }>;
 }) {
   const { username, list } = use(params);
+  const router = useRouter();
   const valid = list in TITLES;
   const [sort, setSort] = useState<GameSortKey>(DEFAULT_SORT);
   const args = valid
@@ -55,6 +57,13 @@ export default function CollectionListPage({
   useEffect(() => {
     restoreIfReady(results.length);
   }, [results.length, restoreIfReady]);
+
+  // A private list viewed by anyone but the owner isn't shared → bounce to the
+  // 401 page instead of revealing it exists.
+  const blocked = valid && !!meta && !meta.shared;
+  useEffect(() => {
+    if (blocked) router.replace("/unauthorized");
+  }, [blocked, router]);
 
   const sentinel = useInfiniteScroll(() => loadMore(48), {
     canLoadMore: status === "CanLoadMore",
@@ -85,9 +94,7 @@ export default function CollectionListPage({
 
       {!valid || meta === null ? (
         <EmptyState title={valid ? "No such user." : "Unknown list."} />
-      ) : meta && !meta.shared ? (
-        <EmptyState title="This player hasn't shared this list." />
-      ) : status === "LoadingFirstPage" || meta === undefined ? (
+      ) : blocked || status === "LoadingFirstPage" || meta === undefined ? (
         <div className="grid grid-cols-3 gap-3 sm:grid-cols-6">
           {Array.from({ length: 12 }).map((_, i) => (
             <Skeleton key={i} className="aspect-square w-full rounded-xl" />

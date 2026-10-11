@@ -1,7 +1,8 @@
 "use client";
 
-import { use, useState } from "react";
+import { use, useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useQuery, useMutation } from "convex/react";
 import {
   Lock,
@@ -20,7 +21,11 @@ import { buttonClasses } from "@/components/ui/Button";
 import { useToast } from "@/components/ui/Toast";
 import { Sheet } from "@/components/ui/Sheet";
 import { SettingsPanel } from "@/components/settings/SettingsPanel";
-import { AccountSection, ProfileAvatar } from "@/components/settings/AccountSection";
+import {
+  AccountSection,
+  ProfileAvatar,
+  DangerZone,
+} from "@/components/settings/AccountSection";
 
 export default function ProfilePage({
   params,
@@ -28,9 +33,17 @@ export default function ProfilePage({
   params: Promise<{ username: string }>;
 }) {
   const { username } = use(params);
+  const router = useRouter();
   const data = useQuery(api.topGames.publicProfile, { username });
   const me = useQuery(api.users.me);
   const [settingsOpen, setSettingsOpen] = useState(false);
+
+  // Profiles are private: anyone but the owner visiting a private profile is
+  // bounced to the 401 page rather than shown the handle + a "private" card.
+  const blocked = !!data && !data.isSelf && data.private;
+  useEffect(() => {
+    if (blocked) router.replace("/unauthorized");
+  }, [blocked, router]);
 
   if (data === undefined) {
     return (
@@ -57,6 +70,16 @@ export default function ProfilePage({
             Back to the Library
           </Link>
         </div>
+      </div>
+    );
+  }
+
+  if (blocked) {
+    // Redirect is in flight (see the effect above) — show a brief spinner
+    // instead of flashing any of the profile chrome.
+    return (
+      <div className="mx-auto flex max-w-site items-center justify-center px-4 py-24 text-muted">
+        <Loader2 className="h-5 w-5 animate-spin" />
       </div>
     );
   }
@@ -100,7 +123,7 @@ export default function ProfilePage({
             </h1>
             {isSelf && (
               <OwnerControls
-                isPublic={me?.publicProfile?.isPublic ?? true}
+                isPublic={me?.publicProfile?.isPublic ?? false}
                 onSettings={() => setSettingsOpen(true)}
               />
             )}
@@ -127,11 +150,8 @@ export default function ProfilePage({
               <ChevronRight className="h-4 w-4 shrink-0 text-subtle" />
             </Link>
           )}
-        </div>
-      ) : data.private ? (
-        <div className="mt-8 rounded-2xl border border-dashed border-border p-10 text-center text-muted">
-          <Lock className="mx-auto h-7 w-7 text-subtle" />
-          <p className="mt-3 font-medium">This profile is private.</p>
+          {/* Danger zone lives at the very bottom of the profile. */}
+          {me && me.isAnonymous !== true && <DangerZone />}
         </div>
       ) : null}
 

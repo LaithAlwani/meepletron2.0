@@ -48,16 +48,21 @@ export async function areFriends(
   return (await getFriendship(ctx, a, b))?.status === "accepted";
 }
 
-/** Whether `viewerId` may see `target`'s profile: public, self, or a friend. */
+/**
+ * Whether `viewerId` may see `target`'s profile. Profiles are PRIVATE by
+ * default: a private profile is visible only to its owner — not even friends.
+ * Making it public (via the profile toggle) opens it to everyone.
+ */
 export async function canViewProfile(
   ctx: QueryCtx,
   target: Doc<"users">,
   viewerId: Id<"users"> | null,
 ): Promise<boolean> {
-  if (target.publicProfile?.isPublic ?? true) return true;
-  if (!viewerId) return false;
-  if (viewerId === target._id) return true;
-  return await areFriends(ctx, viewerId, target._id);
+  // (ctx retained for signature compatibility now that the friend lookup —
+  // areFriends — is no longer part of the gate.)
+  void ctx;
+  if (target.publicProfile?.isPublic ?? false) return true;
+  return viewerId === target._id;
 }
 
 /** Insert a notification (no-op when notifying yourself). */

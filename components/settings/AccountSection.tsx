@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery, useMutation } from "convex/react";
 import { useAuthActions } from "@convex-dev/auth/react";
-import { Camera, LogOut, Loader2 } from "lucide-react";
+import { Camera, LogOut, Loader2, Plus, Check, Trash2, X } from "lucide-react";
 import { api } from "@/convex/_generated/api";
 import type { Doc } from "@/convex/_generated/dataModel";
 import { AvatarImg } from "@/components/ui/Avatar";
@@ -98,8 +98,6 @@ export function AccountSection() {
           </button>
         )}
       </div>
-
-      {!isGuest && <DangerZone />}
     </div>
   );
 }
@@ -397,7 +395,9 @@ function PersonalInfo({ me }: { me: Doc<"users"> }) {
   );
 }
 
-function DangerZone() {
+/** The account "Danger zone" — currently just account deletion. Rendered as a
+ *  standalone section at the very bottom of the profile page. */
+export function DangerZone() {
   const deleteAccount = useMutation(api.users.deleteAccount);
   const confirm = useConfirm();
   const toast = useToast();
@@ -426,14 +426,26 @@ function DangerZone() {
   }
 
   return (
-    <div className="border-t border-border-muted px-5 py-4">
-      <button
-        onClick={handleDelete}
-        disabled={deleting}
-        className="text-sm font-medium text-red-600 transition-colors hover:underline disabled:opacity-50 dark:text-red-400"
-      >
-        {deleting ? "Deleting…" : "Delete account"}
-      </button>
+    <div className="rounded-2xl border border-red-200 bg-red-50/40 p-5 dark:border-red-500/30 dark:bg-red-500/6">
+      <p className="text-xs font-semibold uppercase tracking-widest text-red-600 dark:text-red-400">
+        Danger zone
+      </p>
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-sm font-medium text-foreground">Delete account</p>
+          <p className="mt-0.5 text-xs text-muted">
+            Permanently removes your account, chats, and favorites. This
+            can&apos;t be undone.
+          </p>
+        </div>
+        <button
+          onClick={handleDelete}
+          disabled={deleting}
+          className="inline-flex shrink-0 items-center gap-2 rounded-xl border border-red-300 px-4 py-2 text-sm font-semibold text-red-600 transition-colors hover:bg-red-50 disabled:opacity-50 dark:border-red-500/40 dark:text-red-400 dark:hover:bg-red-500/10"
+        >
+          {deleting ? "Deleting…" : "Delete account"}
+        </button>
+      </div>
     </div>
   );
 }
