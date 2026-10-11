@@ -193,10 +193,14 @@ export function AnswerDemo() {
 
         {/* Transcript — the chat's own bubble geometry. Fixed height (not
             min-height) so cycling between examples of different lengths never
-            changes the card's size and shifts the content below it. Sized for
-            the tallest example; shorter ones just leave empty space, and
-            overflow-hidden clips gracefully rather than growing. */}
-        <div className="h-[25rem] space-y-4 overflow-hidden px-4 py-4">
+            changes the card's size and shifts the content below it. Sized to fit
+            the tallest example on normal screens; overflow-y-auto means a taller
+            one (very narrow widths) scrolls instead of clipping, never grows.
+            data-lenis-prevent keeps that scroll off the page's smooth-scroll. */}
+        <div
+          data-lenis-prevent
+          className="chat-scroll h-112 space-y-4 overflow-y-auto px-4 py-4"
+        >
           {frame.typed && (
             <div className="flex flex-col items-end">
               <div className="max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-br-sm bg-accent px-4 py-2.5 text-sm leading-relaxed text-accent-foreground">
