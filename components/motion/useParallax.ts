@@ -9,8 +9,8 @@ import { useReducedMotionPref } from "@/components/lib/useReducedMotionPref";
 if (typeof window !== "undefined") gsap.registerPlugin(ScrollTrigger);
 
 /**
- * Scrubbed vertical parallax via GSAP ScrollTrigger, tracking the native
- * document scroll. Attach the returned ref to a decorative element that nothing
+ * Scrubbed vertical parallax via GSAP ScrollTrigger (smoothed through Lenis by
+ * GsapLenisBridge). Attach the returned ref to a decorative element that nothing
  * else transforms; it drifts by `distance` px as it travels through the viewport.
  * Off (identity ref) when reduced motion is requested.
  */

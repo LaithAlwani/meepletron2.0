@@ -8,8 +8,8 @@ import { useEffect, useState } from "react";
  * (`components/PreferencesEffects.tsx` sets `html.reduce-motion`).
  *
  * The CSS gates in globals.css neutralize CSS animations/transitions, but they
- * DON'T reach requestAnimationFrame-based JS (Framer Motion / GSAP / R3F).
- * Every JS animation must gate on this hook so the per-user toggle works.
+ * DON'T reach requestAnimationFrame-based JS (Framer Motion / GSAP / Lenis /
+ * R3F). Every JS animation must gate on this hook so the per-user toggle works.
  */
 export function useReducedMotionPref(): boolean {
   const [reduced, setReduced] = useState(false);

@@ -70,7 +70,7 @@ export function ModelPicker({
           role="listbox"
           className="absolute bottom-full left-0 z-20 mb-2 w-72 max-w-[80vw] overflow-hidden rounded-xl border border-border bg-surface shadow-lg"
         >
-          <ul className="max-h-72 overflow-y-auto py-1">
+          <ul className="max-h-72 overflow-y-auto py-1" data-lenis-prevent>
             {models.map((m) => {
               const active = m.id === value;
               // Locked for this viewer (e.g. a guest) → show it, but as a

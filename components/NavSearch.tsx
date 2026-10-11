@@ -275,12 +275,13 @@ function SuggestionList({
         className,
       )}
     >
-      {/*
+      {/* data-lenis-prevent: let the wheel scroll this list instead of Lenis
           hijacking it to scroll the whole page. */}
       <ul
         id={id}
         role="listbox"
         aria-label="Game suggestions"
+        data-lenis-prevent
         className="max-h-96 overflow-y-auto"
       >
         {items.map((s, i) => (
