@@ -154,26 +154,33 @@ export function NavSearch({ overlay = false }: { overlay?: boolean }) {
       highlight >= 0 ? `${listId}-opt-${highlight}` : undefined,
   };
 
-  if (!open) {
-    return (
-      <button
-        type="button"
-        onClick={openSearch}
-        aria-label="Search games"
-        title="Search games"
-        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
-      >
-        <Search className="h-4.5 w-4.5" />
-      </button>
-    );
-  }
-
+  // Mobile: the input lives in an overlay that covers the bar. It stays mounted
+  // and cross-fades + slides, so both opening and closing animate (an unmounted
+  // element can't play an exit transition).
   if (overlay) {
     return (
       <div ref={rootRef}>
+        {/* Resting search button that sits in the bar when closed. */}
+        <button
+          type="button"
+          onClick={openSearch}
+          aria-label="Search games"
+          title="Search games"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
+        >
+          <Search className="h-4.5 w-4.5" />
+        </button>
+
         <form
           onSubmit={submit}
-          className="absolute inset-0 z-10 flex items-center gap-1 bg-background px-1.5"
+          inert={!open}
+          className={cn(
+            "absolute inset-0 z-10 flex items-center gap-1 bg-background px-1.5",
+            "transition-[opacity,transform] duration-200 ease-out",
+            open
+              ? "pointer-events-auto translate-x-0 opacity-100"
+              : "pointer-events-none translate-x-3 opacity-0",
+          )}
         >
           <button
             type="submit"
@@ -200,13 +207,36 @@ export function NavSearch({ overlay = false }: { overlay?: boolean }) {
     );
   }
 
+  // Desktop: the icon expands into the input in place. The input is always
+  // mounted; toggling `open` animates its max-width + opacity both ways.
   return (
     <div ref={rootRef}>
-      <form onSubmit={submit} className="relative">
-        <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-subtle" />
+      <form onSubmit={submit} className="relative flex h-9 items-center justify-end">
+        <button
+          type="button"
+          onClick={() => (open ? inputRef.current?.focus() : openSearch())}
+          aria-label="Search games"
+          title="Search games"
+          tabIndex={open ? -1 : 0}
+          className={cn(
+            "absolute left-0 top-0 z-10 flex h-9 w-9 items-center justify-center rounded-xl transition-colors",
+            open
+              ? "pointer-events-none text-subtle"
+              : "text-muted hover:bg-surface-2 hover:text-foreground",
+          )}
+        >
+          <Search className="h-4.5 w-4.5" />
+        </button>
         <input
           {...inputProps}
-          className="w-120 max-w-[min(30rem,60vw)] rounded-xl border border-border bg-surface py-2 pl-8 pr-3 text-sm outline-none transition-shadow focus:border-accent/50 focus:ring-2 focus:ring-ring/40"
+          inert={!open}
+          className={cn(
+            "h-9 w-[min(30rem,60vw)] rounded-xl text-sm outline-none",
+            "transition-[max-width,opacity,padding,border-color,background-color] duration-200 ease-out",
+            open
+              ? "max-w-[min(30rem,60vw)] border border-border bg-surface pl-9 pr-3 opacity-100 focus:border-accent/50 focus:ring-2 focus:ring-ring/40"
+              : "max-w-9 border border-transparent bg-transparent px-0 opacity-0",
+          )}
         />
         {dropdown}
       </form>
