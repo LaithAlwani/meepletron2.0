@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useId, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { ChevronDown, Check } from "lucide-react";
 import { cn } from "@/lib/cn";
 
@@ -33,8 +34,17 @@ export function SelectMenu<T extends string | number>({
 }) {
   const [open, setOpen] = useState(false);
   const [dropUp, setDropUp] = useState(false);
+  // The menu is rendered in a body portal (so an `overflow-hidden` ancestor
+  // can't clip it); this is the button's position to anchor it to.
+  const [anchor, setAnchor] = useState<{
+    left: number;
+    width: number;
+    top: number;
+    bottom: number;
+  } | null>(null);
   const ref = useRef<HTMLDivElement>(null);
   const btnRef = useRef<HTMLButtonElement>(null);
+  const listRef = useRef<HTMLUListElement>(null);
   const listId = useId();
   const selected = options.find((o) => o.value === value);
 
@@ -45,6 +55,12 @@ export function SelectMenu<T extends string | number>({
       const spaceBelow = window.innerHeight - rect.bottom;
       const menuH = Math.min(options.length * 44 + 8, 240);
       setDropUp(spaceBelow < menuH + 8 && rect.top > spaceBelow);
+      setAnchor({
+        left: rect.left,
+        width: rect.width,
+        top: rect.top,
+        bottom: rect.bottom,
+      });
     }
     setOpen((v) => !v);
   }
@@ -52,7 +68,15 @@ export function SelectMenu<T extends string | number>({
   useEffect(() => {
     if (!open) return;
     const onClick = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+      const t = e.target as Node;
+      // The menu lives in a portal (outside `ref`), so check it separately.
+      if (
+        ref.current &&
+        !ref.current.contains(t) &&
+        !listRef.current?.contains(t)
+      ) {
+        setOpen(false);
+      }
     };
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
@@ -69,11 +93,19 @@ export function SelectMenu<T extends string | number>({
         if (options[next]) onChange(options[next].value);
       }
     };
+    // The portaled menu is fixed-positioned and won't follow the button, so any
+    // scroll (capture-phase catches scrolling ancestors like a sheet body) or
+    // resize just closes it.
+    const onReflow = () => setOpen(false);
     document.addEventListener("mousedown", onClick);
     document.addEventListener("keydown", onKey);
+    window.addEventListener("resize", onReflow);
+    window.addEventListener("scroll", onReflow, true);
     return () => {
       document.removeEventListener("mousedown", onClick);
       document.removeEventListener("keydown", onKey);
+      window.removeEventListener("resize", onReflow);
+      window.removeEventListener("scroll", onReflow, true);
     };
   }, [open, options, value, onChange]);
 
@@ -104,14 +136,23 @@ export function SelectMenu<T extends string | number>({
         />
       </button>
 
-      {open && (
+      {open &&
+        anchor &&
+        typeof document !== "undefined" &&
+        createPortal(
         <ul
+          ref={listRef}
           id={listId}
           role="listbox"
-          className={cn(
-            "animate-in absolute left-0 right-0 z-20 max-h-60 overflow-auto rounded-xl border border-border bg-surface p-1 shadow-xl",
-            dropUp ? "bottom-full mb-1.5" : "top-full mt-1.5",
-          )}
+          style={{
+            position: "fixed",
+            left: anchor.left,
+            width: anchor.width,
+            ...(dropUp
+              ? { bottom: window.innerHeight - anchor.top + 6 }
+              : { top: anchor.bottom + 6 }),
+          }}
+          className="animate-in pointer-events-auto z-[95] max-h-60 overflow-auto rounded-xl border border-border bg-surface p-1 shadow-xl"
         >
           {options.map((o) => {
             const active = o.value === value;
@@ -136,8 +177,9 @@ export function SelectMenu<T extends string | number>({
               </li>
             );
           })}
-        </ul>
-      )}
+        </ul>,
+          document.body,
+        )}
     </div>
   );
 }

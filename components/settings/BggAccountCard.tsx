@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useAction, useMutation, useQuery } from "convex/react";
-import { RefreshCw } from "lucide-react";
+import { RefreshCw, Unlink } from "lucide-react";
 import { api } from "@/convex/_generated/api";
 import { buttonClasses } from "@/components/ui/Button";
 import { useToast } from "@/components/ui/Toast";
@@ -43,6 +43,11 @@ export function BggAccountCard() {
   const playsRunning =
     playsJob &&
     ["queued", "waiting", "running", "sweeping"].includes(playsJob.status);
+
+  // The manual "Import plays" trigger is hidden for now (plays sync is handled
+  // elsewhere); the button's code is kept behind this flag so it's easy to
+  // bring back.
+  const showImportPlays = false;
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -293,7 +298,7 @@ export function BggAccountCard() {
         )}
       </div>
 
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <button
           onClick={doSync}
           disabled={running}
@@ -301,15 +306,22 @@ export function BggAccountCard() {
         >
           Sync collection
         </button>
+        {showImportPlays && (
+          <button
+            onClick={doSyncPlays}
+            disabled={playsRunning}
+            className={buttonClasses("ghost", "sm")}
+          >
+            Import plays
+          </button>
+        )}
         <button
-          onClick={doSyncPlays}
-          disabled={playsRunning}
-          className={buttonClasses("ghost", "sm")}
+          onClick={doUnlink}
+          aria-label="Unlink account"
+          title="Unlink account"
+          className="ml-auto flex h-8 w-8 items-center justify-center rounded-lg text-muted transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-500/10 dark:hover:text-red-400"
         >
-          Import plays
-        </button>
-        <button onClick={doUnlink} className={buttonClasses("ghost", "sm")}>
-          Unlink
+          <Unlink className="h-4 w-4" />
         </button>
       </div>
     </div>

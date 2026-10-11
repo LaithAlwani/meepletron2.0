@@ -10,6 +10,7 @@ import {
 } from "@/lib/usePreferences";
 import { BggAccountCard } from "@/components/settings/BggAccountCard";
 import { ThemeMenu } from "@/components/ThemeToggle";
+import { SelectMenu } from "@/components/ui/SelectMenu";
 
 const FONT_OPTIONS: { value: FontSize; label: string }[] = [
   { value: "sm", label: "Small" },
@@ -61,26 +62,20 @@ export function SettingsPanel() {
         <div className="py-2">
           <ThemeMenu />
         </div>
-        <div className="px-4 py-3.5">
-          <p className="text-sm font-medium text-foreground">Font size</p>
-          <p className="mb-2.5 text-xs text-muted">
-            Scales text across the whole app.
-          </p>
-          <div className="flex flex-wrap gap-1.5">
-            {FONT_OPTIONS.map((o) => (
-              <button
-                key={o.value}
-                onClick={() => set({ fontSize: o.value })}
-                className={`rounded-lg border px-3 py-1.5 text-sm transition-colors ${
-                  prefs.fontSize === o.value
-                    ? "border-accent bg-accent text-accent-foreground"
-                    : "border-border bg-surface text-muted hover:bg-surface-2"
-                }`}
-              >
-                {o.label}
-              </button>
-            ))}
+        <div className="flex items-center justify-between gap-4 px-4 py-3.5">
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-foreground">Font size</p>
+            <p className="mt-0.5 text-xs text-muted">
+              Scales text across the whole app.
+            </p>
           </div>
+          <SelectMenu
+            aria-label="Font size"
+            value={prefs.fontSize}
+            onChange={(value) => set({ fontSize: value })}
+            options={FONT_OPTIONS}
+            className="w-40 shrink-0"
+          />
         </div>
         <Toggle
           label="Reduce motion"

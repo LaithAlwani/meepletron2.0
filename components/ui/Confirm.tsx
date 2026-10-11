@@ -9,6 +9,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { createPortal } from "react-dom";
 
 type ConfirmOptions = {
   title: string;
@@ -75,9 +76,14 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
   return (
     <ConfirmContext.Provider value={confirm}>
       {children}
-      {options && (
+      {options &&
+        typeof document !== "undefined" &&
+        createPortal(
         <div
-          className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-4 sm:items-center"
+          // `pointer-events-auto` re-enables clicks: a drawer open underneath
+          // (vaul/Radix) sets `pointer-events: none` on <body>, which this
+          // body-portaled overlay would otherwise inherit, swallowing clicks.
+          className="pointer-events-auto fixed inset-0 z-[90] flex items-center justify-center bg-black/50 p-4"
           onClick={() => close(false)}
         >
           <div
@@ -119,8 +125,9 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
               </button>
             </div>
           </div>
-        </div>
-      )}
+        </div>,
+          document.body,
+        )}
     </ConfirmContext.Provider>
   );
 }
