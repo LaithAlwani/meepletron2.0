@@ -2,6 +2,13 @@ import type { Metadata, Viewport } from "next";
 import { Bricolage_Grotesque, Hanken_Grotesk, Geist_Mono } from "next/font/google";
 import { GoogleAnalytics } from "@next/third-parties/google";
 import "./globals.css";
+// Lenis's own stylesheet — required in root mode, and previously missing. It
+// sets `html.lenis, html.lenis body { height: auto }`, which overrides the
+// `h-full` / `min-h-full` below; without it documentElement's box stays at
+// viewport height while its scrollHeight grows, so Lenis measures stale scroll
+// bounds. It also makes `lenis.stop()` actually lock the page (overflow: clip)
+// and gives `data-lenis-prevent` scrollers `overscroll-behavior: contain`.
+import "lenis/dist/lenis.css";
 import { Providers } from "./providers";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";

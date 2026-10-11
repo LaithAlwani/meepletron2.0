@@ -27,12 +27,13 @@ export function LenisProvider({ children }: { children: React.ReactNode }) {
 }
 
 /**
- * Re-measure Lenis whenever the page content grows. Lenis's own autoResize
- * observes `document.documentElement`, whose box stays viewport-height even as
- * its scrollHeight grows — so it misses content appended by infinite-scroll
- * lists (and late-loading images), leaving a stale max-scroll that makes
- * scrolling stick/stutter. `document.body` DOES grow with content, so observing
- * it and calling `lenis.resize()` keeps the scroll bounds correct.
+ * Re-measure Lenis whenever the page content grows — content appended by
+ * infinite-scroll lists, and images that land after first paint, both change
+ * the page height without a window resize, and a stale max-scroll makes
+ * scrolling stick or stutter.
+ *
+ * Belt-and-braces alongside Lenis's own autoResize (which observes
+ * documentElement, now that `lenis.css` lets that box grow with the content).
  */
 function LenisResizeWatcher() {
   const lenis = useLenis();
