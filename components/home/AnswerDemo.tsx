@@ -191,8 +191,12 @@ export function AnswerDemo() {
           </span>
         </div>
 
-        {/* Transcript — the chat's own bubble geometry. */}
-        <div className="min-h-[22rem] space-y-4 px-4 py-4 sm:min-h-[20rem]">
+        {/* Transcript — the chat's own bubble geometry. Fixed height (not
+            min-height) so cycling between examples of different lengths never
+            changes the card's size and shifts the content below it. Sized for
+            the tallest example; shorter ones just leave empty space, and
+            overflow-hidden clips gracefully rather than growing. */}
+        <div className="h-[25rem] space-y-4 overflow-hidden px-4 py-4">
           {frame.typed && (
             <div className="flex flex-col items-end">
               <div className="max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-br-sm bg-accent px-4 py-2.5 text-sm leading-relaxed text-accent-foreground">
