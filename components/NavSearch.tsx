@@ -179,7 +179,16 @@ export function NavSearch({ overlay = false }: { overlay?: boolean }) {
             "transition-[opacity,transform] duration-200 ease-out",
             open
               ? "pointer-events-auto translate-x-0 opacity-100"
-              : "pointer-events-none translate-x-3 opacity-0",
+              // Slides in from the LEFT, not the right. The form is
+              // `absolute inset-0` — as wide as the whole bar — so offsetting
+              // it rightwards pushed its edge 12px past the viewport and made
+              // every page carrying this bar 12px wider than the screen. That
+              // horizontal overflow expands the initial containing block, so
+              // the fixed bottom nav and sticky top bar size to 402px on a
+              // 390px screen and slide around as the page pans. Overflow to
+              // the left of the origin isn't scrollable in LTR, so the same
+              // 12px travel costs nothing.
+              : "pointer-events-none -translate-x-3 opacity-0",
           )}
         >
           <button
