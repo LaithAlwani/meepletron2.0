@@ -132,6 +132,12 @@ export const viewport: Viewport = {
   // keyboard overlaying content). Keeps bottom sheets / inputs sized correctly
   // while typing and restores cleanly on dismiss — no stuck-small drawer.
   interactiveWidget: "resizes-content",
+  // Draw into the notch / gesture-bar area, which is what makes
+  // `env(safe-area-inset-*)` report real values. Without this the whole app
+  // reads them as 0 — the mobile top bar reserved nothing for the status bar
+  // and the bottom nav reserved nothing for the gesture bar, so its labels sat
+  // under system UI. Eleven places across the app already assume this is on.
+  viewportFit: "cover",
 };
 
 // Runs before paint to set the theme class + status-bar colour, avoiding a flash

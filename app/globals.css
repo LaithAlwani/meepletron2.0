@@ -110,6 +110,16 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* No pull-to-refresh, no overscroll chaining at the document edges. Chrome's
+   pull-to-refresh pans the ENTIRE visual viewport down, which drags the
+   viewport-anchored chrome with it — the sticky top bar slides down and the
+   fixed bottom nav's labels go off the bottom of the screen. Scrolling up at
+   the top of a list triggered it constantly. Affects installed PWAs as well as
+   browser tabs, which is why it reproduced in both. */
+html {
+  overscroll-behavior-y: none;
+}
+
 /* iOS Safari zooms toward any focused form control whose font-size is under
    16px, and never zooms back out. Our root is 15px, so even text-base inputs
    trip it. Pin form controls to 16px on touch devices — this stops the zoom
