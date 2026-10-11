@@ -226,7 +226,9 @@ function Stat({
   );
 }
 
-/** Self controls: a Public/Private toggle + a gear that opens Settings. */
+/** Self controls: a gear that opens Settings. (The Public/Private toggle is
+ *  hidden for now — profiles are private-only — but its code is kept below,
+ *  gated behind `showVisibilityToggle`, so it's easy to bring back.) */
 function OwnerControls({
   isPublic,
   onSettings,
@@ -237,6 +239,7 @@ function OwnerControls({
   const setPublicProfile = useMutation(api.users.setPublicProfile);
   const toast = useToast();
   const [saving, setSaving] = useState(false);
+  const showVisibilityToggle = false;
 
   async function toggle() {
     setSaving(true);
@@ -255,21 +258,23 @@ function OwnerControls({
 
   return (
     <div className="flex items-center gap-2">
-      <button
-        onClick={toggle}
-        disabled={saving}
-        className={buttonClasses("subtle", "sm")}
-        title={isPublic ? "Make private" : "Make public"}
-      >
-        {saving ? (
-          <Loader2 className="h-4 w-4 animate-spin" />
-        ) : isPublic ? (
-          <Globe className="h-4 w-4" />
-        ) : (
-          <Lock className="h-4 w-4" />
-        )}
-        {isPublic ? "Public" : "Private"}
-      </button>
+      {showVisibilityToggle && (
+        <button
+          onClick={toggle}
+          disabled={saving}
+          className={buttonClasses("subtle", "sm")}
+          title={isPublic ? "Make private" : "Make public"}
+        >
+          {saving ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : isPublic ? (
+            <Globe className="h-4 w-4" />
+          ) : (
+            <Lock className="h-4 w-4" />
+          )}
+          {isPublic ? "Public" : "Private"}
+        </button>
+      )}
       <button
         onClick={onSettings}
         aria-label="Settings"

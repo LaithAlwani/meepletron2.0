@@ -102,6 +102,11 @@ export function AccountSection() {
   );
 }
 
+/** How many avatar photos a user may keep saved at once (mirrors the server
+ *  cap in convex/users.ts). A new upload past this is refused until one is
+ *  deleted. */
+const MAX_SAVED_AVATARS = 3;
+
 export function ProfileAvatar({
   avatarUrl,
   canEdit,
@@ -122,9 +127,24 @@ export function ProfileAvatar({
   const setAvatar = useMutation(api.users.setAvatar);
   const applyRecentAvatar = useMutation(api.users.useRecentAvatar);
   const removeAvatar = useMutation(api.users.removeAvatar);
+  const deleteRecentAvatar = useMutation(api.users.deleteRecentAvatar);
   const toast = useToast();
+  const confirm = useConfirm();
   const fileRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
+
+  const atMax = recentAvatars.length >= MAX_SAVED_AVATARS;
+
+  // Close the picker on Escape, matching the rest of the app's overlays.
+  useEffect(() => {
+    if (!pickerOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setPickerOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [pickerOpen]);
 
   async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -142,6 +162,7 @@ export function ProfileAvatar({
       await syncMetadata({ key });
       await setAvatar({ key });
       toast("Photo updated", "success");
+      setPickerOpen(false);
     } catch (err) {
       toast(friendlyError(err, "Couldn't upload that photo"), "error");
     } finally {
@@ -153,6 +174,7 @@ export function ProfileAvatar({
     setBusy(true);
     try {
       await applyRecentAvatar({ key });
+      setPickerOpen(false);
     } catch {
       toast("Couldn't switch photo", "error");
     } finally {
@@ -160,10 +182,32 @@ export function ProfileAvatar({
     }
   }
 
-  async function remove() {
+  /** Delete a saved photo from the account (removes it from storage too). */
+  async function deleteSaved(key: string) {
+    const ok = await confirm({
+      title: "Delete this photo?",
+      message:
+        "This permanently removes the photo from your saved photos. This can't be undone.",
+      confirmText: "Delete",
+      danger: true,
+    });
+    if (!ok) return;
+    setBusy(true);
+    try {
+      await deleteRecentAvatar({ key });
+      toast("Photo deleted", "success");
+    } catch {
+      toast("Couldn't delete that photo", "error");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function removeCurrent() {
     setBusy(true);
     try {
       await removeAvatar({});
+      setPickerOpen(false);
     } catch {
       toast("Couldn't remove photo", "error");
     } finally {
@@ -172,75 +216,151 @@ export function ProfileAvatar({
   }
 
   return (
-    <div className="flex flex-col items-center gap-2">
-      <div className="relative">
-        <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-full bg-accent/15 text-3xl font-bold text-accent">
-          <AvatarImg
-            src={avatarUrl}
-            initial={initial}
-            icon={isGuest ? <Die className="h-8 w-8" /> : undefined}
-          />
-        </div>
-        {canEdit && (
-          <>
-            <button
-              type="button"
-              onClick={() => fileRef.current?.click()}
-              disabled={busy}
-              aria-label="Change photo"
-              title="Change photo"
-              className="absolute -bottom-1 -right-1 flex h-8 w-8 items-center justify-center rounded-full border-2 border-surface bg-accent text-accent-foreground shadow-md transition-opacity hover:opacity-90 disabled:opacity-60"
-            >
-              {busy ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <Camera className="h-4 w-4" />
-              )}
-            </button>
-            <input
-              ref={fileRef}
-              type="file"
-              accept="image/*"
-              onChange={onFile}
-              className="hidden"
-            />
-          </>
-        )}
+    <div className="relative">
+      <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-full bg-accent/15 text-3xl font-bold text-accent">
+        <AvatarImg
+          src={avatarUrl}
+          initial={initial}
+          icon={isGuest ? <Die className="h-8 w-8" /> : undefined}
+        />
       </div>
-
-      {canEdit && recentAvatars.length > 0 && (
-        <div className="flex items-center gap-1.5">
-          {recentAvatars.map((r) => {
-            const current = r.url === avatarUrl;
-            return (
-              <button
-                key={r.key}
-                type="button"
-                onClick={() => !current && pickRecent(r.key)}
-                disabled={busy || current}
-                aria-label="Use this photo"
-                className={cn(
-                  "h-7 w-7 overflow-hidden rounded-full border-2 transition-colors",
-                  current ? "border-accent" : "border-transparent hover:border-border",
-                )}
-              >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={r.url} alt="" className="h-full w-full object-cover" />
-              </button>
-            );
-          })}
-        </div>
+      {canEdit && (
+        <>
+          <button
+            type="button"
+            onClick={() => setPickerOpen(true)}
+            disabled={busy}
+            aria-label="Change photo"
+            title="Change photo"
+            className="absolute -bottom-1 -right-1 flex h-8 w-8 items-center justify-center rounded-full border-2 border-surface bg-accent text-accent-foreground shadow-md transition-opacity hover:opacity-90 disabled:opacity-60"
+          >
+            {busy && !pickerOpen ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Camera className="h-4 w-4" />
+            )}
+          </button>
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/*"
+            onChange={onFile}
+            className="hidden"
+          />
+        </>
       )}
 
-      {canEdit && hasUpload && (
-        <button
-          type="button"
-          onClick={remove}
-          disabled={busy}
-          className="text-[11px] font-medium text-subtle transition-colors hover:text-red-500 disabled:opacity-50"
+      {/* Photo picker: saved photos (with delete), upload, and remove-current. */}
+      {canEdit && pickerOpen && (
+        <div
+          className="fixed inset-0 z-40 flex items-center justify-center p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Profile photo"
         >
-          Remove photo
-        </button>
+          <button
+            type="button"
+            aria-label="Close"
+            onClick={() => setPickerOpen(false)}
+            className="absolute inset-0 cursor-default bg-black/40"
+          />
+          <div className="relative z-10 w-full max-w-xs rounded-2xl border border-border bg-surface p-5 shadow-xl">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="font-display text-base font-bold">Profile photo</p>
+                <p className="mt-0.5 text-xs text-subtle">
+                  Pick a saved photo or add a new one — up to {MAX_SAVED_AVATARS}.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPickerOpen(false)}
+                aria-label="Close"
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-muted hover:bg-surface-2 hover:text-foreground"
+              >
+                <X className="h-4.5 w-4.5" />
+              </button>
+            </div>
+
+            <div className="mt-4 grid grid-cols-3 gap-3">
+              {recentAvatars.map((r) => {
+                const current = r.url === avatarUrl;
+                return (
+                  <div key={r.key} className="relative aspect-square">
+                    <button
+                      type="button"
+                      onClick={() => !current && pickRecent(r.key)}
+                      disabled={busy}
+                      aria-label={current ? "Current photo" : "Use this photo"}
+                      className={cn(
+                        "h-full w-full overflow-hidden rounded-xl border-2 transition-colors disabled:opacity-60",
+                        current
+                          ? "border-accent"
+                          : "border-transparent hover:border-border",
+                      )}
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={r.url}
+                        alt=""
+                        className="h-full w-full object-cover"
+                      />
+                    </button>
+                    {current && (
+                      <span className="absolute left-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-accent text-accent-foreground shadow">
+                        <Check className="h-3 w-3" />
+                      </span>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => deleteSaved(r.key)}
+                      disabled={busy}
+                      aria-label="Delete photo"
+                      title="Delete photo"
+                      className="absolute -right-1.5 -top-1.5 flex h-6 w-6 items-center justify-center rounded-full border-2 border-surface bg-red-500 text-white shadow transition-colors hover:bg-red-600 disabled:opacity-50"
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </button>
+                  </div>
+                );
+              })}
+
+              {!atMax && (
+                <button
+                  type="button"
+                  onClick={() => fileRef.current?.click()}
+                  disabled={busy}
+                  className="flex aspect-square items-center justify-center rounded-xl border-2 border-dashed border-border text-muted transition-colors hover:border-accent hover:text-accent disabled:opacity-50"
+                  aria-label="Add a photo"
+                >
+                  {busy ? (
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                  ) : (
+                    <Plus className="h-5 w-5" />
+                  )}
+                </button>
+              )}
+            </div>
+
+            {atMax && (
+              <p className="mt-3 text-[11px] text-subtle">
+                You&apos;ve saved the maximum of {MAX_SAVED_AVATARS} photos.
+                Delete one to add another.
+              </p>
+            )}
+
+            {hasUpload && (
+              <button
+                type="button"
+                onClick={removeCurrent}
+                disabled={busy}
+                className="mt-4 text-xs font-medium text-subtle transition-colors hover:text-red-500 disabled:opacity-50"
+              >
+                Remove current photo
+              </button>
+            )}
+          </div>
+        </div>
       )}
     </div>
   );
