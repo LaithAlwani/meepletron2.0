@@ -196,9 +196,8 @@ export function AnswerDemo() {
             changes the card's size and shifts the content below it. Sized to fit
             the tallest example on normal screens; overflow-y-auto means a taller
             one (very narrow widths) scrolls instead of clipping, never grows.
-            data-lenis-prevent keeps that scroll off the page's smooth-scroll. */}
+            so a long answer scrolls inside the frame. */}
         <div
-          data-lenis-prevent
           className="chat-scroll h-112 space-y-4 overflow-y-auto px-4 py-4"
         >
           {frame.typed && (

@@ -13,8 +13,6 @@ import {
 } from "@/components/topbar/MobileTopBar";
 import { PreferencesEffects } from "@/components/PreferencesEffects";
 import { MotionProvider } from "@/components/motion/MotionProvider";
-import { LenisProvider } from "@/components/motion/LenisProvider";
-import { GsapLenisBridge } from "@/components/motion/GsapLenisBridge";
 import { PageTransition } from "@/components/motion/PageTransition";
 import { SITE_URL } from "@/lib/site";
 
@@ -155,18 +153,15 @@ export default function RootLayout({
           <PreferencesEffects />
           <NavigationTracker />
           <MotionProvider>
-            <LenisProvider>
-              <GsapLenisBridge />
-              <TopBarTitleProvider>
-                <SiteHeader />
-                <MobileTopBar />
-                <main className="relative z-10 flex-1">
-                  <PageTransition>{children}</PageTransition>
-                </main>
-                <SiteFooter />
-                <BottomNav />
-              </TopBarTitleProvider>
-            </LenisProvider>
+            <TopBarTitleProvider>
+              <SiteHeader />
+              <MobileTopBar />
+              <main className="relative z-10 flex-1">
+                <PageTransition>{children}</PageTransition>
+              </main>
+              <SiteFooter />
+              <BottomNav />
+            </TopBarTitleProvider>
           </MotionProvider>
         </Providers>
       </body>

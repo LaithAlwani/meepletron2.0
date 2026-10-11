@@ -3,7 +3,6 @@
 import { useEffect } from "react";
 import { createPortal } from "react-dom";
 import { Drawer } from "vaul";
-import { useLenis } from "lenis/react";
 import { useMediaQuery } from "@/lib/useMediaQuery";
 import { cn } from "@/lib/cn";
 
@@ -48,16 +47,6 @@ export function Sheet({
   children,
 }: SheetProps) {
   const isDesktop = useMediaQuery("(min-width: 640px)");
-  const lenis = useLenis();
-
-  // Pause site-wide smooth scroll while a sheet is open so Lenis doesn't fight
-  // the drawer's scroll-lock (or scroll the page behind it). No-op when Lenis
-  // isn't running (reduced motion).
-  useEffect(() => {
-    if (!open || !lenis) return;
-    lenis.stop();
-    return () => lenis.start();
-  }, [open, lenis]);
 
   // While a keyboard-overlay sheet is open on mobile, flip the viewport from
   // `resizes-content` (the app default, which shrinks the page and rides the

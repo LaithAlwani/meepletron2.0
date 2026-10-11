@@ -174,7 +174,6 @@ export default function ProfilePage({
             </button>
           </div>
           <div
-            data-lenis-prevent
             className="themed-scroll min-h-0 flex-1 overflow-y-auto p-4"
           >
             <SettingsPanel />
