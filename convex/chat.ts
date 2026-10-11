@@ -18,6 +18,7 @@ import {
   DEFAULT_CHAT_MODEL,
 } from "./lib/chatConfig";
 import { rowCost } from "./lib/pricing";
+import { stripCitationMarkers } from "./lib/prompts";
 
 /** Daily token budgets: guests get a smaller allowance to nudge sign-up. */
 export const DAILY_TOKEN_LIMIT = 50_000;
@@ -413,9 +414,14 @@ export const getStreamContext = internalQuery({
       .withIndex("by_chat", (q) => q.eq("chatId", chatId))
       .order("desc")
       .take(historyLimit);
+    // Assistant turns go back without their [N] markers: those numbers index
+    // the chunks retrieved for THAT question, so replaying them alongside a
+    // fresh CONTEXT reads as unsupported claims and prompts the model to
+    // retract answers that were correct (see stripCitationMarkers).
     const history = recent.reverse().map((m) => ({
       role: m.role,
-      content: m.content,
+      content:
+        m.role === "assistant" ? stripCitationMarkers(m.content) : m.content,
     }));
 
     const lastUser = [...recent].find((m) => m.role === "user");

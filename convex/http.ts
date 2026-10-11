@@ -6,7 +6,11 @@ import { getAuthUserId } from "@convex-dev/auth/server";
 import { streamText } from "ai";
 import { auth } from "./auth";
 import { finite } from "./lib/num";
-import { resolveChatModel, chatProviderOptions } from "./lib/aiModels";
+import {
+  resolveChatModel,
+  chatProviderOptions,
+  temperatureFor,
+} from "./lib/aiModels";
 import { isChatModelAllowed } from "./lib/chatConfig";
 import { buildAnswer } from "./rag";
 import { createIconTokenStripper } from "./lib/prompts";
@@ -175,7 +179,7 @@ const chat = httpAction(async (ctx, request) => {
     model: resolveChatModel(answerModel),
     system,
     messages,
-    temperature: answerTemperature,
+    temperature: temperatureFor(answerModel, answerTemperature),
     providerOptions: chatProviderOptions(answerModel, {
       thinkingBudget: answerThinkingBudget,
     }),

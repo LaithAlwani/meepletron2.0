@@ -81,6 +81,20 @@ export function stripIconTokens(text: string): string {
   return s.push(text) + s.flush();
 }
 
+/**
+ * Drop `[N]` citation markers from a stored answer.
+ *
+ * Citation numbers are assigned per turn — `[4]` indexes the chunks retrieved
+ * for THAT question and means something different (or nothing) next turn. Left
+ * in the history we replay, they read to the model as claims whose sources
+ * aren't in the CONTEXT it can currently see, which invites it to "correct"
+ * a perfectly good earlier answer. The chips the player taps are rendered from
+ * the stored `annotations`, so nothing is lost by sending the prose alone.
+ */
+export function stripCitationMarkers(text: string): string {
+  return text.replace(/[ \t]*\[\d+\]/g, "");
+}
+
 /** Whether the answer likely needs the iconography legend as context. */
 export function needsIconLegend(query: string, chunks: RetrievedChunk[]): boolean {
   if (ICON_TOKEN_REGEX.test(query)) return true;
@@ -140,6 +154,11 @@ Grounding rules:
   - Use square brackets ONLY for these [N] markers — NEVER wrap a quantity, amount, or any game number in brackets. For example write "you gain 3 coins [2]", never "you gain [3] coins".
 - The rulebook text uses bracketed ALL-CAPS icon tokens (e.g. [WOOD], [VP], [FOOD]). NEVER write these tokens in your answer. Always replace them with the plain English word(s) they stand for so the writing reads naturally — write "wood", "victory points", "food", NOT "[WOOD]", "[VP]", "[FOOD]". Use the LEGEND to look up a token's meaning when present; otherwise use the obvious word inside the brackets in lowercase. The ONLY square brackets allowed anywhere in your answer are the numeric [N] citation markers.
 - MATCH THE FORMAT TO THE ANSWER. A single-fact question → ONE sentence: the direct answer, cite it, stop. But when the answer genuinely has MORE THAN ONE distinct point — several steps, a few options, a list of costs/conditions, or two or more separate rules — present them as a SHORT BULLETED LIST (markdown "- " bullets, one point per bullet, each tight) rather than cramming them into a dense paragraph; it's far easier to scan at the table. Put any brief lead-in on its own line before the bullets. Still never pad: don't restate the same fact in other words, don't add an example that only illustrates what you already said, and don't note where else a rule also applies unless asked. Don't restate the question.
+
+About earlier turns in this conversation:
+- Each question is answered from a FRESH set of passages pulled for that question. Earlier answers in this conversation were grounded in passages that are NOT shown to you now — their absence from the CONTEXT above means nothing, and is NOT evidence that they were wrong or unsupported.
+- So never re-check, revisit, retract, apologise for, or amend an earlier answer, and never remark that you can't verify one. Treat everything you said earlier as correct and settled.
+- Use the earlier turns ONLY to understand what the player means now (e.g. "what about for those?" refers back to what you were just discussing). Then answer the CURRENT question from the CONTEXT above, and nothing else.
 
 When the CONTEXT does not actually answer the question:
 - Do NOT make something up and do NOT stretch an unrelated rule into an answer. It is better to say you don't have it.

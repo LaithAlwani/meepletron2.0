@@ -10,7 +10,11 @@ import type { Id } from "./_generated/dataModel";
 import { generateText, generateObject, type LanguageModel } from "ai";
 import { z } from "zod";
 import { embedQuery, EMBEDDING_MODEL_ID } from "./lib/embedding";
-import { resolveChatModel, chatProviderOptions } from "./lib/aiModels";
+import {
+  resolveChatModel,
+  chatProviderOptions,
+  temperatureFor,
+} from "./lib/aiModels";
 import { DEFAULT_CHAT_MODEL } from "./lib/chatConfig";
 import { finite } from "./lib/num";
 import {
@@ -74,7 +78,7 @@ async function rewriteQuery(
     const { text, usage: u } = await generateText({
       model,
       prompt: buildRewritePrompt(history, query),
-      temperature: 0,
+      temperature: temperatureFor(modelId, 0),
       providerOptions: chatProviderOptions(modelId, { thinkingBudget: 0 }),
     });
     const rewritten = text.trim();
@@ -113,7 +117,7 @@ async function rerankChunks(
       model,
       schema: z.object({ indices: z.array(z.number()) }),
       prompt: buildRerankPrompt(query, chunks, n),
-      temperature: 0,
+      temperature: temperatureFor(modelId, 0),
       // Reasoning on (bounded, Gemini only): choosing which passage actually
       // answers the question — e.g. the "take a researcher card" action vs. a
       // card that merely mentions "researcher card" — is exactly the judgement
