@@ -646,7 +646,7 @@ function ChatView({
                           1e6
                       ).toFixed(4)}
                       {m.answerModel &&
-                        ` · ${m.answerModel.replace(/^(gemini|claude)-/, "")}`}
+                        ` · ${m.answerModel.replace(/^gemini-/, "")}`}
                     </p>
                   )}
               </Fragment>

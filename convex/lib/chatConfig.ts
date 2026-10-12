@@ -4,7 +4,7 @@
  * the runtime reader (`chat.getActiveConfig`) so the two can never drift. Plain
  * data/logic — no server imports — so it's safe to import from anywhere.
  */
-export type ChatProvider = "google" | "anthropic" | "openai";
+export type ChatProvider = "google" | "openai";
 
 /** One answer/aux model the admin can pick. `id` is the AI-SDK model id — also
  *  the value stored in siteConfig, the usageLog key, and the PRICING key.
@@ -25,28 +25,12 @@ export const OPENAI_LUNA_ID = "gpt-6-luna";
 
 // The single source of truth for the answer/aux pickers, pricing, and the
 // model→provider resolver (convex/lib/aiModels.ts derives from this). Adding a
-// row here wires the model into the picker AND prices it (no silent $0). Prices
-// marked TBD are placeholders until the provider's real rate is filled in.
-// Order here is the order shown in the in-chat picker (top → bottom): admin-only
-// Flash 3.6, then Flash-Lite, GPT-6 Luna, GPT-4o mini, and Haiku (the default)
-// at the bottom. Non-admins don't see Flash 3.6, so for them it's Flash-Lite →
-// Luna → 4o mini → Haiku.
+// row here wires the model into the picker AND prices it (no silent $0).
+// Order here is the order shown in the in-chat picker (top → bottom): Luna on
+// top (for signed-in users), then GPT-4o mini — the default, and the only model
+// guests get — then the two admin-only Gemini models. Non-admins don't see the
+// Geminis, so for them the picker is Luna → 4o mini; guests get 4o mini only.
 export const CHAT_MODELS = [
-  {
-    id: "gemini-3.6-flash",
-    provider: "google",
-    label: "Flash 3.6 — Gemini",
-    input: 0.75, // std $1.50/$7.50; currently a 50% launch promo
-    output: 3.75,
-    adminOnly: true, // pricey — hidden from the in-chat picker for non-admins
-  },
-  {
-    id: "gemini-3.5-flash-lite",
-    provider: "google",
-    label: "Flash-Lite 3.5 — Gemini",
-    input: 0.3,
-    output: 2.5,
-  },
   {
     // Pricing is the owner-provided ~$0.10 in / $0.75 out (confirm exact rates).
     id: OPENAI_LUNA_ID,
@@ -63,14 +47,20 @@ export const CHAT_MODELS = [
     output: 0.6,
   },
   {
-    // Base tier ($0.10/$0.50 up to 100K-token prompts; Anthropic charges 5×
-    // beyond 100K — our rulebook prompts stay well under, and rowCost is flat,
-    // so the base tier is what we bill).
-    id: "claude-haiku-5-5",
-    provider: "anthropic",
-    label: "Claude Haiku 5.5 — Anthropic",
-    input: 0.1,
-    output: 0.5,
+    id: "gemini-3.6-flash",
+    provider: "google",
+    label: "Flash 3.6 — Gemini",
+    input: 0.75, // std $1.50/$7.50; currently a 50% launch promo
+    output: 3.75,
+    adminOnly: true, // pricey — hidden from the in-chat picker for non-admins
+  },
+  {
+    id: "gemini-3.5-flash-lite",
+    provider: "google",
+    label: "Flash-Lite 3.5 — Gemini",
+    input: 0.3,
+    output: 2.5,
+    adminOnly: true, // Gemini models are admin-only now
   },
 ] as const satisfies readonly ChatModelEntry[];
 
@@ -84,20 +74,13 @@ const PROVIDER_BY_ID: Record<string, ChatProvider> = Object.fromEntries(
 /** Which provider a model id belongs to. Falls back to an id-prefix guess for
  *  ids not in the registry (e.g. a value lingering in siteConfig). */
 export function providerFor(id: string): ChatProvider {
-  return (
-    PROVIDER_BY_ID[id] ??
-    (id.startsWith("gemini-")
-      ? "google"
-      : id.startsWith("claude-")
-        ? "anthropic"
-        : "openai")
-  );
+  return PROVIDER_BY_ID[id] ?? (id.startsWith("gemini-") ? "google" : "openai");
 }
 
 // The default answer+aux model for everyone when a user hasn't picked one in
 // the chat. There is no global answer/aux config anymore — the in-chat picker
 // is the only control. Must not be adminOnly (so non-admins can use it too).
-export const DEFAULT_CHAT_MODEL: ChatModelId = "claude-haiku-5-5";
+export const DEFAULT_CHAT_MODEL: ChatModelId = "gpt-4o-mini";
 
 // Widened view (the `as const` tuple hides optional fields like adminOnly).
 const CHAT_MODEL_ENTRIES: readonly ChatModelEntry[] = CHAT_MODELS;

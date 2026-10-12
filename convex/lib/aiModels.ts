@@ -7,12 +7,10 @@
  * there's no circular dependency.
  *
  * Provider API keys are read lazily by the SDK factories at request time
- * (GOOGLE_GENERATIVE_AI_API_KEY / ANTHROPIC_API_KEY / OPENAI_API_KEY), so
- * importing this module without a key set is safe — only an actual call on that
- * provider fails.
+ * (GOOGLE_GENERATIVE_AI_API_KEY / OPENAI_API_KEY), so importing this module
+ * without a key set is safe — only an actual call on that provider fails.
  */
 import { google } from "@ai-sdk/google";
-import { anthropic } from "@ai-sdk/anthropic";
 import { openai } from "@ai-sdk/openai";
 import type { LanguageModel } from "ai";
 import type { SharedV4ProviderOptions } from "@ai-sdk/provider";
@@ -20,14 +18,7 @@ import { providerFor, thinkingBudgetFor } from "./chatConfig";
 
 /** Resolve a model id to its provider's AI-SDK model instance. */
 export function resolveChatModel(id: string): LanguageModel {
-  switch (providerFor(id)) {
-    case "anthropic":
-      return anthropic(id);
-    case "openai":
-      return openai(id);
-    default:
-      return google(id);
-  }
+  return providerFor(id) === "openai" ? openai(id) : google(id);
 }
 
 /**
@@ -35,46 +26,33 @@ export function resolveChatModel(id: string): LanguageModel {
  * provider's block to another's model. `temperature` stays a top-level
  * generate/stream arg, not a provider option (see `temperatureFor`).
  *
- * Gemini takes a `thinkingConfig` budget. Anthropic gets the same stance spelled
- * out its own way: thinking off, low effort. Without this, Claude models think
- * by default (Haiku 5.5 at `medium`), which bills as output at 5× the input
- * rate and makes the model audit the conversation before answering — it would
- * notice an earlier answer whose passages are no longer in CONTEXT and retract
- * it. `disabled` is only accepted at effort `high` or below, which `low`
- * satisfies. OpenAI keeps provider defaults.
+ * Gemini takes a `thinkingConfig` budget (thinking off by default, since the
+ * answer is grounded on already-retrieved passages). OpenAI models keep the
+ * provider defaults, so they need no provider block.
  */
 export function chatProviderOptions(
   id: string,
   opts: { thinkingBudget?: number } = {},
 ): SharedV4ProviderOptions | undefined {
-  switch (providerFor(id)) {
-    case "google":
-      return {
-        google: {
-          thinkingConfig: {
-            thinkingBudget: thinkingBudgetFor(id, opts.thinkingBudget ?? 0),
-          },
+  if (providerFor(id) === "google") {
+    return {
+      google: {
+        thinkingConfig: {
+          thinkingBudget: thinkingBudgetFor(id, opts.thinkingBudget ?? 0),
         },
-      };
-    case "anthropic":
-      return {
-        anthropic: { thinking: { type: "disabled" }, effort: "low" },
-      };
-    default:
-      return undefined;
+      },
+    };
   }
+  return undefined;
 }
 
 /**
- * The sampling temperature to send, or `undefined` to send none.
- *
- * Claude 4.6 and later removed the sampling parameters — a non-default
- * `temperature` is rejected — so Anthropic models get none and use the
- * provider default. Everyone else gets the configured value.
+ * The sampling temperature to send. Gemini and OpenAI both accept it, so the
+ * configured value (low by default, for consistent answers) passes through.
  */
 export function temperatureFor(
-  id: string,
+  _id: string,
   requested: number | undefined,
 ): number | undefined {
-  return providerFor(id) === "anthropic" ? undefined : requested;
+  return requested;
 }

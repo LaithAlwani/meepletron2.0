@@ -460,7 +460,7 @@ export const getStreamContext = internalQuery({
 
 /**
  * The model the in-chat picker defaults to when the user hasn't chosen one.
- * There's no global answer/aux config — it's a fixed default (Haiku for now),
+ * There's no global answer/aux config — it's a fixed default (GPT-4o mini for now),
  * and non-admin-safe. Public — any signed-in user seeds their picker from it.
  */
 export const chatModelDefault = query({

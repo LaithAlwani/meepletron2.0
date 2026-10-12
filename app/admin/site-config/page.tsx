@@ -48,7 +48,7 @@ const knobs = [
   {
     key: "answerThinkingBudget" as const,
     label: "Answer thinking budget",
-    help: "Gemini reasoning tokens for the answer (billed as output). 0 = off (cheapest, recommended — answers are grounded on retrieved passages), -1 = dynamic/auto, or a token cap up to 24576. Note: Flash-Lite can't be 0 — it's auto-raised to 512. Only applies to Gemini answer models (ignored for Claude/OpenAI).",
+    help: "Gemini reasoning tokens for the answer (billed as output). 0 = off (cheapest, recommended — answers are grounded on retrieved passages), -1 = dynamic/auto, or a token cap up to 24576. Note: Flash-Lite can't be 0 — it's auto-raised to 512. Only applies to Gemini answer models (ignored for OpenAI).",
     step: 1,
   },
 ];
