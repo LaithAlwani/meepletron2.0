@@ -17,9 +17,40 @@ import { EmailOtp } from "./otp/EmailOtp";
  * - Anonymous: guests get a real identity so the daily token budget is enforced
  *   server-side (not via bypassable localStorage).
  */
+// Origins the Google OAuth flow may hand the browser back to. In prod that's
+// just the real site (`SITE_URL`); in dev we also allow the common localhost
+// ports so sign-in returns to whichever port `next dev` grabbed (3000 is often
+// already taken), instead of always bouncing to the single `SITE_URL` port.
+const ALLOWED_REDIRECT_ORIGINS = [
+  process.env.SITE_URL,
+  "http://localhost:3000",
+  "http://localhost:3001",
+  "http://localhost:3002",
+].filter((o): o is string => !!o);
+
 export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
   providers: [Password({ verify: EmailOtp }), Google, Anonymous()],
   callbacks: {
+    /**
+     * Gate the post-OAuth redirect. Relative targets are always safe (they
+     * resolve against `SITE_URL`); an absolute target must exactly match one of
+     * the allowed origins — the trailing-slash check blocks look-alikes like
+     * `http://localhost:3000.evil.com` that would otherwise capture the session
+     * code. This is what lets a sign-in started on :3001 come back to :3001.
+     */
+    async redirect({ redirectTo }) {
+      if (redirectTo.startsWith("/") || redirectTo.startsWith("?")) {
+        return redirectTo;
+      }
+      if (
+        ALLOWED_REDIRECT_ORIGINS.some(
+          (o) => redirectTo === o || redirectTo.startsWith(o + "/"),
+        )
+      ) {
+        return redirectTo;
+      }
+      throw new Error(`Invalid redirectTo: ${redirectTo}`);
+    },
     async afterUserCreatedOrUpdated(ctx, { userId, existingUserId }) {
       // Once this account's email is verified (Google immediately, Password
       // after the emailed code), adopt a reserved imported row with the same

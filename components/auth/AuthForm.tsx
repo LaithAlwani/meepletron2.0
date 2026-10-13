@@ -94,9 +94,13 @@ export function AuthForm() {
     try {
       if (provider === "google") await stashGuestUpgrade();
       // Google redirects away and back — tell it to land on the library, not "/".
+      // Use an absolute URL on the *current* origin so sign-in returns to the
+      // port dev started on (3000/3001/3002), not whatever `SITE_URL` points at.
       await signIn(
         provider,
-        provider === "google" ? { redirectTo: "/boardgames" } : undefined,
+        provider === "google"
+          ? { redirectTo: `${window.location.origin}/boardgames` }
+          : undefined,
       );
       if (provider === "anonymous") router.push("/boardgames");
     } catch {
