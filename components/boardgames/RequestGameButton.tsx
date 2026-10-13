@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAction, useMutation, useQuery } from "convex/react";
-import { BookPlus, Check, LogIn } from "lucide-react";
+import { BookPlus, Clock, LogIn } from "lucide-react";
 import { api } from "@/convex/_generated/api";
 import { useToast } from "@/components/ui/Toast";
 import { useConfirm } from "@/components/ui/Confirm";
@@ -30,6 +30,11 @@ export function RequestGameButton({
   const me = useQuery(api.users.me);
   const importGame = useAction(api.images.importGame);
   const request = useMutation(api.rulebookRequests.requestRulebook);
+  // If this BGG game was already imported and the caller requested it, keep the
+  // button in its disabled "pending" state across sessions.
+  const alreadyRequested = useQuery(api.rulebookRequests.myRequestByBgg, {
+    bggId,
+  });
   const toast = useToast();
   const confirm = useConfirm();
   const router = useRouter();
@@ -81,16 +86,19 @@ export function RequestGameButton({
     }
   }
 
+  const pending = done || alreadyRequested === true;
   return (
     <button
       onClick={onClick}
-      disabled={busy || done || me === undefined}
+      disabled={
+        busy || pending || me === undefined || alreadyRequested === undefined
+      }
       className={className}
     >
-      {done ? (
+      {pending ? (
         <>
-          <Check className="h-4 w-4" />
-          Requested
+          <Clock className="h-4 w-4" />
+          Request pending
         </>
       ) : (
         <>

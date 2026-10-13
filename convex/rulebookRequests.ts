@@ -7,7 +7,7 @@ import {
 } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
 import { internal } from "./_generated/api";
-import { requireUser, requireAdmin } from "./lib/auth";
+import { getCurrentUser, requireUser, requireAdmin } from "./lib/auth";
 import { thumbUrl } from "./lib/gameCover";
 
 const SITE_URL = process.env.SITE_URL || "https://www.meepletron.com";
@@ -129,20 +129,86 @@ export const listRequests = query({
       title: string;
       thumbUrl: string | null;
       count: number;
+      // Who asked — so the admin can see (and reach) the requesters.
+      requesters: {
+        username: string | null;
+        email: string | null;
+        createdAt: number;
+      }[];
     }[] = [];
     for (const [gameId, count] of counts) {
       const game = await ctx.db.get("games", gameId);
       if (!game) continue;
+      const rows = await ctx.db
+        .query("rulebookRequests")
+        .withIndex("by_game", (q) => q.eq("gameId", gameId))
+        .collect();
+      rows.sort((a, b) => a.createdAt - b.createdAt);
+      const requesters = [];
+      for (const r of rows) {
+        const u = await ctx.db.get("users", r.userId);
+        requesters.push({
+          username: u?.username ?? u?.name ?? null,
+          email: u?.email ?? null,
+          createdAt: r.createdAt,
+        });
+      }
       items.push({
         gameId,
         slug: game.slug,
         title: game.title,
         thumbUrl: await thumbUrl(ctx, game),
         count,
+        requesters,
       });
     }
     items.sort((a, b) => b.count - a.count);
     return items;
+  },
+});
+
+/**
+ * Whether the signed-in caller already has a pending request for this game — so
+ * the game page can show a disabled "Request pending" button instead of letting
+ * them request twice. False when signed out.
+ */
+export const myRequest = query({
+  args: { gameId: v.id("games") },
+  handler: async (ctx, { gameId }): Promise<boolean> => {
+    const user = await getCurrentUser(ctx);
+    if (!user) return false;
+    const existing = await ctx.db
+      .query("rulebookRequests")
+      .withIndex("by_game_and_user", (q) =>
+        q.eq("gameId", gameId).eq("userId", user._id),
+      )
+      .unique();
+    return existing !== null;
+  },
+});
+
+/**
+ * Same as {@link myRequest}, keyed on a BoardGameGeek id — for the "request this
+ * game" preview page, which only has the BGG id until the game is imported. No
+ * local game yet (or no request) ⇒ false.
+ */
+export const myRequestByBgg = query({
+  args: { bggId: v.string() },
+  handler: async (ctx, { bggId }): Promise<boolean> => {
+    const user = await getCurrentUser(ctx);
+    if (!user) return false;
+    const game = await ctx.db
+      .query("games")
+      .withIndex("by_bgg_id", (q) => q.eq("bggId", bggId))
+      .first();
+    if (!game) return false;
+    const existing = await ctx.db
+      .query("rulebookRequests")
+      .withIndex("by_game_and_user", (q) =>
+        q.eq("gameId", game._id).eq("userId", user._id),
+      )
+      .unique();
+    return existing !== null;
   },
 });
 

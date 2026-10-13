@@ -24,12 +24,12 @@ export default function AdminRequestsPage() {
             <thead className="bg-surface-2 text-left text-muted">
               <tr>
                 <th className="px-3 py-2 font-medium">Game</th>
-                <th className="px-3 py-2 text-right font-medium">Requests</th>
+                <th className="px-3 py-2 font-medium">Requested by</th>
               </tr>
             </thead>
             <tbody>
               {requests.map((r) => (
-                <tr key={r.gameId} className="border-t border-border">
+                <tr key={r.gameId} className="border-t border-border align-top">
                   <td className="px-3 py-2">
                     <Link
                       href={`/admin/boardgames/${r.gameId}`}
@@ -48,8 +48,24 @@ export default function AdminRequestsPage() {
                       <span className="font-medium">{r.title}</span>
                     </Link>
                   </td>
-                  <td className="px-3 py-2 text-right font-semibold tabular-nums">
-                    {r.count}
+                  <td className="px-3 py-2">
+                    <ul className="space-y-2">
+                      {r.requesters.map((u, i) => (
+                        <li key={i} className="leading-tight">
+                          <div className="font-medium">
+                            {u.username ?? "—"}
+                          </div>
+                          {u.email && (
+                            <a
+                              href={`mailto:${u.email}`}
+                              className="block text-xs text-muted hover:underline"
+                            >
+                              {u.email}
+                            </a>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
                   </td>
                 </tr>
               ))}
