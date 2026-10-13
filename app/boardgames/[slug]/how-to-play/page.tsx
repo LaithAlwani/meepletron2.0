@@ -51,7 +51,9 @@ export async function generateMetadata({
   const title = `${game.title} rules & rulebook — how to play`;
   const description = `${game.title} rules made simple: setup, turns, scoring and how to win. Download the official ${game.title} rulebook (PDF) and get answers to the most-asked ${game.title} rules questions.`;
   return {
-    title,
+    // Browser-tab + Google-SERP title; the root template appends "· Meepletron".
+    // The keyword-rich variant stays on the OG/Twitter card below.
+    title: `${game.title} | How to Play`,
     description,
     alternates: { canonical: `/boardgames/${slug}/how-to-play` },
     openGraph: {

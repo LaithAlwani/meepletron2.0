@@ -35,7 +35,8 @@ export async function generateMetadata({
     (game.description ? clean(game.description).slice(0, 200) : "") ||
     `Rules, reference, and rulebook chat for ${game.title} on Meepletron.`;
   return {
-    title,
+    // Browser-tab + Google-SERP title; the root template appends "· Meepletron".
+    title: `${game.title} | Board Game`,
     description,
     alternates: { canonical: `/boardgames/${game.slug}` },
     openGraph: {
