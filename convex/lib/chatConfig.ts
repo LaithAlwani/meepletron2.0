@@ -26,26 +26,11 @@ export const OPENAI_LUNA_ID = "gpt-6-luna";
 // The single source of truth for the answer/aux pickers, pricing, and the
 // model→provider resolver (convex/lib/aiModels.ts derives from this). Adding a
 // row here wires the model into the picker AND prices it (no silent $0).
-// Order here is the order shown in the in-chat picker (top → bottom): Luna on
-// top (for signed-in users), then GPT-4o mini — the default, and the only model
-// guests get — then the two admin-only Gemini models. Non-admins don't see the
-// Geminis, so for them the picker is Luna → 4o mini; guests get 4o mini only.
+// Order here is the order shown in the in-chat picker (top → bottom): the two
+// admin-only Gemini models first, then ChatGPT 6 Luna, then GPT-4o mini (the
+// default, and the only model guests get). Non-admins don't see the Geminis, so
+// for them the picker is Luna → 4o mini; guests get 4o mini only.
 export const CHAT_MODELS = [
-  {
-    // Pricing is the owner-provided ~$0.10 in / $0.75 out (confirm exact rates).
-    id: OPENAI_LUNA_ID,
-    provider: "openai",
-    label: "ChatGPT 6 Luna — OpenAI",
-    input: 0.1,
-    output: 0.75,
-  },
-  {
-    id: "gpt-4o-mini",
-    provider: "openai",
-    label: "GPT-4o mini — OpenAI",
-    input: 0.15,
-    output: 0.6,
-  },
   {
     id: "gemini-3.6-flash",
     provider: "google",
@@ -61,6 +46,21 @@ export const CHAT_MODELS = [
     input: 0.3,
     output: 2.5,
     adminOnly: true, // Gemini models are admin-only now
+  },
+  {
+    // Pricing is the owner-provided ~$0.10 in / $0.75 out (confirm exact rates).
+    id: OPENAI_LUNA_ID,
+    provider: "openai",
+    label: "ChatGPT 6 Luna — OpenAI",
+    input: 0.1,
+    output: 0.75,
+  },
+  {
+    id: "gpt-4o-mini",
+    provider: "openai",
+    label: "GPT-4o mini — OpenAI",
+    input: 0.15,
+    output: 0.6,
   },
 ] as const satisfies readonly ChatModelEntry[];
 
