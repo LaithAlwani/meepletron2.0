@@ -21,6 +21,7 @@ export function buildExtractionPrompt(
 
 Rules:
 - Transcribe the rules faithfully. Do NOT summarize, invent, or omit rules.
+- Transcribe ONLY what is on the page. Never complete a sentence the page cuts off, never fill in a number or word that is illegible or obscured, and never add a rule you know this game has but cannot read here — everything downstream treats this text as the rulebook itself, so anything you supply becomes a rule the game does not have. Where text is unreadable, leave it out rather than guessing at it.
 - Use Markdown headings (#, ##, ###) that mirror the rulebook's section structure.
 - Preserve tables as Markdown tables and lists as Markdown lists.
 - At the START of each page's content, emit a marker comment on its own line: \`<!-- page N -->\`, where N is the ACTUAL rulebook page number (between ${startPage} and ${endPage}). Emit a marker for EVERY page in this range in order — even a short, mostly-image, or section-continuing page — and never merge two pages under one marker. Transcribe every column and callout box; do not skip sidebars.

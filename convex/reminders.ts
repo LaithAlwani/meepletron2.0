@@ -67,7 +67,15 @@ export const generateForGame = internalAction({
         }),
         prompt: `You are building a "rules refresher" for a board game — the small, nitty-gritty details a player forgets after not playing for a few months. From the rulebook excerpts below, extract 4–10 such facts. Good candidates: starting resources/money/cards each player begins with, hand/supply limits, tie-breaker rules, turn-order edge cases, what triggers the end of the game, specific end-game scoring amounts, and rules people commonly misremember.
 
-Each item: a short "label" (2–5 words, e.g. "Starting money", "Ties", "Hand limit", "Game end") and a one-sentence "detail" with the concrete rule — prefer exact numbers. ONLY use facts stated in the excerpts; do not invent or generalize. If a fact isn't in the excerpts, leave it out. Return an empty array if none apply.
+Each item: a short "label" (2–5 words, e.g. "Starting money", "Ties", "Hand limit", "Game end") and a one-sentence "detail" with the concrete rule — prefer exact numbers.
+
+Grounding rules:
+- UNDER NO CIRCUMSTANCES state anything that is not in the excerpts. Not a clarification, not an example, not an edge case, not a "usually". If it is not in the excerpts below, it does not go in the output. This overrides everything else here, including returning a useful number of items.
+- Every DETAIL must be traceable to the excerpts in full — not just its opening. A detail that starts with a real rule and then runs on into something the excerpts don't state is a fabrication, however obvious the continuation sounds, and the true first half is exactly what makes the invented second half credible. Check the whole sentence before you keep it.
+- NEVER finish a rule the excerpts leave open. If they give a tie-breaker but not what happens when players are STILL tied, the detail is the tie-breaker alone — stop where the text stops. Never append what "then" happens, and never fall back on how other board games handle it.
+- Never infer a number. Use only quantities the excerpts actually state; do not calculate, scale by player count, or supply a number that looks right.
+- Recognising the game is not a source. If you know this game and remember a rule, that memory licenses nothing — only the excerpts do. Where memory would fill a gap the excerpts leave, the gap stays and the item is dropped.
+- Fewer, fully-supported items beat a longer list. Returning 4 solid facts — or an empty array — is correct and expected when that is all the excerpts support.
 
 RULEBOOK EXCERPTS:
 ${context}`,

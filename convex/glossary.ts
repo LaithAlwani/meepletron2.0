@@ -83,7 +83,16 @@ export const generateForGame = internalAction({
               z.object({ item: z.string(), count: z.number() }),
             ),
           }),
-          prompt: `From the board game rulebook excerpt below, extract the physical components in the box (the "Components"/"Contents" list) with their quantities. Give each item's name and its integer count; if no quantity is stated use 1. Only include real physical components — not rules, phases, or icons. If the excerpt has no component list, return an empty array.\n\n${compText}`,
+          prompt: `From the board game rulebook excerpt below, extract the physical components in the box (the "Components"/"Contents" list) with their quantities. Give each item's name and its integer count. Only include real physical components — not rules, phases, or icons.
+
+Grounding rules:
+- UNDER NO CIRCUMSTANCES list a component that is not named in the excerpt. Never add a piece because a game of this kind would normally include it, and never expand one entry into several.
+- Use ONLY quantities the excerpt states. Do not infer a count from the rules, from the player count, or from what you know of the game. Where an item is listed with no number at all, use 1 — that is the only count you may supply, and only in that case.
+- Recognising the game is not a source. Remembering what is in this box licenses nothing; only the excerpt does.
+- If the excerpt has no component list, return an empty array. An empty array is a correct answer — a plausible guessed list is not.
+
+RULEBOOK EXCERPT:
+${compText}`,
           providerOptions: NO_THINK,
         });
         components = object.components
