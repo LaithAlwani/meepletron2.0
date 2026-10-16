@@ -373,11 +373,16 @@ export default defineSchema({
   }).index("by_user_and_faq", ["userId", "faqId"]),
 
   // Rulebook-derived component list ("what's in the box"), keyed on the base game.
+  // A top-level item may break a total into sub-types (one level deep) — e.g.
+  // "74 player cards" → 48/14/12. When `children` is set, `count` is their sum.
   gameComponents: defineTable({
     gameId: v.id("games"),
     item: v.string(),
     count: v.number(),
     order: v.number(),
+    children: v.optional(
+      v.array(v.object({ item: v.string(), count: v.number() })),
+    ),
   }).index("by_game", ["gameId"]),
 
   // Rulebook-derived "rules refresher" — easily-forgotten nitty-gritty facts
