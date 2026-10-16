@@ -6,6 +6,7 @@ import { Plus, Trash2, Sparkles } from "lucide-react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { useToast } from "@/components/ui/Toast";
+import { useUnsavedForm } from "@/components/admin/UnsavedGuard";
 
 type Row = {
   id: number;
@@ -43,6 +44,16 @@ export function FaqEditor({ gameId }: { gameId: Id<"games"> }) {
       })),
     );
   }, [data, rows]);
+
+  const dirty =
+    rows !== null &&
+    JSON.stringify(
+      rows
+        .filter((r) => r.question.trim() && r.answer.trim())
+        .map((r) => ({ q: r.question.trim(), a: r.answer.trim() })),
+    ) !==
+      JSON.stringify((data ?? []).map((f) => ({ q: f.question, a: f.answer })));
+  useUnsavedForm("faq", dirty, onSave);
 
   if (rows === null) return <p className="text-sm text-muted">Loading…</p>;
 

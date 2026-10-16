@@ -6,6 +6,7 @@ import { Download } from "lucide-react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { friendlyError } from "@/lib/friendlyError";
+import { useUnsavedForm } from "@/components/admin/UnsavedGuard";
 
 type BggStats = {
   rating?: number;
@@ -191,41 +192,79 @@ export function GameForm({
     }
   }
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  async function doSave() {
     if (!title.trim()) {
       setError("Title is required");
-      return;
+      throw new Error("VALIDATION");
     }
-    setSaving(true);
     setError(null);
+    await onSubmit({
+      title: title.trim(),
+      isExpansion,
+      parentId: isExpansion && parentId ? (parentId as Id<"games">) : undefined,
+      year: year.trim() || undefined,
+      minPlayers: num(minPlayers),
+      maxPlayers: num(maxPlayers),
+      minAge: minAge.trim() || undefined,
+      minPlayTime: num(minPlayTime),
+      maxPlayTime: num(maxPlayTime),
+      description: description.trim() || undefined,
+      designers: parseCsv(designers),
+      artists: parseCsv(artists),
+      publishers: parseCsv(publishers),
+      categories: parseCsv(categories),
+      gameMechanics: parseCsv(gameMechanics),
+      bggId: bggId.trim() || undefined,
+      bgg: bggStats,
+    });
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setSaving(true);
     try {
-      await onSubmit({
-        title: title.trim(),
-        isExpansion,
-        parentId:
-          isExpansion && parentId ? (parentId as Id<"games">) : undefined,
-        year: year.trim() || undefined,
-        minPlayers: num(minPlayers),
-        maxPlayers: num(maxPlayers),
-        minAge: minAge.trim() || undefined,
-        minPlayTime: num(minPlayTime),
-        maxPlayTime: num(maxPlayTime),
-        description: description.trim() || undefined,
-        designers: parseCsv(designers),
-        artists: parseCsv(artists),
-        publishers: parseCsv(publishers),
-        categories: parseCsv(categories),
-        gameMechanics: parseCsv(gameMechanics),
-        bggId: bggId.trim() || undefined,
-        bgg: bggStats,
-      });
+      await doSave();
     } catch (err) {
-      setError(friendlyError(err, "Something went wrong. Please try again."));
+      if (!(err instanceof Error && err.message === "VALIDATION"))
+        setError(friendlyError(err, "Something went wrong. Please try again."));
     } finally {
       setSaving(false);
     }
   }
+
+  // Unsaved-changes guard: dirty when any field differs from what loaded.
+  const dirty = useMemo(
+    () =>
+      JSON.stringify([
+        title, isExpansion, parentId, year, minPlayers, maxPlayers, minAge,
+        minPlayTime, maxPlayTime, description, designers, artists, publishers,
+        categories, gameMechanics, bggId,
+      ]) !==
+      JSON.stringify([
+        initial?.title ?? "",
+        initial?.isExpansion ?? false,
+        initial?.parentId ?? "",
+        initial?.year ?? "",
+        initial?.minPlayers?.toString() ?? "",
+        initial?.maxPlayers?.toString() ?? "",
+        initial?.minAge ?? "",
+        initial?.minPlayTime?.toString() ?? "",
+        initial?.maxPlayTime?.toString() ?? "",
+        initial?.description ?? "",
+        csv(initial?.designers),
+        csv(initial?.artists),
+        csv(initial?.publishers),
+        csv(initial?.categories),
+        csv(initial?.gameMechanics),
+        initial?.bggId ?? "",
+      ]),
+    [
+      title, isExpansion, parentId, year, minPlayers, maxPlayers, minAge,
+      minPlayTime, maxPlayTime, description, designers, artists, publishers,
+      categories, gameMechanics, bggId, initial,
+    ],
+  );
+  useUnsavedForm("details", dirty, doSave);
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">

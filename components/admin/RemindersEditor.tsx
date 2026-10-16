@@ -6,6 +6,7 @@ import { Plus, Trash2, Sparkles } from "lucide-react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { useToast } from "@/components/ui/Toast";
+import { useUnsavedForm } from "@/components/admin/UnsavedGuard";
 
 type Row = { id: number; label: string; detail: string };
 
@@ -30,6 +31,15 @@ export function RemindersEditor({ gameId }: { gameId: Id<"games"> }) {
       data.map((r) => ({ id: idRef.current++, label: r.label, detail: r.detail })),
     );
   }, [data, rows]);
+
+  const dirty =
+    rows !== null &&
+    JSON.stringify(
+      rows
+        .filter((r) => r.label.trim() && r.detail.trim())
+        .map((r) => ({ l: r.label.trim(), d: r.detail.trim() })),
+    ) !== JSON.stringify((data ?? []).map((r) => ({ l: r.label, d: r.detail })));
+  useUnsavedForm("reminders", dirty, onSave);
 
   if (rows === null) return <p className="text-sm text-muted">Loading…</p>;
 
