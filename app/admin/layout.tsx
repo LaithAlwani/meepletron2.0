@@ -1,19 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
-
-const adminNav = [
-  { href: "/admin", label: "Overview" },
-  { href: "/admin/boardgames", label: "Games" },
-  { href: "/admin/usage", label: "Usage" },
-  { href: "/admin/site-config", label: "Config" },
-  { href: "/admin/searches", label: "Searches" },
-  { href: "/admin/requests", label: "Requests" },
-  { href: "/admin/users", label: "Users" },
-];
+import { AdminNav } from "@/components/admin/AdminNav";
 
 export default function AdminLayout({
   children,
@@ -21,11 +11,6 @@ export default function AdminLayout({
   children: React.ReactNode;
 }) {
   const me = useQuery(api.users.me);
-  const pathname = usePathname();
-  const requestCount = useQuery(
-    api.rulebookRequests.pendingRequestCount,
-    me?.role === "admin" ? {} : "skip",
-  );
 
   if (me === undefined) {
     return (
@@ -34,7 +19,6 @@ export default function AdminLayout({
       </div>
     );
   }
-
   if (!me || me.role !== "admin") {
     return (
       <div className="mx-auto max-w-md px-4 py-20 text-center">
@@ -53,48 +37,9 @@ export default function AdminLayout({
   }
 
   return (
-    <div className="mx-auto max-w-site px-4 py-8">
-      <div className="mb-6">
-        <h1 className="font-display text-2xl font-extrabold tracking-tight">
-          Admin
-        </h1>
-        <div className="mt-3 border-b border-border">
-          <nav className="flex gap-1 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            {adminNav.map((item) => {
-              const active =
-                item.href === "/admin"
-                  ? pathname === "/admin"
-                  : pathname.startsWith(item.href);
-              const badge =
-                item.href === "/admin/requests" &&
-                typeof requestCount === "number" &&
-                requestCount > 0
-                  ? requestCount
-                  : null;
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  aria-current={active ? "page" : undefined}
-                  className={`flex shrink-0 items-center gap-1.5 whitespace-nowrap border-b-2 px-3 py-2 text-sm font-medium transition-colors ${
-                    active
-                      ? "border-accent text-foreground"
-                      : "border-transparent text-muted hover:text-foreground"
-                  }`}
-                >
-                  {item.label}
-                  {badge !== null && (
-                    <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-accent px-1.5 py-0.5 text-xs font-semibold leading-none text-accent-foreground tabular-nums">
-                      {badge}
-                    </span>
-                  )}
-                </Link>
-              );
-            })}
-          </nav>
-        </div>
-      </div>
-      {children}
+    <div className="mx-auto flex max-w-site gap-3 px-3 py-6 sm:gap-6 sm:px-4 sm:py-8">
+      <AdminNav />
+      <main className="min-w-0 flex-1">{children}</main>
     </div>
   );
 }
