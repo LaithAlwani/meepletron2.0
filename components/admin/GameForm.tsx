@@ -82,12 +82,15 @@ export function GameForm({
   submitLabel,
   onSubmit,
   onBggImage,
+  onDone,
 }: {
   initial?: GameFormInitial;
   submitLabel: string;
   onSubmit: (values: GameFormValues) => Promise<void>;
   // Called with BGG's cover URL when filling — the page compresses + stores it.
   onBggImage?: (url: string) => void | Promise<void>;
+  // Called after a successful save (and on cancel) so a wrapper can collapse.
+  onDone?: () => void;
 }) {
   const baseGames = useQuery(api.games.baseGameOptions);
   const [saving, setSaving] = useState(false);
@@ -224,6 +227,7 @@ export function GameForm({
     setSaving(true);
     try {
       await doSave();
+      onDone?.();
     } catch (err) {
       if (!(err instanceof Error && err.message === "VALIDATION"))
         setError(friendlyError(err, "Something went wrong. Please try again."));
@@ -389,13 +393,24 @@ export function GameForm({
         </p>
       )}
 
-      <button
-        type="submit"
-        disabled={saving}
-        className="rounded-lg bg-accent px-5 py-2.5 font-semibold text-accent-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
-      >
-        {saving ? "Saving…" : submitLabel}
-      </button>
+      <div className="flex items-center gap-2">
+        {onDone && (
+          <button
+            type="button"
+            onClick={onDone}
+            className="rounded-lg border border-border px-4 py-2.5 text-sm font-medium text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
+          >
+            Cancel
+          </button>
+        )}
+        <button
+          type="submit"
+          disabled={saving}
+          className="rounded-lg bg-accent px-5 py-2.5 font-semibold text-accent-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
+        >
+          {saving ? "Saving…" : submitLabel}
+        </button>
+      </div>
     </form>
   );
 }

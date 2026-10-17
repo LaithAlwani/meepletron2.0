@@ -14,7 +14,13 @@ const inputBase =
   "rounded-md border border-border bg-background px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-ring";
 
 /** Admin editor for a game's "Rules refresher" list (fix the AI's output). */
-export function RemindersEditor({ gameId }: { gameId: Id<"games"> }) {
+export function RemindersEditor({
+  gameId,
+  onDone,
+}: {
+  gameId: Id<"games">;
+  onDone?: () => void;
+}) {
   const data = useQuery(api.reminders.listForGame, { gameId });
   const save = useMutation(api.reminders.adminSaveReminders);
   const regenerate = useAction(api.reminders.adminRegenerate);
@@ -60,6 +66,7 @@ export function RemindersEditor({ gameId }: { gameId: Id<"games"> }) {
           .map((r) => ({ label: r.label.trim(), detail: r.detail.trim() })),
       });
       toast("Rules refresher saved", "success");
+      onDone?.();
     } catch {
       toast("Couldn't save", "error");
     } finally {
@@ -132,10 +139,18 @@ export function RemindersEditor({ gameId }: { gameId: Id<"games"> }) {
           <Sparkles className="h-4 w-4" />
           {busy ? "Regenerating…" : "Regenerate with AI"}
         </button>
+        {onDone && (
+          <button
+            onClick={onDone}
+            className="ml-auto rounded-lg border border-border px-4 py-1.5 text-sm font-medium text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
+          >
+            Cancel
+          </button>
+        )}
         <button
           onClick={onSave}
           disabled={saving}
-          className="ml-auto rounded-lg bg-accent px-4 py-1.5 text-sm font-semibold text-accent-foreground transition-colors hover:bg-accent-hover disabled:opacity-50"
+          className={`${onDone ? "" : "ml-auto "}rounded-lg bg-accent px-4 py-1.5 text-sm font-semibold text-accent-foreground transition-colors hover:bg-accent-hover disabled:opacity-50`}
         >
           {saving ? "Saving…" : "Save reminders"}
         </button>

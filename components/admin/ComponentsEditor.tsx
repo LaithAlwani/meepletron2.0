@@ -101,7 +101,13 @@ function applyMove(rows: Row[], src: Src, drop: Drop): Row[] {
  *  Supports one level of nesting: drag the handle to reorder, drop an item onto
  *  another to make it a sub-item, or drag a sub-item out to promote it. Drag is
  *  driven by Pointer Events so it works with both a mouse and touch. */
-export function ComponentsEditor({ gameId }: { gameId: Id<"games"> }) {
+export function ComponentsEditor({
+  gameId,
+  onDone,
+}: {
+  gameId: Id<"games">;
+  onDone?: () => void;
+}) {
   const data = useQuery(api.glossary.componentsForGame, { gameId });
   const save = useMutation(api.glossary.adminSaveComponents);
   const regenerate = useAction(api.glossary.adminRegenerate);
@@ -320,6 +326,7 @@ export function ComponentsEditor({ gameId }: { gameId: Id<"games"> }) {
           })),
       });
       toast("Components saved", "success");
+      onDone?.();
     } catch {
       toast("Couldn't save components", "error");
     } finally {
@@ -492,10 +499,18 @@ export function ComponentsEditor({ gameId }: { gameId: Id<"games"> }) {
           <Sparkles className="h-4 w-4" />
           {busy ? "Regenerating…" : "Regenerate with AI"}
         </button>
+        {onDone && (
+          <button
+            onClick={onDone}
+            className="ml-auto rounded-lg border border-border px-4 py-1.5 text-sm font-medium text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
+          >
+            Cancel
+          </button>
+        )}
         <button
           onClick={onSave}
           disabled={saving}
-          className="ml-auto rounded-lg bg-accent px-4 py-1.5 text-sm font-semibold text-accent-foreground transition-colors hover:bg-accent-hover disabled:opacity-50"
+          className={`${onDone ? "" : "ml-auto "}rounded-lg bg-accent px-4 py-1.5 text-sm font-semibold text-accent-foreground transition-colors hover:bg-accent-hover disabled:opacity-50`}
         >
           {saving ? "Saving…" : "Save components"}
         </button>

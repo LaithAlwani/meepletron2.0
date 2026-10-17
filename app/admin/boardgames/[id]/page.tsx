@@ -13,6 +13,15 @@ import { FaqEditor } from "@/components/admin/FaqEditor";
 import { RemindersEditor } from "@/components/admin/RemindersEditor";
 import { useToast } from "@/components/ui/Toast";
 import { UnsavedGuardProvider } from "@/components/admin/UnsavedGuard";
+import { EditableCard } from "@/components/admin/EditableCard";
+import {
+  DetailsView,
+  CoverView,
+  RulebooksView,
+  ComponentsView,
+  FaqView,
+  RemindersView,
+} from "@/components/admin/ReadViews";
 import { cn } from "@/lib/cn";
 
 const TABS = [
@@ -90,70 +99,106 @@ export default function EditGamePage({
         ))}
       </div>
 
-      {/* Panels stay mounted (just hidden) so switching tabs never drops
-          unsaved edits in an editor. */}
+      {/* Each section is a read-only card with an Edit button that reveals its
+          editor. Panels stay mounted (hidden) so switching tabs keeps an
+          in-progress edit and its unsaved-changes state. */}
       <div className="mt-6">
         <div
           role="tabpanel"
-          className={cn("space-y-8", tab !== "details" && "hidden")}
+          className={cn("space-y-4", tab !== "details" && "hidden")}
         >
-          <section>
-            <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-muted">
-              Cover
-            </h3>
-            <CoverUploader gameId={gameId} imageUrl={game.imageUrl} />
-          </section>
-
-          <section>
-            <GameForm
-              initial={game}
-              submitLabel="Save changes"
-              onSubmit={async (values) => {
-                await updateGame({ gameId, ...values });
-              }}
-              onBggImage={async (url) => {
-                try {
-                  const r = await setCoverFromUrl({ gameId, url });
-                  toast(
-                    r.alreadyExists
-                      ? "Cover already saved — kept the existing image"
-                      : "Cover imported from BGG",
-                    "success",
-                  );
-                } catch {
-                  toast("Couldn't import the BGG cover", "error");
-                }
-              }}
-            />
-          </section>
+          <EditableCard
+            title="Cover"
+            view={<CoverView imageUrl={game.imageUrl} />}
+            renderEdit={(done) => (
+              <div className="space-y-3">
+                <CoverUploader gameId={gameId} imageUrl={game.imageUrl} />
+                <DoneButton onClick={done} />
+              </div>
+            )}
+          />
+          <EditableCard
+            title="Details"
+            view={<DetailsView game={game} />}
+            renderEdit={(done) => (
+              <GameForm
+                initial={game}
+                submitLabel="Save changes"
+                onDone={done}
+                onSubmit={async (values) => {
+                  await updateGame({ gameId, ...values });
+                }}
+                onBggImage={async (url) => {
+                  try {
+                    const r = await setCoverFromUrl({ gameId, url });
+                    toast(
+                      r.alreadyExists
+                        ? "Cover already saved — kept the existing image"
+                        : "Cover imported from BGG",
+                      "success",
+                    );
+                  } catch {
+                    toast("Couldn't import the BGG cover", "error");
+                  }
+                }}
+              />
+            )}
+          />
         </div>
 
         <div role="tabpanel" className={cn(tab !== "rulebooks" && "hidden")}>
-          <RulebookManager gameId={gameId} rulebooks={game.rulebooks} />
+          <EditableCard
+            title="Rulebooks"
+            view={<RulebooksView rulebooks={game.rulebooks} />}
+            renderEdit={(done) => (
+              <div className="space-y-3">
+                <RulebookManager gameId={gameId} rulebooks={game.rulebooks} />
+                <DoneButton onClick={done} />
+              </div>
+            )}
+          />
         </div>
 
         <div role="tabpanel" className={cn(tab !== "box" && "hidden")}>
-          <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-muted">
-            In the box
-          </h3>
-          <ComponentsEditor gameId={gameId} />
+          <EditableCard
+            title="In the box"
+            view={<ComponentsView gameId={gameId} />}
+            renderEdit={(done) => (
+              <ComponentsEditor gameId={gameId} onDone={done} />
+            )}
+          />
         </div>
 
         <div role="tabpanel" className={cn(tab !== "faq" && "hidden")}>
-          <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-muted">
-            Common questions (FAQ)
-          </h3>
-          <FaqEditor gameId={gameId} />
+          <EditableCard
+            title="Common questions (FAQ)"
+            view={<FaqView gameId={gameId} />}
+            renderEdit={(done) => <FaqEditor gameId={gameId} onDone={done} />}
+          />
         </div>
 
         <div role="tabpanel" className={cn(tab !== "reminders" && "hidden")}>
-          <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-muted">
-            Rules refresher
-          </h3>
-          <RemindersEditor gameId={gameId} />
+          <EditableCard
+            title="Rules refresher"
+            view={<RemindersView gameId={gameId} />}
+            renderEdit={(done) => (
+              <RemindersEditor gameId={gameId} onDone={done} />
+            )}
+          />
         </div>
       </div>
     </div>
     </UnsavedGuardProvider>
+  );
+}
+
+function DoneButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className="rounded-lg border border-border px-4 py-1.5 text-sm font-medium text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
+    >
+      Done
+    </button>
   );
 }

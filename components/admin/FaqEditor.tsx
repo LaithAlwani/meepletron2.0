@@ -22,7 +22,13 @@ const inputBase =
  * Admin editor for a game's FAQ (fix the AI's output). Editing an answer clears
  * its citations (they'd no longer match); untouched entries keep their votes.
  */
-export function FaqEditor({ gameId }: { gameId: Id<"games"> }) {
+export function FaqEditor({
+  gameId,
+  onDone,
+}: {
+  gameId: Id<"games">;
+  onDone?: () => void;
+}) {
   const data = useQuery(api.faqs.listForGame, { gameId });
   const save = useMutation(api.faqs.adminSaveFaqs);
   const regenerate = useAction(api.faqs.adminRegenerate);
@@ -81,6 +87,7 @@ export function FaqEditor({ gameId }: { gameId: Id<"games"> }) {
           })),
       });
       toast("FAQ saved", "success");
+      onDone?.();
     } catch {
       toast("Couldn't save FAQ", "error");
     } finally {
@@ -153,10 +160,18 @@ export function FaqEditor({ gameId }: { gameId: Id<"games"> }) {
           <Sparkles className="h-4 w-4" />
           {busy ? "Regenerating…" : "Regenerate with AI"}
         </button>
+        {onDone && (
+          <button
+            onClick={onDone}
+            className="ml-auto rounded-lg border border-border px-4 py-1.5 text-sm font-medium text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
+          >
+            Cancel
+          </button>
+        )}
         <button
           onClick={onSave}
           disabled={saving}
-          className="ml-auto rounded-lg bg-accent px-4 py-1.5 text-sm font-semibold text-accent-foreground transition-colors hover:bg-accent-hover disabled:opacity-50"
+          className={`${onDone ? "" : "ml-auto "}rounded-lg bg-accent px-4 py-1.5 text-sm font-semibold text-accent-foreground transition-colors hover:bg-accent-hover disabled:opacity-50`}
         >
           {saving ? "Saving…" : "Save FAQ"}
         </button>
