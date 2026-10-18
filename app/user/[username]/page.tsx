@@ -12,7 +12,6 @@ import {
   Sparkles,
   Settings,
   Shield,
-  ChevronRight,
   X,
 } from "lucide-react";
 import { api } from "@/convex/_generated/api";
@@ -124,6 +123,7 @@ export default function ProfilePage({
             {isSelf && (
               <OwnerControls
                 isPublic={me?.publicProfile?.isPublic ?? false}
+                isAdmin={me?.role === "admin"}
                 onSettings={() => setSettingsOpen(true)}
               />
             )}
@@ -140,16 +140,6 @@ export default function ProfilePage({
         <div className="mt-6 space-y-6">
           <AccountSection />
           <UsageCard />
-          {me?.role === "admin" && (
-            <Link
-              href="/admin"
-              className="flex items-center gap-3 rounded-2xl border border-border-muted bg-surface px-4 py-3.5 text-sm font-medium text-foreground transition-colors hover:bg-surface-2"
-            >
-              <Shield className="h-4.5 w-4.5 shrink-0 text-muted" />
-              <span className="flex-1">Admin console</span>
-              <ChevronRight className="h-4 w-4 shrink-0 text-subtle" />
-            </Link>
-          )}
           {/* Danger zone lives at the very bottom of the profile. */}
           {me && me.isAnonymous !== true && <DangerZone />}
         </div>
@@ -231,9 +221,11 @@ function Stat({
  *  gated behind `showVisibilityToggle`, so it's easy to bring back.) */
 function OwnerControls({
   isPublic,
+  isAdmin,
   onSettings,
 }: {
   isPublic: boolean;
+  isAdmin: boolean;
   onSettings: () => void;
 }) {
   const setPublicProfile = useMutation(api.users.setPublicProfile);
@@ -274,6 +266,16 @@ function OwnerControls({
           )}
           {isPublic ? "Public" : "Private"}
         </button>
+      )}
+      {isAdmin && (
+        <Link
+          href="/admin"
+          aria-label="Admin console"
+          title="Admin console"
+          className={buttonClasses("ghost", "sm")}
+        >
+          <Shield className="h-4 w-4" />
+        </Link>
       )}
       <button
         onClick={onSettings}
