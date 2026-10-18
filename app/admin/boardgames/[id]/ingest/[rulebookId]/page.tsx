@@ -59,6 +59,14 @@ export default function IngestReviewPage({
 
   const acceptedCount = chunks?.filter((c) => c.accepted).length ?? 0;
 
+  // Number every chunk by its global position (1-based) for the "N/X" badge.
+  const totalChunks = chunks?.length ?? 0;
+  const chunkNumber = useMemo(() => {
+    const m = new Map<string, number>();
+    (chunks ?? []).forEach((c, i) => m.set(c._id, i + 1));
+    return m;
+  }, [chunks]);
+
   // Feedback: counts, flag breakdown, and pages that produced no chunk.
   const stats = useMemo(() => {
     if (!chunks) return null;
@@ -434,7 +442,13 @@ export default function IngestReviewPage({
 
           {groups.length <= 1
             ? visibleChunks.map((c: Doc<"draftChunks">) => (
-                <ChunkCard key={c._id} chunk={c} rulebookId={rbId} />
+                <ChunkCard
+                  key={c._id}
+                  chunk={c}
+                  rulebookId={rbId}
+                  index={chunkNumber.get(c._id)}
+                  total={totalChunks}
+                />
               ))
             : groups.map((g) => {
                 const isCollapsed = collapsed.has(g.id);
@@ -462,7 +476,13 @@ export default function IngestReviewPage({
                     </button>
                     {!isCollapsed &&
                       g.chunks.map((c) => (
-                        <ChunkCard key={c._id} chunk={c} rulebookId={rbId} />
+                        <ChunkCard
+                          key={c._id}
+                          chunk={c}
+                          rulebookId={rbId}
+                          index={chunkNumber.get(c._id)}
+                          total={totalChunks}
+                        />
                       ))}
                   </div>
                 );
