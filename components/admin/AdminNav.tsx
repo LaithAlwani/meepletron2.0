@@ -2,8 +2,6 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { useQuery } from "convex/react";
 import {
   LayoutDashboard,
   Gamepad2,
@@ -14,10 +12,11 @@ import {
   Users,
   ChevronsLeft,
   ChevronsRight,
+  Menu,
   X,
+  ExternalLink,
   type LucideIcon,
 } from "lucide-react";
-import { api } from "@/convex/_generated/api";
 import { Sheet } from "@/components/ui/Sheet";
 import { cn } from "@/lib/cn";
 
@@ -35,7 +34,7 @@ const adminNav: { href: string; label: string; icon: LucideIcon }[] = [
 const STICKY_TOP = "top-[calc(env(safe-area-inset-top)+3.75rem)]";
 
 /** The admin nav links — icon + (optionally) label, active highlight, and the
- *  pending-requests badge. Shared by the desktop sidebar/rail and mobile drawer. */
+ *  pending-requests badge. Shared by the desktop sidebar and mobile drawer. */
 function NavLinks({
   labels,
   pathname,
@@ -97,22 +96,20 @@ function NavLinks({
   );
 }
 
-/** The admin sidebar: a sticky left rail that stays in view while the page
- *  content scrolls. Desktop collapses to an icon rail; mobile is an icon rail
- *  with a drawer for the full labels. Render as a flex sibling of the content. */
-export function AdminNav() {
-  const pathname = usePathname() ?? "/admin";
-  const requestCount = useQuery(api.rulebookRequests.pendingRequestCount, {});
-  // Desktop icon-rail collapse, remembered across visits. Read lazily (no
-  // setState-in-effect); the desktop aside suppresses the hydration diff.
+/** Desktop-only sticky left sidebar; collapses to an icon rail (remembered). */
+export function AdminSidebar({
+  pathname,
+  requestCount,
+}: {
+  pathname: string;
+  requestCount: number | undefined;
+}) {
   const [collapsed, setCollapsed] = useState<boolean>(
     () =>
       typeof window !== "undefined" &&
       localStorage.getItem("adminNavCollapsed") === "1",
   );
-  const [drawerOpen, setDrawerOpen] = useState(false);
-
-  const toggleCollapsed = () =>
+  const toggle = () =>
     setCollapsed((c) => {
       const next = !c;
       try {
@@ -124,68 +121,70 @@ export function AdminNav() {
     });
 
   return (
-    <>
-      {/* Desktop sidebar — sticky, collapses to an icon rail. */}
-      <aside
-        suppressHydrationWarning
+    <aside
+      suppressHydrationWarning
+      className={cn(
+        "sticky hidden shrink-0 flex-col self-start transition-[width] duration-200 sm:flex",
+        STICKY_TOP,
+        collapsed ? "w-17" : "w-56",
+      )}
+    >
+      <div
         className={cn(
-          "sticky hidden shrink-0 flex-col self-start transition-[width] duration-200 sm:flex",
-          STICKY_TOP,
-          collapsed ? "w-17" : "w-56",
+          "mb-3 flex items-center px-2",
+          collapsed ? "justify-center" : "justify-between",
         )}
       >
-        <div
-          className={cn(
-            "mb-3 flex items-center px-2",
-            collapsed ? "justify-center" : "justify-between",
-          )}
-        >
-          {!collapsed && (
-            <span className="font-display text-lg font-extrabold">Admin</span>
-          )}
-          <button
-            onClick={toggleCollapsed}
-            aria-label={collapsed ? "Expand menu" : "Collapse menu"}
-            title={collapsed ? "Expand menu" : "Collapse menu"}
-            className="rounded-md p-1.5 text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
-          >
-            {collapsed ? (
-              <ChevronsRight className="h-4 w-4" />
-            ) : (
-              <ChevronsLeft className="h-4 w-4" />
-            )}
-          </button>
-        </div>
-        <NavLinks
-          labels={!collapsed}
-          pathname={pathname}
-          requestCount={requestCount}
-        />
-      </aside>
-
-      {/* Mobile icon rail — sticky; the bottom arrow opens the full menu. */}
-      <aside
-        className={cn(
-          "sticky flex shrink-0 flex-col self-start sm:hidden",
-          STICKY_TOP,
+        {!collapsed && (
+          <span className="font-display text-lg font-extrabold">Admin</span>
         )}
-      >
-        <NavLinks labels={false} pathname={pathname} requestCount={requestCount} />
         <button
-          onClick={() => setDrawerOpen(true)}
-          aria-label="Open menu"
-          className="mt-1 flex items-center justify-center rounded-lg px-3 py-2 text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
+          onClick={toggle}
+          aria-label={collapsed ? "Expand menu" : "Collapse menu"}
+          title={collapsed ? "Expand menu" : "Collapse menu"}
+          className="rounded-md p-1.5 text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
         >
-          <ChevronsRight className="h-4 w-4" />
+          {collapsed ? (
+            <ChevronsRight className="h-4 w-4" />
+          ) : (
+            <ChevronsLeft className="h-4 w-4" />
+          )}
         </button>
-      </aside>
+      </div>
+      <NavLinks
+        labels={!collapsed}
+        pathname={pathname}
+        requestCount={requestCount}
+      />
+    </aside>
+  );
+}
 
-      {/* Mobile full-label drawer. */}
-      <Sheet open={drawerOpen} onClose={() => setDrawerOpen(false)}>
+/** Mobile-only: a single menu button (upper corner) that opens a drawer with
+ *  the full nav plus a link back out to the main site's Library. */
+export function AdminMobileNav({
+  pathname,
+  requestCount,
+}: {
+  pathname: string;
+  requestCount: number | undefined;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="sm:hidden">
+      <button
+        onClick={() => setOpen(true)}
+        aria-label="Open menu"
+        className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl border border-border bg-surface text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
+      >
+        <Menu className="h-5 w-5" />
+      </button>
+
+      <Sheet open={open} onClose={() => setOpen(false)}>
         <div className="flex shrink-0 items-center justify-between border-b border-border px-4 py-3">
           <span className="font-display text-lg font-bold">Admin</span>
           <button
-            onClick={() => setDrawerOpen(false)}
+            onClick={() => setOpen(false)}
             aria-label="Close"
             className="flex h-8 w-8 items-center justify-center rounded-lg text-muted hover:bg-surface-2 hover:text-foreground"
           >
@@ -197,10 +196,19 @@ export function AdminNav() {
             labels
             pathname={pathname}
             requestCount={requestCount}
-            onNavigate={() => setDrawerOpen(false)}
+            onNavigate={() => setOpen(false)}
           />
+          <div className="my-2 border-t border-border-muted" />
+          <Link
+            href="/boardgames"
+            onClick={() => setOpen(false)}
+            className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
+          >
+            <ExternalLink className="h-4.5 w-4.5 shrink-0" />
+            <span className="min-w-0 flex-1 truncate">Library</span>
+          </Link>
         </div>
       </Sheet>
-    </>
+    </div>
   );
 }

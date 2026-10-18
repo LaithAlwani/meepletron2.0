@@ -26,6 +26,8 @@ export function BottomNav() {
     // The home route (`/`) is chrome-free: the landing owns the whole screen.
     pathname === "/" ||
     pathname === "/auth" ||
+    // The admin console has its own nav (drawer); no bottom bar there.
+    pathname.startsWith("/admin") ||
     /^\/boardgames\/[^/]+\/chat/.test(pathname);
   if (hidden) return null;
 

@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { AdminNav } from "@/components/admin/AdminNav";
+import { AdminSidebar, AdminMobileNav } from "@/components/admin/AdminNav";
 
 export default function AdminLayout({
   children,
@@ -11,6 +12,11 @@ export default function AdminLayout({
   children: React.ReactNode;
 }) {
   const me = useQuery(api.users.me);
+  const pathname = usePathname() ?? "/admin";
+  const requestCount = useQuery(
+    api.rulebookRequests.pendingRequestCount,
+    me?.role === "admin" ? {} : "skip",
+  );
 
   if (me === undefined) {
     return (
@@ -37,9 +43,13 @@ export default function AdminLayout({
   }
 
   return (
-    <div className="mx-auto flex max-w-site gap-3 px-3 py-6 sm:gap-6 sm:px-4 sm:py-8">
-      <AdminNav />
-      <main className="min-w-0 flex-1">{children}</main>
+    <div className="mx-auto max-w-site px-3 py-6 sm:px-4 sm:py-8">
+      {/* Mobile: a single menu button (upper corner) + drawer. */}
+      <AdminMobileNav pathname={pathname} requestCount={requestCount} />
+      <div className="sm:flex sm:gap-6">
+        <AdminSidebar pathname={pathname} requestCount={requestCount} />
+        <main className="min-w-0 sm:flex-1">{children}</main>
+      </div>
     </div>
   );
 }
