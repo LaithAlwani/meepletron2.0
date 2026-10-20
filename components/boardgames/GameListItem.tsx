@@ -1,9 +1,12 @@
+"use client";
+
 import Link from "next/link";
 import { Star } from "lucide-react";
 import type { GameCardData } from "@/convex/games";
 import { formatPlayTime } from "@/lib/format";
 import { CollectionButton } from "./CollectionButton";
 import { Die } from "@/components/ui/icons";
+import { CoverMorph, useCoverMorph } from "./coverMorph";
 
 export function GameListItem({ game }: { game: GameCardData }) {
   const players =
@@ -19,6 +22,7 @@ export function GameListItem({ game }: { game: GameCardData }) {
   ].filter(Boolean);
   const cover = game.thumbnailUrl ?? game.imageUrl ?? null;
   const rating = game.bggRating;
+  const morph = useCoverMorph(game.slug, cover);
   const iconBtn =
     "flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted transition-colors hover:text-accent";
 
@@ -28,11 +32,15 @@ export function GameListItem({ game }: { game: GameCardData }) {
       <Link
         href={`/boardgames/${game.slug}`}
         aria-label={game.title}
+        onClick={morph.onNavigate}
         className="h-12 w-12 shrink-0 overflow-hidden rounded-xl bg-surface-2 shadow-sm"
       >
         {cover ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={cover} alt="" className="h-full w-full object-cover object-top" />
+          // Morphs into the detail page's hero on navigation.
+          <CoverMorph name={morph.name}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={cover} alt="" className="h-full w-full object-cover object-top" />
+          </CoverMorph>
         ) : (
           <div className="flex h-full w-full items-center justify-center text-subtle">
             <Die className="h-6 w-6" />

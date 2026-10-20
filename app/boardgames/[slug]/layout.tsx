@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { cache } from "react";
+import { Suspense, cache } from "react";
 import { fetchQuery } from "convex/nextjs";
 import { api } from "@/convex/_generated/api";
 import { decodeHtmlEntities } from "@/lib/htmlEntities";
@@ -54,13 +54,12 @@ export async function generateMetadata({
   };
 }
 
-export default async function GameDetailLayout({
-  children,
-  params,
-}: {
-  children: React.ReactNode;
-  params: Promise<{ slug: string }>;
-}) {
+// Rendered inside a Suspense boundary so the layout shell doesn't wait on
+// Convex. Awaiting the game at layout level held the whole navigation (and,
+// with the old root loading screen, showed a spinner instead of the page) —
+// which also kept the detail skeleton, the cover morph's landing spot, out of
+// the navigation's first commit. The JSON-LD now streams in behind the page.
+async function GameJsonLd({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   const game = await getGame(slug);
 
@@ -110,14 +109,27 @@ export default async function GameDetailLayout({
       ]
     : null;
 
+  if (!jsonLd) return null;
+  return (
+    <script
+      type="application/ld+json"
+      dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+    />
+  );
+}
+
+export default function GameDetailLayout({
+  children,
+  params,
+}: {
+  children: React.ReactNode;
+  params: Promise<{ slug: string }>;
+}) {
   return (
     <>
-      {jsonLd && (
-        <script
-          type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
-        />
-      )}
+      <Suspense fallback={null}>
+        <GameJsonLd params={params} />
+      </Suspense>
       {children}
     </>
   );

@@ -33,6 +33,8 @@ import { decodeHtmlEntities } from "@/lib/htmlEntities";
 import { Fab } from "@/components/ui/Fab";
 import { buttonClasses } from "@/components/ui/Button";
 import { Die } from "@/components/ui/icons";
+import { pendingCoverFor } from "@/components/boardgames/coverMorph";
+import { HERO_COVER_W, HeroCover } from "@/components/boardgames/HeroCover";
 
 function InfoSection({
   title,
@@ -211,10 +213,22 @@ export default function GameDetailPage({
   }, [zoomed]);
 
   if (game === undefined) {
+    // If we arrived from a thumbnail, show its image straight away under the
+    // hero's view-transition name so the cover morph has something to land on
+    // while the query is in flight (components/boardgames/coverMorph.tsx).
+    const pendingCover = pendingCoverFor(handle);
     return (
       <div className="mx-auto max-w-site px-4 pb-8 pt-3 nav:pt-8">
         <div className="flex flex-col gap-6 sm:flex-row">
-          <div className="mx-auto h-64 w-48 shrink-0 animate-pulse rounded-2xl bg-surface-2 sm:mx-0" />
+          {pendingCover ? (
+            <div className="mx-auto w-fit shrink-0 sm:mx-0">
+              <HeroCover slug={handle} cover={pendingCover} alt="" />
+            </div>
+          ) : (
+            <div
+              className={`mx-auto aspect-3/4 shrink-0 animate-pulse rounded-2xl bg-surface-2 sm:mx-0 ${HERO_COVER_W}`}
+            />
+          )}
           <div className="flex-1 space-y-3">
             <div className="h-9 w-2/3 animate-pulse rounded-lg bg-surface-2" />
             <div className="h-4 w-1/3 animate-pulse rounded bg-surface-2" />
@@ -283,24 +297,31 @@ export default function GameDetailPage({
 
           <div className="flex flex-col gap-6 sm:flex-row sm:items-start sm:gap-8">
             {/* Cover */}
-            <div className="animate-in mx-auto w-fit sm:mx-0 sm:shrink-0">
+            {/* No `animate-in` here: the cover arrives via the view transition
+                (morph from the thumbnail or the page fade); re-fading it from 0
+                when the query resolves read as a flash. */}
+            <div className="mx-auto w-fit sm:mx-0 sm:shrink-0">
               <div className="relative w-fit">
                 {cover ? (
                   <button
                     type="button"
                     onClick={() => setZoomed(true)}
                     aria-label="View full artwork"
-                    className="zoom-in group block cursor-zoom-in overflow-hidden rounded-2xl bg-surface-2 shadow-xl ring-1 ring-black/5"
+                    className="zoom-in group block cursor-zoom-in"
                   >
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={cover}
+                    {/* Fixed-width box, thumbnail first, full image on top —
+                        and the morph target for the list thumbnail. */}
+                    <HeroCover
+                      slug={game.slug}
+                      cover={cover}
+                      thumb={game.thumbnailUrl}
                       alt={game.title}
-                      className="block h-56 w-auto transition-transform duration-300 group-hover:scale-[1.03] sm:h-64"
                     />
                   </button>
                 ) : (
-                  <div className="flex aspect-3/4 h-56 items-center justify-center rounded-2xl bg-surface-2 text-subtle shadow-xl sm:h-64">
+                  <div
+                    className={`flex aspect-3/4 items-center justify-center rounded-2xl bg-surface-2 text-subtle shadow-xl ${HERO_COVER_W}`}
+                  >
                     <Die className="h-14 w-14" />
                   </div>
                 )}

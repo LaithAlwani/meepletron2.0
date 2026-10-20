@@ -1,9 +1,12 @@
+"use client";
+
 import Link from "next/link";
 import { Users, Clock, Star } from "lucide-react";
 import type { GameCardData } from "@/convex/games";
 import { formatPlayTime } from "@/lib/format";
 import { CollectionButton } from "./CollectionButton";
 import { Die } from "@/components/ui/icons";
+import { CoverMorph, useCoverMorph } from "./coverMorph";
 
 export function GameCard({
   game,
@@ -21,6 +24,7 @@ export function GameCard({
   const time = formatPlayTime(game.minPlayTime, game.maxPlayTime);
   const cover = game.thumbnailUrl ?? game.imageUrl ?? "";
   const rating = game.bggRating;
+  const morph = useCoverMorph(game.slug, cover || null);
 
   return (
     <div
@@ -32,7 +36,8 @@ export function GameCard({
       <Link
         href={`/boardgames/${game.slug}`}
         aria-label={game.title}
-        className="relative block aspect-4/3 overflow-hidden bg-surface-2"
+        onClick={morph.onNavigate}
+        className="relative flex aspect-4/3 items-center justify-center overflow-hidden bg-surface-2"
       >
         {cover ? (
           <>
@@ -45,13 +50,18 @@ export function GameCard({
               className="absolute inset-0 h-full w-full scale-105 object-cover opacity-50 blur-sm transition-transform group-hover:scale-110"
               loading="lazy"
             />
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={cover}
-              alt={game.title}
-              className="relative h-full w-full object-contain transition-transform duration-300 group-hover:scale-105"
-              loading="lazy"
-            />
+            {/* Morphs into the detail page's hero on navigation. Sized to the
+                image itself (not the 4:3 frame) so the snapshot has no
+                letterbox and the morph is a clean box-to-box move. */}
+            <CoverMorph name={morph.name}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={cover}
+                alt={game.title}
+                className="relative h-full w-auto max-w-full object-contain transition-transform duration-300 group-hover:scale-105"
+                loading="lazy"
+              />
+            </CoverMorph>
           </>
         ) : (
           <div className="flex h-full w-full items-center justify-center text-subtle">

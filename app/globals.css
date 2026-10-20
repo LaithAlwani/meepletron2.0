@@ -461,6 +461,153 @@ body::before {
   margin: 0.6em 0 0.3em;
 }
 
+/* View transitions — route changes animate through the browser's View
+   Transitions API (React <ViewTransition> in components/motion/PageTransition.tsx,
+   enabled by `experimental.viewTransition` in next.config.ts). The old page's
+   snapshot gets the exit class, the new page the enter class. */
+:root {
+  --vt-exit: 150ms;
+  --vt-enter: 280ms;
+  --vt-ease: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* Default: fade out, then fade + rise in (matches the old Framer fade-up). */
+::view-transition-old(.page) {
+  animation: var(--vt-exit) ease-in both vt-fade reverse;
+}
+::view-transition-new(.page) {
+  animation:
+    var(--vt-enter) var(--vt-ease) var(--vt-exit) both vt-fade,
+    var(--vt-enter) var(--vt-ease) var(--vt-exit) both vt-rise;
+}
+
+/* Directional: opt in per link with transitionTypes={["nav-forward"]} or
+   ["nav-back"]. Forward slides content left, back slides it right. */
+::view-transition-old(.nav-forward) {
+  --vt-offset: -40px;
+  animation:
+    var(--vt-exit) ease-in both vt-fade reverse,
+    var(--vt-enter) var(--vt-ease) both vt-slide reverse;
+}
+::view-transition-new(.nav-forward) {
+  --vt-offset: 40px;
+  animation:
+    var(--vt-enter) var(--vt-ease) var(--vt-exit) both vt-fade,
+    var(--vt-enter) var(--vt-ease) var(--vt-exit) both vt-slide;
+}
+::view-transition-old(.nav-back) {
+  --vt-offset: 40px;
+  animation:
+    var(--vt-exit) ease-in both vt-fade reverse,
+    var(--vt-enter) var(--vt-ease) both vt-slide reverse;
+}
+::view-transition-new(.nav-back) {
+  --vt-offset: -40px;
+  animation:
+    var(--vt-enter) var(--vt-ease) var(--vt-exit) both vt-fade,
+    var(--vt-enter) var(--vt-ease) var(--vt-exit) both vt-slide;
+}
+
+/* Old and new page snapshots overlap briefly; paint them normally instead of
+   the UA's plus-lighter blend, which flashes bright over light backgrounds. */
+::view-transition-image-pair(.page),
+::view-transition-image-pair(.nav-forward),
+::view-transition-image-pair(.nav-back) {
+  isolation: auto;
+}
+::view-transition-new(.page),
+::view-transition-new(.nav-forward),
+::view-transition-new(.nav-back) {
+  mix-blend-mode: normal;
+}
+
+/* Cover morph — a game thumbnail and the detail hero share a name
+   (components/boardgames/coverMorph.tsx). Slower than the page fade so the
+   movement reads; object-fit keeps either image from stretching if the two
+   boxes differ in aspect ratio. */
+::view-transition-group(.cover-morph) {
+  animation-duration: 600ms;
+  animation-timing-function: var(--vt-ease);
+  z-index: 50;
+}
+/* Both sides show the same thumbnail during the morph (the detail skeleton
+   reuses the clicked image), so skip the crossfade: a plain swap avoids the
+   plus-lighter shimmer that reads as flicker mid-flight. */
+::view-transition-old(.cover-morph) {
+  animation: none;
+  opacity: 0;
+}
+::view-transition-new(.cover-morph) {
+  animation: none;
+}
+::view-transition-old(.cover-morph),
+::view-transition-new(.cover-morph) {
+  height: 100%;
+  width: 100%;
+  object-fit: contain;
+}
+
+/* Chrome (site header, mobile top bar, bottom nav) stays put — only the page
+   body moves. Hiding the old snapshot avoids a double image mid-transition. */
+::view-transition-group(site-header),
+::view-transition-group(mobile-top-bar),
+::view-transition-group(bottom-nav) {
+  animation: none;
+  z-index: 100;
+}
+::view-transition-old(site-header),
+::view-transition-old(mobile-top-bar),
+::view-transition-old(bottom-nav) {
+  display: none;
+}
+::view-transition-new(site-header),
+::view-transition-new(mobile-top-bar),
+::view-transition-new(bottom-nav) {
+  animation: none;
+}
+
+@keyframes vt-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes vt-rise {
+  from {
+    transform: translateY(8px);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+@keyframes vt-slide {
+  from {
+    transform: translateX(var(--vt-offset));
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+/* Reduced motion: view-transition pseudo-elements live on <html>, so the
+   universal `*` rules below don't reach them — zero them explicitly. */
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(*),
+  ::view-transition-new(*),
+  ::view-transition-group(*) {
+    animation-duration: 0s !important;
+    animation-delay: 0s !important;
+  }
+}
+html.reduce-motion::view-transition-old(*),
+html.reduce-motion::view-transition-new(*),
+html.reduce-motion::view-transition-group(*) {
+  animation-duration: 0s !important;
+  animation-delay: 0s !important;
+}
+
 /* Respect users who prefer reduced motion — via the OS setting or the
    per-user "Reduce motion" preference (html.reduce-motion). */
 @media (prefers-reduced-motion: reduce) {

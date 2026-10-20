@@ -37,7 +37,11 @@ export function BottomNav() {
         aria-hidden
         className="h-[calc(3.25rem+env(safe-area-inset-bottom))] nav:hidden"
       />
-      <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-surface/95 pb-[env(safe-area-inset-bottom)] backdrop-blur nav:hidden">
+      <nav
+        className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-surface/95 pb-[env(safe-area-inset-bottom)] backdrop-blur nav:hidden"
+        // Pinned during route view transitions (see globals.css).
+        style={{ viewTransitionName: "bottom-nav" }}
+      >
         <ul className="mx-auto flex max-w-md items-stretch">
           {TABS.map((t) => {
             const active =

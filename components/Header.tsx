@@ -63,7 +63,11 @@ export function Header() {
   // Desktop only — on mobile the bottom nav + each page's own title/back link
   // replace the top bar, giving more room to the content.
   return (
-    <header className="sticky top-0 z-30 hidden border-b border-border bg-background/80 backdrop-blur nav:block">
+    <header
+      className="sticky top-0 z-30 hidden border-b border-border bg-background/80 backdrop-blur nav:block"
+      // Pinned during route view transitions (see globals.css).
+      style={{ viewTransitionName: "site-header" }}
+    >
       <div className="mx-auto flex max-w-site items-center gap-3 px-4 py-3">
         <Brand />
         <nav className="ml-2 hidden flex-1 items-center gap-1 sm:flex">

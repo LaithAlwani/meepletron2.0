@@ -114,7 +114,11 @@ export function MobileTopBar() {
         "sticky top-0 z-30 bg-background/85 backdrop-blur transition-colors nav:hidden",
         scrolled ? "border-b border-border" : "border-b border-transparent",
       )}
-      style={{ paddingTop: "env(safe-area-inset-top)" }}
+      // viewTransitionName pins the bar during route view transitions.
+      style={{
+        paddingTop: "env(safe-area-inset-top)",
+        viewTransitionName: "mobile-top-bar",
+      }}
     >
       <div className="relative flex h-13 items-center gap-1 px-1.5">
         {route.back === null ? (

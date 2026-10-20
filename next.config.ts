@@ -1,6 +1,14 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Route navigations run inside React's <ViewTransition> integration, so the
+  // browser View Transitions API animates page changes (see
+  // components/motion/PageTransition.tsx and the ::view-transition rules in
+  // app/globals.css). Browsers without the API just swap pages instantly.
+  experimental: {
+    viewTransition: true,
+  },
+
   // Allow phones/tablets on the LAN to reach the dev server's internal
   // endpoints (RSC/HMR) so the page hydrates and touch works over the IP.
   allowedDevOrigins: ["192.168.86.*", "192.168.2.*"],

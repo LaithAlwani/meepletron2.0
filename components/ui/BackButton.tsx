@@ -14,7 +14,10 @@ export function useBackNav(fallbackHref: string) {
   const router = useRouter();
   return () => {
     if (canGoBack()) router.back();
-    else router.push(fallbackHref);
+    // Tag the fallback as a "back" navigation so the page slides right
+    // (components/motion/PageTransition.tsx). router.back() can't carry a
+    // type — browser history navigations get the default fade.
+    else router.push(fallbackHref, { transitionTypes: ["nav-back"] });
   };
 }
 

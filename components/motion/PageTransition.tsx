@@ -1,25 +1,37 @@
 "use client";
 
-import { motion } from "motion/react";
+import { ViewTransition } from "react";
 import { usePathname } from "next/navigation";
-import { EASE } from "@/lib/motion";
 
 /**
- * A gentle fade+rise on every route change. Enter-only (keyed on the pathname so
- * it remounts + replays) — no exit animation, which keeps App Router navigation
- * snappy and avoids fighting Next's rendering. Reduced motion → instant (Framer
- * strips the transform via MotionConfig).
+ * Animates every route change with the browser's View Transitions API via
+ * React's `<ViewTransition>` (enabled in next.config.ts). Keyed on the pathname
+ * so the old page gets an `exit` snapshot and the new one an `enter`.
+ *
+ * Untyped navigations (any Link / router.push) get a quick fade-out and a
+ * fade+rise in — the same feel as the previous Framer version. Links that opt
+ * in with `transitionTypes={["nav-forward"]}` / `["nav-back"]` slide the
+ * content left/right instead. The CSS for each class lives in
+ * app/globals.css under "View transitions"; the header, mobile top bar and
+ * bottom nav are pinned there so only the page body moves. Reduced motion
+ * (OS or the in-app toggle) zeroes the durations.
  */
+const TRANSITIONS = {
+  "nav-forward": "nav-forward",
+  "nav-back": "nav-back",
+  default: "page",
+} as const;
+
 export function PageTransition({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   return (
-    <motion.div
+    <ViewTransition
       key={pathname}
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.28, ease: EASE }}
+      enter={TRANSITIONS}
+      exit={TRANSITIONS}
+      default="none"
     >
-      {children}
-    </motion.div>
+      <div>{children}</div>
+    </ViewTransition>
   );
 }
