@@ -19,6 +19,11 @@ type Demo = {
  * drift from what the app actually looks like. Real rules and real rulebook
  * sections — the passages are shortened for the page, which is why the frame is
  * labelled as an example rather than passed off as a live session.
+ *
+ * The last one is a strategy question, and it is here on purpose: the landing
+ * claims Meepletron declines what the manual doesn't cover, so the demo has to
+ * show that outcome too, not only the flattering one. It carries no sources,
+ * which is the whole point — there is nothing to cite.
  */
 const DEMOS: Demo[] = [
   {
@@ -54,6 +59,13 @@ const DEMOS: Demo[] = [
         text: "If all of the dice in the birdfeeder show the same face, you may reroll all of them.",
       },
     ],
+  },
+  {
+    game: "Ticket to Ride",
+    question: "What's the best opening move?",
+    answer:
+      "The rulebook doesn't address this — it covers how the game is played, not how to play it well. I only answer from the manual, so strategy is outside what I can tell you.\n\nIf you meant something about the rules of setup or the first turn, ask again and I'll find it.",
+    sources: [],
   },
   {
     game: "Ticket to Ride",
@@ -270,7 +282,7 @@ function Answer({
           onOpenSource={setOpenN}
           activeSource={openN}
         />
-        {showSources && (
+        {showSources && sources.length > 0 && (
           <Sources
             annotations={sources}
             answer={answer}

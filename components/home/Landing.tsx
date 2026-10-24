@@ -4,9 +4,10 @@ import {
   Crown,
   BookOpenCheck,
   Quote,
-  ListTree,
-  Layers,
+  Gavel,
+  ShieldCheck,
   MessageCircleQuestion,
+  X,
   type LucideIcon,
 } from "lucide-react";
 import { Reveal, Stagger, StaggerItem } from "@/components/motion/Reveal";
@@ -15,32 +16,58 @@ import { HomeCta } from "@/components/home/HomeCta";
 import { AnswerDemo } from "@/components/home/AnswerDemo";
 import ContactForm from "@/components/ContactForm";
 
-// Why an answer can be trusted — the actual mechanics, not adjectives. This is
-// the part that separates Meepletron from asking a general chatbot.
-const ACCURACY: { icon: LucideIcon; title: string; body: string }[] = [
+// What Meepletron actually does at the table. Each card is a promise a new
+// player can hold us to in their first session — keep it to what ships.
+const WHAT_IT_IS: { icon: LucideIcon; title: string; body: string }[] = [
   {
-    icon: BookOpenCheck,
-    title: "It reads the rulebook",
-    body: "Answers are built from the manual indexed for that specific game — not from half-remembered forum posts. Ask about a rule the book doesn't cover and it says so instead of inventing one.",
+    icon: MessageCircleQuestion,
+    title: "Answers mid-game, from the manual",
+    body: "Ask in plain language while the game is on the table. The answer is built from that game's actual rulebook text, not from what an AI remembers about it.",
   },
   {
     icon: Quote,
-    title: "Every answer shows its work",
-    body: "Each claim carries a numbered citation. Tap it and the passage opens inline, with the section it came from, so you can check the wording before anyone argues about it.",
+    title: "Shows you the page",
+    body: "Every claim carries a numbered citation. Tap it and the passage opens inline with its section and page, so you can check the wording yourself.",
   },
   {
-    icon: ListTree,
-    title: "Parsed, not just skimmed",
-    body: "Ingestion keeps the rulebook's structure — sections, headings, pages, tables and the symbols the rules lean on — so a question lands on the right rule, not merely a paragraph that looks right.",
+    icon: Gavel,
+    title: "Settles it without the PDF",
+    body: "“Can I do this?” and “does this happen before or after?” get a ruling in seconds, instead of someone scrolling the manual while everyone waits.",
   },
   {
-    icon: Layers,
-    title: "Expansions included",
-    body: "Play with expansions and their manuals are searched too. Each citation is labelled with the book it came from, so you always know which one the answer is quoting.",
+    icon: BookOpenCheck,
+    title: "A reference per game",
+    body: "Each game gets a what's-in-the-box list, a rules refresher of the easy-to-forget bits, and an FAQ — all pulled from the same rulebook.",
   },
 ];
 
-// What's live alongside the rules expert. Keep this honest — a card here is a
+// The boundaries, stated plainly. This section exists so nobody signs up
+// expecting a different product — it is deliberately as prominent as the
+// "what it is" block above it.
+const WHAT_IT_ISNT: { title: string; body: string }[] = [
+  {
+    title: "Not a strategy coach",
+    body: "It won't tell you the strongest move, read the board, or help you win. Ask what you should do and it will only tell you what the rules allow.",
+  },
+  {
+    title: "Not a digital version of the game",
+    body: "There's no board, no score engine, and nothing enforcing whose turn it is. Meepletron rules on the rules — you still play the game.",
+  },
+  {
+    title: "Not a recommender",
+    body: "It won't pick your next purchase or rank games for you. The library exists so a game's rulebook has somewhere to live, not as a catalogue to browse.",
+  },
+  {
+    title: "It won't guess",
+    body: "No filling a gap with general knowledge of the game, no inferring a number the manual never states, and no house rules — not even common ones.",
+  },
+  {
+    title: "It won't quote what it wasn't given",
+    body: "Publisher FAQs, errata and forum rulings count only if that document was added for the game. Otherwise they're outside what it can see, and it will say so.",
+  },
+];
+
+// What's live alongside the rules referee. Keep this honest — a card here is a
 // promise the signed-up visitor can hold us to on their first session.
 const FEATURES: { icon: LucideIcon; title: string; body: string }[] = [
   {
@@ -61,7 +88,7 @@ export function Landing() {
     <div className="relative overflow-hidden">
       <HeroBackdrop />
 
-      {/* Hero — leads with the AI rules expert. On desktop the live example
+      {/* Hero — leads with the rules referee. On desktop the live example
           sits to the right of the pitch; on mobile it stacks beneath it. */}
       <section className="mx-auto max-w-6xl px-4 pb-14 pt-16 sm:pt-24">
         <div className="grid items-center gap-10 lg:grid-cols-2 lg:gap-12">
@@ -77,15 +104,19 @@ export function Landing() {
             />
             <p className="animate-in mt-5 inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-[0.2em] text-accent">
               <MessageCircleQuestion className="h-4 w-4" />
-              AI board game rules expert
+              AI board game rules referee
             </p>
             <h1 className="animate-in font-display mt-3 text-balance text-4xl font-extrabold tracking-tight sm:text-5xl">
-              Ask any board game rule — answered from the rulebook.
+              A rules referee that answers only from the rulebook.
             </h1>
             <p className="animate-in mx-auto mt-4 max-w-xl text-balance text-base text-muted sm:text-lg">
-              Meepletron reads the game&apos;s actual rulebook and answers in
-              seconds, quoting the exact rule and the section it came from. Not a
-              guess from a general AI — an answer you can check at the table.
+              Ask a rules question mid-game and get the answer straight from that
+              game&apos;s actual manual — quoted, with the page it came from, so
+              you can check it at the table.
+            </p>
+            <p className="animate-in mx-auto mt-3.5 max-w-sm text-balance text-sm font-semibold text-accent">
+              If it&apos;s not in the manual, we&apos;ll tell you it&apos;s not
+              in the manual.
             </p>
             <HomeCta />
           </div>
@@ -97,20 +128,19 @@ export function Landing() {
         </div>
       </section>
 
-      {/* How the accuracy is actually achieved. */}
-      <section className="mx-auto max-w-site px-4 pb-20">
+      {/* What it is */}
+      <section className="mx-auto max-w-site px-4 pb-16">
         <Reveal className="mb-6 text-center">
           <h2 className="font-display text-2xl font-extrabold tracking-tight sm:text-3xl">
-            Why the answers hold up
+            What Meepletron is
           </h2>
           <p className="mx-auto mt-2 max-w-lg text-sm text-muted">
-            Ask a general chatbot a rules question and you get a confident
-            answer with nothing behind it. Meepletron is built the other way
-            round — the source comes first, and the answer has to come from it.
+            One job, done properly: reading the rulebook so you don&apos;t have
+            to, and showing its work every time.
           </p>
         </Reveal>
         <Stagger as="ul" className="grid gap-3 sm:grid-cols-2">
-          {ACCURACY.map((a) => {
+          {WHAT_IT_IS.map((a) => {
             const Icon = a.icon;
             return (
               <StaggerItem
@@ -129,6 +159,69 @@ export function Landing() {
         </Stagger>
       </section>
 
+      {/* What it isn't — deliberately given the same weight as the section
+          above, not tucked into a footer. */}
+      <section className="mx-auto max-w-site px-4 pb-16">
+        <Reveal className="mb-6 text-center">
+          <h2 className="font-display text-2xl font-extrabold tracking-tight sm:text-3xl">
+            And what it isn&apos;t
+          </h2>
+          <p className="mx-auto mt-2 max-w-lg text-sm text-muted">
+            Worth knowing before you sign up — the limits are the point, not the
+            small print.
+          </p>
+        </Reveal>
+        <Stagger
+          as="ul"
+          className="grid gap-x-6 gap-y-px overflow-hidden rounded-2xl border border-border bg-surface/60 backdrop-blur sm:grid-cols-2 sm:gap-y-0"
+        >
+          {WHAT_IT_ISNT.map((n) => (
+            <StaggerItem
+              as="li"
+              key={n.title}
+              className="flex gap-3 border-b border-border-muted p-5 last:border-b-0 sm:border-b-0"
+            >
+              <span
+                aria-hidden
+                className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-surface-2 text-subtle"
+              >
+                <X className="h-3.5 w-3.5" strokeWidth={2.75} />
+              </span>
+              <div className="min-w-0">
+                <p className="font-display font-bold">{n.title}</p>
+                <p className="mt-1 text-sm text-muted">{n.body}</p>
+              </div>
+            </StaggerItem>
+          ))}
+        </Stagger>
+      </section>
+
+      {/* Why it works this way */}
+      <section className="mx-auto max-w-site px-4 pb-20">
+        <Reveal className="mx-auto max-w-3xl rounded-2xl border border-accent/30 bg-accent/8 p-6 sm:p-8">
+          <p className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.18em] text-accent">
+            <ShieldCheck className="h-4 w-4 shrink-0" />
+            Why it works this way
+          </p>
+          <div className="mt-3 space-y-3 text-base leading-relaxed text-muted">
+            <p>
+              A confident wrong answer is worse than &ldquo;not covered.&rdquo;
+              At the table, an invented rule gets played — and nobody finds out
+              until someone checks. So Meepletron is built the other way round
+              from a general chatbot: the source comes first, and the answer has
+              to come out of it.
+            </p>
+            <p>
+              It&apos;s also why the manual is parsed rather than skimmed —
+              sections, pages and tables are kept, so a question lands on the
+              right rule and not a paragraph that merely looks right. Expansion
+              manuals are searched too, each citation labelled with the book it
+              came from.
+            </p>
+          </div>
+        </Reveal>
+      </section>
+
       {/* Everything else for game night */}
       <section className="mx-auto max-w-site px-4 pb-20">
         <Reveal className="mb-6 text-center">
@@ -136,7 +229,7 @@ export function Landing() {
             Everything else for game night
           </h2>
           <p className="mx-auto mt-2 max-w-md text-sm text-muted">
-            The rules expert is the heart of it — here&apos;s what else is
+            The rules referee is the heart of it — here&apos;s what else is
             ready to use today.
           </p>
         </Reveal>

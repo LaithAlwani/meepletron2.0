@@ -1,19 +1,17 @@
 import type { Metadata } from "next";
 import { Landing } from "@/components/home/Landing";
 
+const title =
+  "Meepletron — an AI rules referee that answers only from the rulebook";
+
 const description =
-  "Meepletron is an AI board game rules expert: ask any rules question and get an answer pulled from that game's actual rulebook, cited by page — not guessed from a general AI. Plus a game library, your collection and a first-player picker.";
+  "Ask a board game rules question mid-game and get the answer straight from that game's actual manual, cited by page so you can check it. If the rulebook doesn't cover it, Meepletron says so — it won't guess, won't coach strategy, and won't fill gaps from general knowledge.";
 
 export const metadata: Metadata = {
-  title: { absolute: "Meepletron — AI board game rules, answered from the rulebook" },
+  title: { absolute: title },
   description,
   alternates: { canonical: "/" },
-  openGraph: {
-    title: "Meepletron — AI board game rules, answered from the rulebook",
-    description,
-    url: "/",
-    type: "website",
-  },
+  openGraph: { title, description, url: "/", type: "website" },
 };
 
 /**
