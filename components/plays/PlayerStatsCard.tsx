@@ -86,7 +86,7 @@ export function PlayerStatsCard({
             <span className="font-display text-2xl font-extrabold tabular-nums">
               {winPct != null ? `${winPct}%` : "—"}
             </span>
-            <span className="text-[10px] font-semibold uppercase tracking-wide text-subtle">
+            <span className="text-2xs font-semibold uppercase tracking-wide text-subtle">
               win rate
             </span>
           </div>
@@ -112,7 +112,7 @@ export function PlayerStatsCard({
 
       {/* Monthly bar chart */}
       <div className="mt-5">
-        <p className="mb-1.5 text-[11px] font-bold uppercase tracking-[0.12em] text-subtle">
+        <p className="mb-1.5 text-2xs font-bold uppercase tracking-[0.12em] text-subtle">
           Last 6 months
         </p>
         <div className="h-28">
@@ -151,7 +151,7 @@ export function PlayerStatsCard({
 
       {/* Recent games with winners */}
       <div className="mt-4">
-        <p className="mb-1.5 text-[11px] font-bold uppercase tracking-[0.12em] text-subtle">
+        <p className="mb-1.5 text-2xs font-bold uppercase tracking-[0.12em] text-subtle">
           Recent games
         </p>
         <ul className="divide-y divide-border-muted">
@@ -188,7 +188,7 @@ function Stat({ label, value }: { label: string; value: number | string }) {
       <div className="font-display text-xl font-extrabold tabular-nums">
         {value}
       </div>
-      <div className="text-[11px] text-subtle">{label}</div>
+      <div className="text-2xs text-subtle">{label}</div>
     </div>
   );
 }

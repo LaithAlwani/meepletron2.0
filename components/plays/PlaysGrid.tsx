@@ -66,7 +66,7 @@ export function PlaysGrid({
     return (
       <div className="grid grid-cols-3 gap-1">
         {Array.from({ length: 9 }).map((_, i) => (
-          <Skeleton key={i} className="aspect-square w-full rounded-md" />
+          <Skeleton key={i} className="aspect-square w-full rounded-lg" />
         ))}
       </div>
     );
@@ -114,7 +114,7 @@ export function PlaysGrid({
             <Link
               href={`/plays/${p._id}`}
               onClick={() => save(results.length)}
-              className="group relative block aspect-square overflow-hidden rounded-md bg-surface-2"
+              className="group relative block aspect-square overflow-hidden rounded-lg bg-surface-2"
             >
               {p.photoUrl || p.coverUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element

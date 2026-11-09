@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { buttonClasses } from "@/components/ui/buttonStyles";
 import Link from "next/link";
 import Image from "next/image";
 
@@ -36,7 +37,7 @@ export default async function UnauthorizedPage({
           {isSignIn && (
             <Link
               href="/auth"
-              className="inline-flex items-center justify-center gap-2 rounded-xl bg-accent px-5 py-2.5 text-sm font-semibold text-accent-foreground shadow-sm transition-opacity hover:opacity-90"
+              className={buttonClasses("primary", "md")}
             >
               🔑 Sign in
             </Link>

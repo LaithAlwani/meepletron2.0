@@ -20,7 +20,7 @@ export function FilterButton({
     >
       <SlidersHorizontal className="h-4.5 w-4.5" />
       {activeCount > 0 && (
-        <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-accent px-1 text-[11px] font-bold text-accent-foreground">
+        <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-accent px-1 text-2xs font-bold text-accent-foreground">
           {activeCount}
         </span>
       )}

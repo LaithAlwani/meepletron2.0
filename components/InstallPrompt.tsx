@@ -1,5 +1,6 @@
 "use client";
 
+import { buttonClasses } from "@/components/ui/buttonStyles";
 import { useEffect, useState } from "react";
 import Image from "next/image";
 
@@ -98,7 +99,7 @@ export function InstallPrompt() {
             <button
               onClick={install}
               disabled={installing}
-              className="mt-4 inline-flex items-center gap-2 rounded-xl bg-accent px-5 py-2.5 text-sm font-semibold text-accent-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
+              className={buttonClasses("primary", "md", "mt-4")}
             >
               {DownloadIcon}
               {installing ? "Installing…" : "Install app"}

@@ -126,16 +126,16 @@ export default function PlayPage({
       {/* Header */}
       <div className="min-w-0">
         <div className="flex items-center gap-2">
-          <span className="rounded-full bg-surface-2 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-muted">
+          <span className="rounded-full bg-surface-2 px-2 py-0.5 text-2xs font-bold uppercase tracking-wide text-muted">
             {FORMAT_LABEL[play.format] ?? play.format}
           </span>
           {play.source === "bgg" && (
-            <span className="rounded-full bg-accent-2/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-accent-2">
+            <span className="rounded-full bg-accent-2/15 px-2 py-0.5 text-2xs font-bold uppercase tracking-wide text-accent-2">
               BGG
             </span>
           )}
           {!isPublic && (
-            <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-subtle">
+            <span className="inline-flex items-center gap-1 text-2xs font-semibold text-subtle">
               <Lock className="h-3 w-3" />
               Private
             </span>
@@ -238,7 +238,7 @@ export default function PlayPage({
             <button
               onClick={onDelete}
               title="Delete"
-              className="inline-flex h-9 items-center gap-2 rounded-xl border border-border bg-surface px-3 text-sm font-semibold text-muted transition-all hover:border-red-200 hover:bg-red-50 hover:text-red-600 active:scale-[0.98] dark:hover:border-red-500/30 dark:hover:bg-red-500/10 dark:hover:text-red-400"
+              className="inline-flex h-9 items-center gap-2 rounded-xl border border-border bg-surface px-3 text-sm font-semibold text-muted transition-all hover:border-red-200 hover:bg-red-50 hover:text-danger active:scale-[0.98] dark:hover:border-danger/30 dark:hover:bg-danger/10 dark:hover:text-danger"
             >
               <Trash2 className="h-4 w-4" />
               <span className="hidden sm:inline">Delete</span>
@@ -264,7 +264,7 @@ export default function PlayPage({
             className={cn(
               "inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-semibold transition-colors",
               play.myReaction
-                ? "text-red-500"
+                ? "text-danger"
                 : "text-muted hover:bg-surface-2 hover:text-foreground",
             )}
           >
@@ -308,7 +308,7 @@ export default function PlayPage({
             "mt-5 rounded-2xl border px-4 py-3 text-center font-display text-lg font-bold",
             play.coopOutcome === "win"
               ? "border-accent/40 bg-accent/10 text-accent"
-              : "border-red-300 bg-red-50 text-red-600 dark:border-red-500/40 dark:bg-red-500/10 dark:text-red-400",
+              : "border-red-300 bg-red-50 text-danger dark:border-danger/40 dark:bg-danger/10",
           )}
         >
           {play.coopOutcome === "win" ? "🏆 The table won" : "The table lost"}
@@ -321,7 +321,7 @@ export default function PlayPage({
       {/* Expansions used — the play itself is always the base game. */}
       {play.expansions.length > 0 && (
         <div className="mt-5 rounded-2xl border border-border bg-surface p-4">
-          <p className="mb-2 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.12em] text-subtle">
+          <p className="mb-2 flex items-center gap-1.5 text-2xs font-bold uppercase tracking-[0.12em] text-subtle">
             <Puzzle className="h-3.5 w-3.5" />
             Expansions used
           </p>

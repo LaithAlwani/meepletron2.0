@@ -159,7 +159,7 @@ function PerGameStats({
       <div className="hidden overflow-x-auto sm:block">
         <table className="w-full min-w-110 text-sm">
           <thead>
-            <tr className="border-b border-border-muted text-[11px] uppercase tracking-wider text-subtle">
+            <tr className="border-b border-border-muted text-2xs uppercase tracking-wider text-subtle">
               <th className="px-4 py-2.5 text-left font-semibold">Game</th>
               <th className="px-2 py-2.5 text-center font-semibold">Plays</th>
               <th className="px-2 py-2.5 text-center font-semibold">Won</th>
@@ -176,7 +176,7 @@ function PerGameStats({
               >
                 <td className="px-4 py-2.5">
                   <div className="flex items-center gap-2.5">
-                    <div className="h-9 w-9 shrink-0 overflow-hidden rounded-md bg-surface-2">
+                    <div className="h-9 w-9 shrink-0 overflow-hidden rounded-lg bg-surface-2">
                       {g.coverUrl ? (
                         <Thumb url={g.coverUrl} className="h-9 w-9" />
                       ) : (
@@ -267,7 +267,7 @@ function PerGameStats({
         </button>
       )}
       {capped && (
-        <p className="border-t border-border-muted px-4 py-2.5 text-center text-[11px] text-subtle">
+        <p className="border-t border-border-muted px-4 py-2.5 text-center text-2xs text-subtle">
           Based on your 1,000 most recent plays.
         </p>
       )}
@@ -288,7 +288,7 @@ function GameStatCell({
 }) {
   return (
     <div className={align === "right" ? "text-right" : ""}>
-      <div className="text-[11px] uppercase tracking-wider text-subtle">
+      <div className="text-2xs uppercase tracking-wider text-subtle">
         {label}
       </div>
       <div
@@ -331,7 +331,7 @@ function StatCard({
         {value === undefined ? "—" : value}
       </div>
       <div className="text-xs text-subtle">{label}</div>
-      {sub && <div className="mt-0.5 text-[11px] text-subtle">{sub}</div>}
+      {sub && <div className="mt-0.5 text-2xs text-subtle">{sub}</div>}
     </div>
   );
 }

@@ -28,7 +28,7 @@ export function GamePlaysSection({
   if (results.length === 0) {
     return (
       <section className="animate-in mb-8">
-        <h2 className="mb-3 text-[11px] font-bold uppercase tracking-[0.16em] text-subtle">
+        <h2 className="mb-3 text-2xs font-bold uppercase tracking-[0.16em] text-subtle">
           Plays
         </h2>
         <div className="flex items-center justify-between gap-3 rounded-2xl border border-dashed border-border p-5">
@@ -45,7 +45,7 @@ export function GamePlaysSection({
   return (
     <section className="animate-in mb-8">
       <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-[11px] font-bold uppercase tracking-[0.16em] text-subtle">
+        <h2 className="text-2xs font-bold uppercase tracking-[0.16em] text-subtle">
           Recent plays
         </h2>
         <button

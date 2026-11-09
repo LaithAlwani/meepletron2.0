@@ -40,7 +40,7 @@ export default function AdminSearchesPage() {
         {searches.length > 0 && (
           <button
             onClick={clearAll}
-            className="inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1 text-xs font-medium text-muted transition-colors hover:border-red-300 hover:bg-red-50 hover:text-red-600 dark:hover:border-red-500/30 dark:hover:bg-red-500/10 dark:hover:text-red-400"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1 text-xs font-medium text-muted transition-colors hover:border-red-300 hover:bg-red-50 hover:text-danger dark:hover:border-danger/30 dark:hover:bg-danger/10 dark:hover:text-danger"
           >
             <Trash2 className="h-3.5 w-3.5" />
             Delete all

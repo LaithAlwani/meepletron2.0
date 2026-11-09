@@ -111,7 +111,7 @@ export function CoverScroller({
                     </div>
                   )}
                 </div>
-                <p className="mt-1 w-24 truncate text-[11px] text-muted">
+                <p className="mt-1 w-24 truncate text-2xs text-muted">
                   {g.title}
                 </p>
               </>

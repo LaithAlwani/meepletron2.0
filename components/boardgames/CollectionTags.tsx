@@ -41,14 +41,14 @@ export function CollectionTags({
       ? "px-3.5 py-2 text-base"
       : size === "md"
         ? "px-2 py-0.5 text-xs"
-        : "px-1.5 py-0.5 text-[10px]";
+        : "px-1.5 py-0.5 text-2xs";
 
   return (
     <div className={`flex flex-wrap gap-1 ${className ?? ""}`}>
       {active.map((t) => (
         <span
           key={t.key}
-          className={`inline-flex items-center rounded-md font-bold shadow-sm ${pill} ${t.cls}`}
+          className={`inline-flex items-center rounded-lg font-bold shadow-sm ${pill} ${t.cls}`}
         >
           {t.label}
         </span>

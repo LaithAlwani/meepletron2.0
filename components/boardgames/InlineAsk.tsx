@@ -1,5 +1,6 @@
 "use client";
 
+import { buttonClasses } from "@/components/ui/buttonStyles";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery } from "convex/react";
@@ -108,19 +109,19 @@ export function InlineAsk({
           <button
             onClick={submit}
             disabled={!q.trim()}
-            className="rounded-xl bg-accent px-5 py-2.5 text-sm font-semibold text-accent-foreground transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:bg-surface-2 disabled:text-subtle"
+            className={buttonClasses("primary", "md")}
           >
             Ask →
           </button>
         </div>
         {resourceCount > 0 && (
           <div className="mt-3 flex flex-wrap items-center gap-1.5">
-            <span className="text-[11px] text-subtle">Searches:</span>
+            <span className="text-2xs text-subtle">Searches:</span>
             {(sources ?? []).flatMap((g) =>
               g.rulebooks.map((rb) => (
                 <span
                   key={rb._id}
-                  className="rounded-full border border-border bg-surface-2 px-2 py-0.5 text-[11px] text-muted"
+                  className="rounded-full border border-border bg-surface-2 px-2 py-0.5 text-2xs text-muted"
                 >
                   {rb.label}
                 </span>

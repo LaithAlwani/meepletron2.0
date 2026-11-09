@@ -152,7 +152,7 @@ function ChatsList() {
               <button
                 onClick={() => deleteChat(c._id, c.gameTitle)}
                 aria-label={`Delete chat about ${c.gameTitle}`}
-                className="flex h-9 w-9 items-center justify-center rounded-lg text-subtle transition-colors hover:bg-surface-2 hover:text-red-500 dark:hover:text-red-400"
+                className="flex h-9 w-9 items-center justify-center rounded-lg text-subtle transition-colors hover:bg-surface-2 hover:text-danger dark:hover:text-danger"
               >
                 <Trash2 className="h-4 w-4" />
               </button>
@@ -247,7 +247,7 @@ function TwoPane() {
                       <span className="truncate text-sm font-bold">
                         {c.gameTitle}
                       </span>
-                      <span className="shrink-0 text-[11px] text-subtle">
+                      <span className="shrink-0 text-2xs text-subtle">
                         {relativeTime(c.lastMessageAt)}
                       </span>
                     </span>
@@ -264,7 +264,7 @@ function TwoPane() {
                     if (gone && wasActive) setSelected(null);
                   }}
                   aria-label={`Delete chat about ${c.gameTitle}`}
-                  className="mr-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-subtle opacity-0 transition-opacity hover:bg-surface-2 hover:text-red-500 focus-visible:opacity-100 group-hover:opacity-100 dark:hover:text-red-400"
+                  className="mr-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-subtle opacity-0 transition-opacity hover:bg-surface-2 hover:text-danger focus-visible:opacity-100 group-hover:opacity-100 dark:hover:text-danger"
                 >
                   <Trash2 className="h-4 w-4" />
                 </button>

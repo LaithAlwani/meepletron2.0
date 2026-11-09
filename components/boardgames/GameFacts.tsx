@@ -76,7 +76,7 @@ function Pill({
       <span className="flex flex-col justify-center leading-tight">
         <span className="text-sm font-semibold text-foreground">{main}</span>
         {sub != null && (
-          <span className="text-[11px] font-medium text-subtle">{sub}</span>
+          <span className="text-2xs font-medium text-subtle">{sub}</span>
         )}
       </span>
       {trailing}
@@ -99,7 +99,7 @@ function PollPopover({
           Player-count votes
         </p>
         {pollVotes != null && (
-          <p className="text-[10px] text-muted">
+          <p className="text-2xs text-muted">
             {pollVotes.toLocaleString()} votes
           </p>
         )}
@@ -133,7 +133,7 @@ function PollPopover({
           );
         })}
       </div>
-      <div className="mt-2.5 flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-muted">
+      <div className="mt-2.5 flex flex-wrap gap-x-3 gap-y-1 text-2xs text-muted">
         <span className="flex items-center gap-1">
           <span className="h-2 w-2 rounded-full bg-accent" /> Best
         </span>

@@ -30,7 +30,7 @@ export function SectionHeading({
   return (
     <h2
       className={cn(
-        "text-[11px] font-bold uppercase tracking-[0.16em] text-subtle",
+        "text-2xs font-bold uppercase tracking-[0.16em] text-subtle",
         className,
       )}
     >

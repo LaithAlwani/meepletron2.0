@@ -160,7 +160,7 @@ export function ComponentsView({ gameId }: { gameId: Id<"games"> }) {
 
 function Count({ children }: { children: React.ReactNode }) {
   return (
-    <span className="inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-md bg-surface-2 px-1 text-xs font-bold text-muted">
+    <span className="inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-lg bg-surface-2 px-1 text-xs font-bold text-muted">
       {children}
     </span>
   );

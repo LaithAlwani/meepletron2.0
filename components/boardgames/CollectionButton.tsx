@@ -170,7 +170,7 @@ export function CollectionButton({
             className="w-52 rounded-xl border border-border bg-surface p-1 shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <p className="px-2 py-1 text-[11px] font-bold uppercase tracking-wide text-subtle">
+            <p className="px-2 py-1 text-2xs font-bold uppercase tracking-wide text-subtle">
               Add to collection
             </p>
             {OPTS.map((o) => {

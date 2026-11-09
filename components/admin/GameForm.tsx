@@ -1,5 +1,7 @@
 "use client";
 
+import { buttonClasses } from "@/components/ui/buttonStyles";
+import { fieldClasses } from "@/components/ui/Field";
 import { useMemo, useState } from "react";
 import { useQuery, useAction } from "convex/react";
 import { Download } from "lucide-react";
@@ -50,7 +52,7 @@ export type GameFormInitial = Partial<GameFormValues> & {
   parent?: { _id: Id<"games">; title: string } | null;
 };
 
-const csv = (arr?: string[]) => (arr ?? []).join(", ");
+const csv = (arr?: string[]) => (arr ?? []).join(",");
 // Accept comma- OR newline-separated values.
 const parseCsv = (s: string) =>
   s
@@ -74,8 +76,7 @@ function Field({
   );
 }
 
-const inputClass =
-  "w-full rounded-lg border border-border bg-surface px-3 py-2 outline-none focus:ring-2 focus:ring-ring";
+const inputClass = `${fieldClasses} px-3.5 py-2.5`;
 
 export function GameForm({
   initial,
@@ -286,7 +287,7 @@ export function GameForm({
             type="button"
             onClick={handleFill}
             disabled={filling || !bggId.trim()}
-            className="flex shrink-0 items-center gap-1.5 rounded-lg border border-border bg-surface px-3 py-2 text-sm font-medium transition-colors hover:bg-surface-2 disabled:opacity-50"
+            className={buttonClasses("ghost", "md", "shrink-0")}
           >
             <Download className="h-4 w-4" />
             {filling ? "Fetching…" : "Fill from BGG"}
@@ -388,7 +389,7 @@ export function GameForm({
       </Field>
 
       {error && (
-        <p role="alert" className="text-sm text-red-600 dark:text-red-400">
+        <p role="alert" className="text-sm text-danger">
           {error}
         </p>
       )}
@@ -398,7 +399,7 @@ export function GameForm({
           <button
             type="button"
             onClick={onDone}
-            className="rounded-lg border border-border px-4 py-2.5 text-sm font-medium text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
+            className={buttonClasses("ghost", "md")}
           >
             Cancel
           </button>
@@ -406,7 +407,7 @@ export function GameForm({
         <button
           type="submit"
           disabled={saving}
-          className="rounded-lg bg-accent px-5 py-2.5 font-semibold text-accent-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
+          className={buttonClasses("primary", "md")}
         >
           {saving ? "Saving…" : submitLabel}
         </button>

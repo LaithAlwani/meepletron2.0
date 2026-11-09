@@ -53,7 +53,7 @@ export function BottomNav() {
                   href={t.href}
                   aria-current={active ? "page" : undefined}
                   className={cn(
-                    "flex h-13 flex-col items-center justify-center gap-0.5 text-[10px] font-semibold transition-colors",
+                    "flex h-13 flex-col items-center justify-center gap-0.5 text-2xs font-semibold transition-colors",
                     active ? "text-accent" : "text-subtle hover:text-muted",
                   )}
                 >
@@ -68,7 +68,7 @@ export function BottomNav() {
               href="/profile"
               aria-current={pathname.startsWith("/user/") ? "page" : undefined}
               className={cn(
-                "flex h-13 flex-col items-center justify-center gap-0.5 text-[10px] font-semibold transition-colors",
+                "flex h-13 flex-col items-center justify-center gap-0.5 text-2xs font-semibold transition-colors",
                 pathname.startsWith("/user/")
                   ? "text-accent"
                   : "text-subtle hover:text-muted",
@@ -76,7 +76,7 @@ export function BottomNav() {
             >
               <span
                 className={cn(
-                  "flex h-5 w-5 items-center justify-center overflow-hidden rounded-full text-[9px] font-bold ring-1",
+                  "flex h-5 w-5 items-center justify-center overflow-hidden rounded-full text-2xs font-bold ring-1",
                   me ? "bg-accent/12 text-accent" : "bg-surface-2 text-muted",
                   pathname.startsWith("/user/")
                     ? "ring-accent"

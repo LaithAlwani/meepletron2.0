@@ -246,7 +246,7 @@ export function TopGamesEditor({
               onClick={onDelete}
               title="Delete draft"
               aria-label="Delete draft"
-              className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-border bg-surface text-muted transition-all hover:border-red-200 hover:bg-red-50 hover:text-red-600 active:scale-[0.98] dark:hover:border-red-500/30 dark:hover:bg-red-500/10 dark:hover:text-red-400"
+              className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-border bg-surface text-muted transition-all hover:border-red-200 hover:bg-red-50 hover:text-danger active:scale-[0.98] dark:hover:border-danger/30 dark:hover:bg-danger/10 dark:hover:text-danger"
             >
               <Trash2 className="h-4.5 w-4.5" />
             </button>
@@ -315,7 +315,7 @@ export function TopGamesEditor({
                     <button
                       onClick={() => removeGame(row.gameId)}
                       aria-label={`Remove ${row.title}`}
-                      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-subtle transition-colors hover:bg-red-500/10 hover:text-red-500"
+                      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-subtle transition-colors hover:bg-danger/10 hover:text-danger"
                     >
                       <X className="h-4 w-4" />
                     </button>
@@ -331,7 +331,7 @@ export function TopGamesEditor({
                 style={{ top: size * pitch - 4 }}
               >
                 <div className="h-px flex-1 bg-accent/40" />
-                <span className="mx-2 inline-flex items-center gap-1 rounded-full border border-accent/40 bg-background px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wide text-accent">
+                <span className="mx-2 inline-flex items-center gap-1 rounded-full border border-accent/40 bg-background px-2.5 py-0.5 text-2xs font-bold uppercase tracking-wide text-accent">
                   <Star className="h-3 w-3" />
                   Honorable mentions
                 </span>
@@ -369,7 +369,7 @@ function SaveBadge({ state }: { state: SaveState }) {
     <span
       className={cn(
         "text-xs font-medium",
-        state === "error" ? "text-red-500" : "text-subtle",
+        state === "error" ? "text-danger" : "text-subtle",
       )}
     >
       {label}

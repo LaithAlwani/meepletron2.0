@@ -399,7 +399,7 @@ function CoPlayersBars({
           </span>
         );
         const tooltip = (
-          <span className="pointer-events-none absolute left-full top-1/2 z-30 ml-2 hidden -translate-y-1/2 whitespace-nowrap rounded-md bg-foreground px-2 py-1 text-[11px] font-medium text-background shadow-lg group-hover:block">
+          <span className="pointer-events-none absolute left-full top-1/2 z-30 ml-2 hidden -translate-y-1/2 whitespace-nowrap rounded-lg bg-foreground px-2 py-1 text-2xs font-medium text-background shadow-lg group-hover:block">
             {p.name}
           </span>
         );
@@ -422,9 +422,9 @@ function CoPlayersBars({
         return (
           <li key={i} className="flex items-center gap-3">
             {avatarNode}
-            <div className="h-6 min-w-0 flex-1 overflow-hidden rounded-md bg-surface-2">
+            <div className="h-6 min-w-0 flex-1 overflow-hidden rounded-lg bg-surface-2">
               <div
-                className="flex h-full items-center justify-end rounded-md px-2 text-[11px] font-bold text-white transition-[width] duration-700 ease-out"
+                className="flex h-full items-center justify-end rounded-lg px-2 text-2xs font-bold text-white transition-[width] duration-700 ease-out"
                 style={{ width: grown ? `${pct}%` : "0%", backgroundColor: accent }}
               >
                 {p.plays}

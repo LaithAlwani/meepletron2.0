@@ -3,14 +3,15 @@
 import { forwardRef } from "react";
 import { cn } from "@/lib/cn";
 
-const fieldBase =
+export const fieldClasses =
+  
   "w-full rounded-xl border border-border bg-surface text-sm text-foreground outline-none transition-shadow placeholder:text-subtle focus:border-accent/50 focus:ring-2 focus:ring-ring/40 disabled:opacity-60";
 
 export const Input = forwardRef<
   HTMLInputElement,
   React.InputHTMLAttributes<HTMLInputElement>
 >(({ className, ...props }, ref) => (
-  <input ref={ref} className={cn(fieldBase, "px-3.5 py-2.5", className)} {...props} />
+  <input ref={ref} className={cn(fieldClasses, "px-3.5 py-2.5", className)} {...props} />
 ));
 Input.displayName = "Input";
 
@@ -20,7 +21,7 @@ export const Textarea = forwardRef<
 >(({ className, ...props }, ref) => (
   <textarea
     ref={ref}
-    className={cn(fieldBase, "px-3.5 py-2.5 resize-none", className)}
+    className={cn(fieldClasses, "px-3.5 py-2.5 resize-none", className)}
     {...props}
   />
 ));
@@ -32,7 +33,7 @@ export const Select = forwardRef<
 >(({ className, ...props }, ref) => (
   <select
     ref={ref}
-    className={cn(fieldBase, "cursor-pointer px-3.5 py-2.5", className)}
+    className={cn(fieldClasses, "cursor-pointer px-3.5 py-2.5", className)}
     {...props}
   />
 ));

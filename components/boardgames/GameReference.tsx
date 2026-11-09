@@ -48,7 +48,7 @@ export function ComponentsList({ gameId }: { gameId: Id<"games"> }) {
               className="rounded-lg border border-border bg-surface px-3 py-2 text-sm sm:col-span-2"
             >
               <div className="flex items-center gap-2">
-                <span className="inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-md bg-surface-2 px-1 text-xs font-bold text-muted">
+                <span className="inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-lg bg-surface-2 px-1 text-xs font-bold text-muted">
                   {c.count}
                 </span>
                 <span className="min-w-0 flex-1 font-medium">{c.item}</span>
@@ -56,7 +56,7 @@ export function ComponentsList({ gameId }: { gameId: Id<"games"> }) {
               <ul className="ml-7 mt-1.5 grid grid-cols-1 gap-1 sm:grid-cols-2">
                 {c.children.map((ch, j) => (
                   <li key={j} className="flex items-center gap-2 text-muted">
-                    <span className="inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-md bg-surface-2 px-1 text-xs font-bold">
+                    <span className="inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-lg bg-surface-2 px-1 text-xs font-bold">
                       {ch.count}
                     </span>
                     <span className="min-w-0 flex-1 truncate">{ch.item}</span>
@@ -69,7 +69,7 @@ export function ComponentsList({ gameId }: { gameId: Id<"games"> }) {
               key={i}
               className="flex items-center gap-2 rounded-lg border border-border bg-surface px-3 py-1.5 text-sm"
             >
-              <span className="inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-md bg-surface-2 px-1 text-xs font-bold text-muted">
+              <span className="inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-lg bg-surface-2 px-1 text-xs font-bold text-muted">
                 {c.count}
               </span>
               <span className="min-w-0 flex-1 truncate">{c.item}</span>

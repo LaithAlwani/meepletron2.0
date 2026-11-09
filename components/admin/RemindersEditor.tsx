@@ -1,5 +1,7 @@
 "use client";
 
+import { buttonClasses } from "@/components/ui/buttonStyles";
+import { fieldClasses } from "@/components/ui/Field";
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useMutation, useAction } from "convex/react";
 import { Plus, Trash2, Sparkles } from "lucide-react";
@@ -10,8 +12,7 @@ import { useUnsavedForm } from "@/components/admin/UnsavedGuard";
 
 type Row = { id: number; label: string; detail: string };
 
-const inputBase =
-  "rounded-md border border-border bg-background px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-ring";
+const inputBase = `${fieldClasses} !w-auto px-3 py-1.5`;
 
 /** Admin editor for a game's "Rules refresher" list (fix the AI's output). */
 export function RemindersEditor({
@@ -107,7 +108,7 @@ export function RemindersEditor({
               <button
                 onClick={() => remove(r.id)}
                 aria-label="Remove reminder"
-                className="shrink-0 rounded-md p-2 text-subtle transition-colors hover:bg-surface-2 hover:text-red-600"
+                className="shrink-0 rounded-lg p-2 text-subtle transition-colors hover:bg-surface-2 hover:text-danger"
               >
                 <Trash2 className="h-4 w-4" />
               </button>
@@ -126,7 +127,7 @@ export function RemindersEditor({
       <div className="flex flex-wrap items-center gap-2">
         <button
           onClick={add}
-          className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm font-medium text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
+          className={buttonClasses("ghost", "sm")}
         >
           <Plus className="h-4 w-4" />
           Add reminder
@@ -134,7 +135,7 @@ export function RemindersEditor({
         <button
           onClick={onRegenerate}
           disabled={busy}
-          className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm font-medium text-muted transition-colors hover:bg-surface-2 hover:text-foreground disabled:opacity-50"
+          className={buttonClasses("ghost", "sm")}
         >
           <Sparkles className="h-4 w-4" />
           {busy ? "Regenerating…" : "Regenerate with AI"}
@@ -142,7 +143,7 @@ export function RemindersEditor({
         {onDone && (
           <button
             onClick={onDone}
-            className="ml-auto rounded-lg border border-border px-4 py-1.5 text-sm font-medium text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
+            className={buttonClasses("ghost", "sm", "ml-auto")}
           >
             Cancel
           </button>

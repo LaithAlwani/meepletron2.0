@@ -1,5 +1,6 @@
 "use client";
 
+import { buttonClasses } from "@/components/ui/buttonStyles";
 import Image from "next/image";
 
 export default function Error({ reset }: { error: Error; reset: () => void }) {
@@ -21,7 +22,7 @@ export default function Error({ reset }: { error: Error; reset: () => void }) {
 
         <button
           onClick={reset}
-          className="inline-flex items-center justify-center gap-2 rounded-xl bg-accent px-5 py-2.5 text-sm font-semibold text-accent-foreground shadow-sm transition-opacity hover:opacity-90"
+          className={buttonClasses("primary", "md")}
         >
           Try again
         </button>

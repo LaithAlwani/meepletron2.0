@@ -83,7 +83,7 @@ function Avatar({ player, size }: { player: PlayPlayer; size: "sm" | "md" }) {
     <span
       className={cn(
         "flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-surface-2 font-bold text-muted",
-        size === "md" ? "h-9 w-9 text-xs" : "h-7 w-7 text-[10px]",
+        size === "md" ? "h-9 w-9 text-xs" : "h-7 w-7 text-2xs",
       )}
     >
       <AvatarImg src={player.avatarUrl} initial={initial} />
@@ -145,12 +145,12 @@ function PlayerIdentity({
             </span>
           )}
           {!player.userId && (
-            <span className="rounded-full bg-surface-2 px-1.5 py-px text-[10px] font-bold uppercase tracking-wide text-subtle">
+            <span className="rounded-full bg-surface-2 px-1.5 py-px text-2xs font-bold uppercase tracking-wide text-subtle">
               non-user
             </span>
           )}
           {player.isNew && (
-            <span className="rounded-full bg-accent-2/15 px-1.5 py-px text-[10px] font-bold uppercase text-accent-2">
+            <span className="rounded-full bg-accent-2/15 px-1.5 py-px text-2xs font-bold uppercase text-accent-2">
               new
             </span>
           )}

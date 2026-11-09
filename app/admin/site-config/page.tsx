@@ -1,5 +1,6 @@
 "use client";
 
+import { buttonClasses } from "@/components/ui/buttonStyles";
 import { useEffect, useState } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
@@ -170,7 +171,7 @@ export default function SiteConfigPage() {
         <button
           onClick={save}
           disabled={saving}
-          className="rounded-lg bg-accent px-5 py-2.5 font-semibold text-accent-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
+          className={buttonClasses("primary", "md")}
         >
           {saving ? "Saving…" : "Save config"}
         </button>

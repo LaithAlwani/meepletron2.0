@@ -1,5 +1,6 @@
 "use client";
 
+import { fieldClasses } from "@/components/ui/Field";
 import { useEffect, useState } from "react";
 import { Sheet } from "@/components/ui/Sheet";
 import { useRouter } from "next/navigation";
@@ -172,9 +173,8 @@ const SCORE_MODES: { value: ScoreMode; label: string }[] = [
 ];
 
 const LABEL =
-  "mb-1.5 block text-[11px] font-bold uppercase tracking-[0.12em] text-subtle";
-const fieldCls =
-  "w-full rounded-xl border border-border bg-surface px-3.5 py-2.5 text-sm text-foreground outline-none transition-shadow focus:border-accent/50 focus:ring-2 focus:ring-ring/40";
+  "mb-1.5 block text-2xs font-bold uppercase tracking-[0.12em] text-subtle";
+const fieldCls = `${fieldClasses} px-3.5 py-2.5`;
 
 function todayStr(): string {
   const d = new Date();
@@ -608,7 +608,7 @@ export function LogPlayWizard({
                 onClick={discard}
                 aria-label="Discard draft"
                 title="Discard this draft"
-                className="flex h-8 w-8 items-center justify-center rounded-lg text-muted hover:bg-red-500/10 hover:text-red-500"
+                className="flex h-8 w-8 items-center justify-center rounded-lg text-muted hover:bg-danger/10 hover:text-danger"
               >
                 <Trash2 className="h-4.5 w-4.5" />
               </button>
@@ -1028,7 +1028,7 @@ function ExpansionsStep({
                 </span>
                 <span
                   className={cn(
-                    "flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition-colors",
+                    "flex h-5 w-5 shrink-0 items-center justify-center rounded-lg border transition-colors",
                     on
                       ? "border-accent bg-accent text-accent-foreground"
                       : "border-border",
@@ -1179,12 +1179,12 @@ function PlayersStep(props: {
               <span className="min-w-0 flex-1 truncate text-sm font-medium">
                 {p.name}
                 {p.userId && (
-                  <span className="ml-1.5 text-[11px] font-semibold text-accent">
+                  <span className="ml-1.5 text-2xs font-semibold text-accent">
                     you
                   </span>
                 )}
                 {p.newPersonEmail && (
-                  <span className="ml-1.5 text-[11px] text-subtle">
+                  <span className="ml-1.5 text-2xs text-subtle">
                     {p.newPersonEmail}
                   </span>
                 )}
@@ -1214,7 +1214,7 @@ function PlayersStep(props: {
                 <button
                   onClick={() => remove(p.key)}
                   aria-label={`Remove ${p.name}`}
-                  className="flex h-7 w-7 items-center justify-center rounded-lg text-subtle hover:bg-red-500/10 hover:text-red-500"
+                  className="flex h-7 w-7 items-center justify-center rounded-lg text-subtle hover:bg-danger/10 hover:text-danger"
                 >
                   <X className="h-4 w-4" />
                 </button>
@@ -1248,7 +1248,7 @@ function PlayersStep(props: {
                       className="h-6 w-6 shrink-0 rounded-full object-cover"
                     />
                   ) : (
-                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-accent/15 text-[11px] font-bold text-accent">
+                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-accent/15 text-2xs font-bold text-accent">
                       {u.name.charAt(0).toUpperCase()}
                     </span>
                   )}
@@ -1256,7 +1256,7 @@ function PlayersStep(props: {
                     {u.name}
                   </span>
                   {u.username && (
-                    <span className="shrink-0 text-[11px] font-semibold text-accent">
+                    <span className="shrink-0 text-2xs font-semibold text-accent">
                       @{u.username}
                     </span>
                   )}
@@ -1277,7 +1277,7 @@ function PlayersStep(props: {
                   className="flex w-full items-center justify-between rounded-lg px-2.5 py-1.5 text-left text-sm hover:bg-surface-2"
                 >
                   <span>{p.name}</span>
-                  <span className="text-[11px] text-subtle">
+                  <span className="text-2xs text-subtle">
                     {p.playCount} play{p.playCount === 1 ? "" : "s"}
                   </span>
                 </button>
@@ -1341,7 +1341,7 @@ function ScoresStep(props: {
                   props.coopOutcome === o
                     ? o === "win"
                       ? "border-accent bg-accent/10 text-accent"
-                      : "border-red-300 bg-red-50 text-red-600 dark:border-red-500/40 dark:bg-red-500/10 dark:text-red-400"
+                      : "border-red-300 bg-red-50 text-danger dark:border-danger/40 dark:bg-danger/10"
                     : "border-border bg-surface text-muted hover:bg-surface-2",
                 )}
               >
@@ -1485,7 +1485,7 @@ function ShareStep(props: {
             ) : (
               <ImagePlus className="h-5 w-5" />
             )}
-            <span className="text-[10px] font-medium">Add</span>
+            <span className="text-2xs font-medium">Add</span>
             <input
               type="file"
               accept="image/*"

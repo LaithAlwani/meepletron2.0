@@ -329,7 +329,7 @@ function SuggestionList({
                 <span className="font-display flex items-center gap-1.5 truncate font-bold leading-snug">
                   <span className="truncate">{s.title}</span>
                   {s.isExpansion && (
-                    <span className="shrink-0 rounded-full bg-surface-2 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-subtle">
+                    <span className="shrink-0 rounded-full bg-surface-2 px-1.5 py-0.5 text-2xs font-bold uppercase tracking-wide text-subtle">
                       Exp
                     </span>
                   )}
@@ -347,7 +347,7 @@ function SuggestionList({
                 )}
               </span>
               {s.rating != null && (
-                <span className="inline-flex shrink-0 items-center gap-0.5 text-[11px] font-bold text-accent">
+                <span className="inline-flex shrink-0 items-center gap-0.5 text-2xs font-bold text-accent">
                   <Star className="h-3 w-3 fill-current" />
                   {s.rating.toFixed(1)}
                 </span>

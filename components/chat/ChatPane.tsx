@@ -541,12 +541,12 @@ function ChatView({
               <span className="relative">
                 {LayersIcon}
                 {resourceCount > 0 && (
-                  <span className="absolute -right-2 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-accent px-1 text-[10px] font-bold leading-none text-accent-foreground">
+                  <span className="absolute -right-2 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-accent px-1 text-2xs font-bold leading-none text-accent-foreground">
                     {resourceCount}
                   </span>
                 )}
               </span>
-              <span className="text-[10px] font-medium leading-none">Resources</span>
+              <span className="text-2xs font-medium leading-none">Resources</span>
             </button>
           </div>
         </header>
@@ -632,7 +632,7 @@ function ChatView({
                 {isAdmin &&
                   m.role === "assistant" &&
                   ((m.inputTokens ?? 0) > 0 || (m.outputTokens ?? 0) > 0) && (
-                    <p className="mt-0.5 pl-1 text-[10px] text-subtle">
+                    <p className="mt-0.5 pl-1 text-2xs text-subtle">
                       {(m.inputTokens ?? 0).toLocaleString()} in ·{" "}
                       {(m.outputTokens ?? 0).toLocaleString()} out ·{" "}
                       {((m.inputTokens ?? 0) + (m.outputTokens ?? 0)).toLocaleString()}{" "}
@@ -672,7 +672,7 @@ function ChatView({
         </div>
 
         {error && (
-          <p role="alert" className="mb-2 text-sm text-red-600 dark:text-red-400">
+          <p role="alert" className="mb-2 text-sm text-danger">
             {error}
           </p>
         )}
@@ -703,9 +703,9 @@ function ChatView({
                   />
                   {budget && (
                     <p
-                      className={`shrink-0 pr-1 text-right text-[11px] font-medium ${
+                      className={`shrink-0 pr-1 text-right text-2xs font-medium ${
                         !budget.unlimited && budget.remaining <= 5000
-                          ? "text-red-500"
+                          ? "text-danger"
                           : "text-subtle"
                       }`}
                     >

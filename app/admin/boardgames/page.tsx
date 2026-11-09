@@ -1,5 +1,6 @@
 "use client";
 
+import { buttonClasses } from "@/components/ui/buttonStyles";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useQuery, useMutation } from "convex/react";
@@ -209,7 +210,7 @@ export default function AdminGamesPage() {
         </div>
         <Link
           href="/admin/boardgames/new"
-          className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-accent-foreground"
+          className={buttonClasses("primary", "md")}
         >
           Add game
         </Link>
@@ -266,7 +267,7 @@ export default function AdminGamesPage() {
           <p className="mt-3 text-center text-xs text-subtle">
             Showing {shown.length} of {filtered.length}
           </p>
-          <p className="mt-1 text-center text-[11px] text-subtle sm:hidden">
+          <p className="mt-1 text-center text-2xs text-subtle sm:hidden">
             Tap a game to edit · swipe left to delete.
           </p>
         </>
@@ -328,20 +329,20 @@ function IngestBadge({
 }) {
   if (status === "none") {
     return (
-      <span className="shrink-0 rounded-full bg-surface-2 px-2 py-0.5 text-[11px] text-subtle">
+      <span className="shrink-0 rounded-full bg-surface-2 px-2 py-0.5 text-2xs text-subtle">
         No files
       </span>
     );
   }
   if (status === "done") {
     return (
-      <span className="shrink-0 rounded-full bg-green-500/10 px-2 py-0.5 text-[11px] font-medium text-green-600 dark:text-green-400">
+      <span className="shrink-0 rounded-full bg-green-500/10 px-2 py-0.5 text-2xs font-medium text-green-600 dark:text-green-400">
         Ingested {total}/{total}
       </span>
     );
   }
   return (
-    <span className="shrink-0 rounded-full bg-amber-500/10 px-2 py-0.5 text-[11px] font-medium text-amber-600 dark:text-amber-400">
+    <span className="shrink-0 rounded-full bg-amber-500/10 px-2 py-0.5 text-2xs font-medium text-amber-600 dark:text-amber-400">
       {ingested}/{total} ingested
     </span>
   );
@@ -440,7 +441,7 @@ function GameRow({ game, onDelete }: { game: AdminGame; onDelete: () => void }) 
         style={{ transform: `translateX(${dx}px)`, touchAction: "pan-y" }}
         className={`relative flex items-center gap-3 rounded-lg border border-border bg-surface p-3 transition-colors hover:bg-surface-2 sm:pr-14 ${dragging ? "" : "transition-transform duration-200"}`}
       >
-        <div className="h-12 w-12 shrink-0 overflow-hidden rounded-md bg-surface-2">
+        <div className="h-12 w-12 shrink-0 overflow-hidden rounded-lg bg-surface-2">
           {game.thumbnailUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
@@ -460,12 +461,12 @@ function GameRow({ game, onDelete }: { game: AdminGame; onDelete: () => void }) 
           <p className="truncate text-xs text-muted">{game.slug}</p>
           <div className="mt-1 flex flex-wrap items-center gap-1.5">
             {game.isExpansion && (
-              <span className="rounded-full bg-surface-2 px-2 py-0.5 text-[11px] text-muted">
+              <span className="rounded-full bg-surface-2 px-2 py-0.5 text-2xs text-muted">
                 Expansion
               </span>
             )}
             {game.isStub && (
-              <span className="rounded-full bg-sky-500/10 px-2 py-0.5 text-[11px] font-medium text-sky-600 dark:text-sky-400">
+              <span className="rounded-full bg-sky-500/10 px-2 py-0.5 text-2xs font-medium text-sky-600 dark:text-sky-400">
                 Stub
               </span>
             )}
@@ -483,7 +484,7 @@ function GameRow({ game, onDelete }: { game: AdminGame; onDelete: () => void }) 
         onClick={onDelete}
         aria-label={`Delete ${game.title}`}
         title="Delete"
-        className="absolute right-3 top-1/2 z-10 hidden h-8 w-8 -translate-y-1/2 items-center justify-center rounded-md border border-border bg-surface text-red-600 transition-colors hover:bg-red-500/10 sm:flex dark:text-red-400"
+        className="absolute right-3 top-1/2 z-10 hidden h-8 w-8 -translate-y-1/2 items-center justify-center rounded-lg border border-border bg-surface text-danger transition-colors hover:bg-danger/10 sm:flex"
       >
         {TrashIcon}
       </button>

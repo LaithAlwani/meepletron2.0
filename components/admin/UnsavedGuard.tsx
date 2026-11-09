@@ -1,5 +1,6 @@
 "use client";
 
+import { buttonClasses } from "@/components/ui/buttonStyles";
 import {
   createContext,
   useCallback,
@@ -164,7 +165,7 @@ export function UnsavedGuardProvider({ children }: { children: ReactNode }) {
                 <button
                   onClick={onDiscard}
                   disabled={saving}
-                  className="rounded-lg px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 disabled:opacity-50 dark:text-red-400 dark:hover:bg-red-500/10"
+                  className="rounded-lg px-4 py-2 text-sm font-medium text-danger hover:bg-red-50 disabled:opacity-50 dark:hover:bg-danger/10"
                 >
                   Leave without saving
                 </button>
@@ -172,7 +173,7 @@ export function UnsavedGuardProvider({ children }: { children: ReactNode }) {
                   onClick={onSaveAndLeave}
                   disabled={saving}
                   autoFocus
-                  className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-accent-foreground hover:opacity-90 disabled:opacity-50"
+                  className={buttonClasses("primary", "md")}
                 >
                   {saving ? "Saving…" : "Save & leave"}
                 </button>

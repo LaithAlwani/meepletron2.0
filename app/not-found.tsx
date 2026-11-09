@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { buttonClasses } from "@/components/ui/buttonStyles";
 import Link from "next/link";
 import Image from "next/image";
 import { LayoutGrid, Heart } from "lucide-react";
@@ -27,13 +28,13 @@ export default function NotFound() {
         <div className="flex flex-col justify-center gap-3 sm:flex-row">
           <Link
             href="/boardgames"
-            className="inline-flex items-center justify-center gap-2 rounded-xl bg-accent px-5 py-2.5 text-sm font-semibold text-accent-foreground shadow-sm transition-opacity hover:opacity-90"
+            className={buttonClasses("primary", "md")}
           >
             <LayoutGrid className="h-4 w-4" /> Browse board games
           </Link>
           <Link
             href="/favorites"
-            className="inline-flex items-center justify-center gap-2 rounded-xl border border-border bg-surface px-5 py-2.5 text-sm font-semibold transition-colors hover:bg-surface-2"
+            className={buttonClasses("ghost", "md")}
           >
             <Heart className="h-4 w-4" /> Your favourites
           </Link>

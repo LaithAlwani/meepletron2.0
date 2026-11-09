@@ -47,7 +47,7 @@ function OverlayChip({ list }: { list: TopListRow }) {
         ? "Public"
         : "Finalized";
   return (
-    <span className="inline-flex items-center gap-1 rounded-full bg-black/45 px-2.5 py-0.5 text-[11px] font-semibold text-white ring-1 ring-white/25 backdrop-blur-sm">
+    <span className="inline-flex items-center gap-1 rounded-full bg-black/45 px-2.5 py-0.5 text-2xs font-semibold text-white ring-1 ring-white/25 backdrop-blur-sm">
       {list.status !== "draft" && list.visibility === "public" && (
         <Globe className="h-3 w-3" />
       )}
@@ -105,7 +105,7 @@ export function ListCard({ list }: { list: TopListRow }) {
         {list.category !== "overall" && (
           <span
             className={cn(
-              "mb-0.5 block text-[10px] font-bold uppercase tracking-[0.14em]",
+              "mb-0.5 block text-2xs font-bold uppercase tracking-[0.14em]",
               hasCollage ? "text-white/80 drop-shadow-sm" : "text-accent",
             )}
           >

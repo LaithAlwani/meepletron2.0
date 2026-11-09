@@ -143,7 +143,7 @@ export function Sheet({
             aria-hidden
             className="mx-auto mt-2.5 h-1.5 w-10 shrink-0 rounded-full bg-border"
           />
-          <p className="shrink-0 pb-1 pt-1.5 text-center text-[11px] text-subtle">
+          <p className="shrink-0 pb-1 pt-1.5 text-center text-2xs text-subtle">
             Pull down to dismiss
           </p>
           <Drawer.Title className="sr-only">Sheet</Drawer.Title>

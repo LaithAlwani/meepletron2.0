@@ -178,7 +178,7 @@ function PersonRow({ person }: { person: Person }) {
         <p className="flex items-center gap-1.5 truncate text-sm font-semibold">
           {person.name}
           {person.linked && (
-            <span className="inline-flex items-center gap-0.5 rounded-full bg-accent-2/15 px-1.5 py-px text-[10px] font-bold text-accent-2">
+            <span className="inline-flex items-center gap-0.5 rounded-full bg-accent-2/15 px-1.5 py-px text-2xs font-bold text-accent-2">
               <BadgeCheck className="h-3 w-3" />
               on Meepletron
             </span>
@@ -217,7 +217,7 @@ function PersonRow({ person }: { person: Person }) {
             title="Remove"
             className={cn(
               "flex h-8 w-8 items-center justify-center rounded-lg text-muted transition-colors",
-              "hover:bg-red-500/10 hover:text-red-500",
+              "hover:bg-danger/10 hover:text-danger",
             )}
           >
             <Trash2 className="h-4 w-4" />

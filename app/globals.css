@@ -23,6 +23,7 @@
   --accent-2-hover: #0a7a6d;
   --accent-2-foreground: #ffffff;
   --ring: #dc4e26;
+  --danger: #dc2626; /* errors / destructive */
   /* Muted category tag colors (tints picked to sit on cream + charcoal). */
   --cat-1: #c2571f; /* amber */
   --cat-2: #2f8f6f; /* green */
@@ -47,6 +48,7 @@
   --accent-2-hover: #5ee0ce;
   --accent-2-foreground: #10201d;
   --ring: #ff7a4d;
+  --danger: #f87171;
   --cat-1: #e6864a;
   --cat-2: #5cc79f;
   --cat-3: #7d9be6;
@@ -63,6 +65,7 @@
   --color-subtle: var(--subtle);
   --color-border: var(--border);
   --color-ring: var(--ring);
+  --color-danger: var(--danger);
   --color-accent: var(--accent);
   --color-accent-hover: var(--accent-hover);
   --color-accent-foreground: var(--accent-foreground);
@@ -76,6 +79,8 @@
   --color-cat-5: var(--cat-5);
   /* Remaining alias — `border-muted` is still used across cards/panels. */
   --color-border-muted: var(--border-muted);
+  /* Smallest allowed text (badges, captions) — replaces ad-hoc 9/10/11px. */
+  --text-2xs: 0.6875rem;
   --font-display: var(--font-bricolage), var(--font-hanken), system-ui, sans-serif;
   --font-sans: var(--font-hanken), var(--font-geist-sans), system-ui, sans-serif;
   --font-mono: var(--font-geist-mono), monospace;

@@ -88,7 +88,7 @@ export function ModelPicker({
                         <span className="block truncate text-sm font-medium text-foreground">
                           {shortLabel(m.label)}
                         </span>
-                        <span className="block truncate text-[11px] font-semibold text-accent">
+                        <span className="block truncate text-2xs font-semibold text-accent">
                           Sign in to use
                         </span>
                       </span>
@@ -119,7 +119,7 @@ export function ModelPicker({
                       <span className="block truncate text-sm font-medium text-foreground">
                         {shortLabel(m.label)}
                       </span>
-                      <span className="block truncate text-[11px] text-muted">
+                      <span className="block truncate text-2xs text-muted">
                         {m.label.split(" — ")[1] ?? m.provider}
                       </span>
                     </span>

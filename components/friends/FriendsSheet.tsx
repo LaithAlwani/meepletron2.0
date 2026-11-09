@@ -115,7 +115,7 @@ export function FriendsSheet({
                   {p.linked ? (
                     <span
                       title="Joined Meepletron"
-                      className="inline-flex items-center gap-1 rounded-full bg-accent-2/12 px-2 py-0.5 text-[11px] font-semibold text-accent-2"
+                      className="inline-flex items-center gap-1 rounded-full bg-accent-2/12 px-2 py-0.5 text-2xs font-semibold text-accent-2"
                     >
                       <Check className="h-3 w-3" />
                       Joined

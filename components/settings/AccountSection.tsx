@@ -1,5 +1,6 @@
 "use client";
 
+import { fieldClasses } from "@/components/ui/Field";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery, useMutation } from "convex/react";
@@ -91,7 +92,7 @@ export function AccountSection() {
         ) : (
           <button
             onClick={handleSignOut}
-            className="inline-flex items-center gap-2 rounded-xl border border-border px-4 py-2 text-sm font-medium text-muted transition-all hover:border-red-200 hover:bg-red-50 hover:text-red-600 dark:hover:border-red-500/30 dark:hover:bg-red-500/10 dark:hover:text-red-400"
+            className="inline-flex items-center gap-2 rounded-xl border border-border px-4 py-2 text-sm font-medium text-muted transition-all hover:border-red-200 hover:bg-red-50 hover:text-danger dark:hover:border-danger/30 dark:hover:bg-danger/10 dark:hover:text-danger"
           >
             <LogOut className="h-4 w-4" />
             Sign out
@@ -343,7 +344,7 @@ export function ProfileAvatar({
             </div>
 
             {atMax && (
-              <p className="mt-3 text-[11px] text-subtle">
+              <p className="mt-3 text-2xs text-subtle">
                 You&apos;ve saved the maximum of {MAX_SAVED_AVATARS} photos.
                 Delete one to add another.
               </p>
@@ -354,7 +355,7 @@ export function ProfileAvatar({
                 type="button"
                 onClick={removeCurrent}
                 disabled={busy}
-                className="mt-4 text-xs font-medium text-subtle transition-colors hover:text-red-500 disabled:opacity-50"
+                className="mt-4 text-xs font-medium text-subtle transition-colors hover:text-danger disabled:opacity-50"
               >
                 Remove current photo
               </button>
@@ -388,8 +389,7 @@ function PersonalInfo({ me }: { me: Doc<"users"> }) {
   const nameDirty = name !== (me.name ?? "");
   const usernameDirty = username !== (me.username ?? "");
   const dirty = nameDirty || usernameDirty;
-  const inputCls =
-    "w-full rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-accent/50 disabled:opacity-50";
+  const inputCls = `${fieldClasses} px-3.5 py-2.5`;
   const memberSince = new Date(me._creationTime).toLocaleDateString("en-US", {
     month: "long",
     year: "numeric",
@@ -463,7 +463,7 @@ function PersonalInfo({ me }: { me: Doc<"users"> }) {
                   className={inputCls}
                 />
               </div>
-              <p className="text-[11px] text-subtle">
+              <p className="text-2xs text-subtle">
                 3–20 characters — letters, numbers, underscore or dot.
               </p>
             </>
@@ -505,7 +505,7 @@ function PersonalInfo({ me }: { me: Doc<"users"> }) {
           <button
             onClick={save}
             disabled={saving || !dirty}
-            className="rounded-xl bg-accent px-3 py-1.5 text-xs font-semibold text-accent-foreground hover:opacity-90 disabled:opacity-50"
+            className={buttonClasses("primary", "sm")}
           >
             {saving ? "Saving…" : "Save"}
           </button>
@@ -546,8 +546,8 @@ export function DangerZone() {
   }
 
   return (
-    <div className="rounded-2xl border border-red-200 bg-red-50/40 p-5 dark:border-red-500/30 dark:bg-red-500/6">
-      <p className="text-xs font-semibold uppercase tracking-widest text-red-600 dark:text-red-400">
+    <div className="rounded-2xl border border-red-200 bg-red-50/40 p-5 dark:border-danger/30 dark:bg-danger/6">
+      <p className="text-xs font-semibold uppercase tracking-widest text-danger">
         Danger zone
       </p>
       <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
@@ -561,7 +561,7 @@ export function DangerZone() {
         <button
           onClick={handleDelete}
           disabled={deleting}
-          className="inline-flex shrink-0 items-center gap-2 rounded-xl border border-red-300 px-4 py-2 text-sm font-semibold text-red-600 transition-colors hover:bg-red-50 disabled:opacity-50 dark:border-red-500/40 dark:text-red-400 dark:hover:bg-red-500/10"
+          className="inline-flex shrink-0 items-center gap-2 rounded-xl border border-red-300 px-4 py-2 text-sm font-semibold text-danger transition-colors hover:bg-red-50 disabled:opacity-50 dark:border-danger/40 dark:hover:bg-danger/10"
         >
           {deleting ? "Deleting…" : "Delete account"}
         </button>

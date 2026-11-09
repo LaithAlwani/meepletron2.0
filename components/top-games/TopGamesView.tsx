@@ -83,14 +83,14 @@ function historyLine(item: Item) {
 function MovementBadge({ item, onDark = false }: { item: Item; onDark?: boolean }) {
   if (item.tag === "new") {
     return (
-      <span className="rounded-full bg-accent px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-accent-foreground">
+      <span className="rounded-full bg-accent px-2 py-0.5 text-2xs font-bold uppercase tracking-wide text-accent-foreground">
         New
       </span>
     );
   }
   if (item.tag === "back") {
     return (
-      <span className="rounded-full bg-accent-2 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-accent-2-foreground">
+      <span className="rounded-full bg-accent-2 px-2 py-0.5 text-2xs font-bold uppercase tracking-wide text-accent-2-foreground">
         Back
       </span>
     );
@@ -499,7 +499,7 @@ function HonorableReveal({
 
   return (
     <div ref={sectionRef} className="mb-8">
-      <h2 className="mb-3 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.16em] text-accent-2">
+      <h2 className="mb-3 flex items-center gap-1.5 text-2xs font-bold uppercase tracking-[0.16em] text-accent-2">
         <Star className="h-3.5 w-3.5" />
         Honorable mentions
       </h2>
@@ -606,7 +606,7 @@ function RevealShow({
 const ICON_BTN =
   "inline-flex h-9 w-9 items-center justify-center rounded-xl border border-border bg-surface text-foreground transition-all hover:bg-surface-2 active:scale-[0.98]";
 const DELETE_ICON_BTN =
-  "inline-flex h-9 w-9 items-center justify-center rounded-xl border border-border bg-surface text-muted transition-all hover:border-red-200 hover:bg-red-50 hover:text-red-600 active:scale-[0.98] dark:hover:border-red-500/30 dark:hover:bg-red-500/10 dark:hover:text-red-400";
+  "inline-flex h-9 w-9 items-center justify-center rounded-xl border border-border bg-surface text-muted transition-all hover:border-red-200 hover:bg-red-50 hover:text-danger active:scale-[0.98] dark:hover:border-danger/30 dark:hover:bg-danger/10 dark:hover:text-danger";
 
 export function TopGamesView({ data }: { data: TopListData }) {
   const toast = useToast();
@@ -796,7 +796,7 @@ export function TopGamesView({ data }: { data: TopListData }) {
           {/* Honorable mentions — a compact horizontal strip. */}
           {honorable.length > 0 && (
             <div className="mt-8">
-              <h2 className="mb-3 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.16em] text-accent-2">
+              <h2 className="mb-3 flex items-center gap-1.5 text-2xs font-bold uppercase tracking-[0.16em] text-accent-2">
                 <Star className="h-3.5 w-3.5" />
                 Honorable mentions
               </h2>
@@ -816,7 +816,7 @@ export function TopGamesView({ data }: { data: TopListData }) {
           {/* Fell off this year */}
           {data.droppedOff.length > 0 && (
             <div className="mt-8">
-              <h2 className="text-[11px] font-bold uppercase tracking-[0.16em] text-subtle">
+              <h2 className="text-2xs font-bold uppercase tracking-[0.16em] text-subtle">
                 Fell off this year
               </h2>
               <ul className="mt-3 flex flex-wrap gap-2">

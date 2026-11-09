@@ -41,7 +41,7 @@ function MessageActions({ message }: { message: Doc<"messages"> }) {
   // Layout only — no text color here so an active rating's color isn't
   // overridden by an idle `hover:text-*` on hover.
   const base =
-    "flex h-7 w-7 items-center justify-center rounded-md transition-colors hover:bg-surface-2";
+    "flex h-7 w-7 items-center justify-center rounded-lg transition-colors hover:bg-surface-2";
   const idle = "text-muted hover:text-foreground";
 
   return (
@@ -57,7 +57,7 @@ function MessageActions({ message }: { message: Doc<"messages"> }) {
         onClick={() => rate({ messageId: message._id, rating: "down" })}
         aria-label="Not helpful"
         aria-pressed={rating === "down"}
-        className={`${base} ${rating === "down" ? "text-red-500" : idle}`}
+        className={`${base} ${rating === "down" ? "text-danger" : idle}`}
       >
         <ThumbsDown
           className="h-3.5 w-3.5"
@@ -174,14 +174,14 @@ export function Sources({
   return (
     <div className="mt-3 border-t border-border pt-2">
       <div className="mb-1.5 flex flex-wrap items-center gap-x-2 gap-y-0.5">
-        <span className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted">
+        <span className="flex items-center gap-1.5 text-2xs font-semibold uppercase tracking-wide text-muted">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5">
             <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
             <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
           </svg>
           Sources
         </span>
-        <span className="text-[11px] normal-case text-muted/80">
+        <span className="text-2xs normal-case text-muted/80">
           Tap a reference to see that section of the rulebook.
         </span>
       </div>
@@ -200,7 +200,7 @@ export function Sources({
               }`}
             >
               <span
-                className={`inline-flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-bold leading-none ${
+                className={`inline-flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-2xs font-bold leading-none ${
                   active ? "bg-accent text-accent-foreground" : "bg-accent/15 text-accent"
                 }`}
               >
@@ -226,7 +226,7 @@ export function Sources({
           className="animate-in mt-2 rounded-lg border border-accent/30 bg-surface-2 p-3 text-sm"
         >
           <div className="mb-1.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted">
-            <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-accent/15 px-1 text-[10px] font-bold leading-none text-accent">
+            <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-accent/15 px-1 text-2xs font-bold leading-none text-accent">
               {open.n}
             </span>
             {open.breadcrumb && <span className="font-medium text-foreground">{open.breadcrumb}</span>}
@@ -236,7 +236,7 @@ export function Sources({
           <blockquote className="max-h-52 overflow-y-auto whitespace-pre-wrap border-l-2 border-accent/40 pl-3 leading-relaxed text-foreground/90">
             {highlightPassage(open.text, answer)}
           </blockquote>
-          <p className="mt-1.5 text-[11px] text-muted">from {open.bgTitle}</p>
+          <p className="mt-1.5 text-2xs text-muted">from {open.bgTitle}</p>
         </div>
       )}
     </div>
@@ -255,7 +255,7 @@ export function MessageBubble({ message }: { message: Doc<"messages"> }) {
         <div className="max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-br-sm bg-accent px-4 py-2.5 text-sm leading-relaxed text-accent-foreground">
           {message.content}
         </div>
-        <span className="mt-1 mr-1 text-[11px] text-subtle">
+        <span className="mt-1 mr-1 text-2xs text-subtle">
           {timeOfDay(message._creationTime)}
         </span>
       </div>
@@ -296,7 +296,7 @@ export function MessageBubble({ message }: { message: Doc<"messages"> }) {
 
         <MessageActions message={message} />
       </div>
-      <span className="mt-1 ml-1 text-[11px] text-subtle">
+      <span className="mt-1 ml-1 text-2xs text-subtle">
         {timeOfDay(message._creationTime)}
       </span>
     </div>
