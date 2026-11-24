@@ -170,9 +170,11 @@ export default defineSchema({
     // daily cron. Lets the detail page read ~6 ids instead of scanning the whole
     // catalogue on every view. Absent until the first recompute.
     similarIds: v.optional(v.array(v.id("games"))),
-    // DEPRECATED, unused. The chat-ready gating is gone; this bare optional
-    // field lingers only so a prod schema push doesn't fail on docs that still
-    // carry it. Run migrations:clearChatReady against prod, then drop this line.
+    // Denormalized: true on a BASE game whose family (itself or any expansion)
+    // has >=1 ingested, non-download rulebook — i.e. Meepletron can chat about
+    // it. Maintained by refreshChatReady() in games.ts at every rulebook /
+    // parent write, reconciled daily. Unset on expansions. Lets the default
+    // (chat-ready) library browse paginate off an index instead of scanning.
     chatReady: v.optional(v.boolean()),
     // BoardGameGeek id (from the original import) + cached BGG stats.
     bggId: v.optional(v.string()),
@@ -224,6 +226,15 @@ export default defineSchema({
     .index("by_lib_updated", ["isStub", "contentUpdatedAt"])
     // Newest-first: non-stub games by creation time (the index's implicit tail).
     .index("by_isStub", ["isStub"])
+    // Same sorted reads, restricted to chat-ready base games (the default
+    // public browse). See libraryBase() in games.ts.
+    .index("by_chat", ["isStub", "chatReady"])
+    .index("by_chat_title", ["isStub", "chatReady", "sortTitle"])
+    .index("by_chat_year", ["isStub", "chatReady", "yearNum"])
+    .index("by_chat_rating", ["isStub", "chatReady", "bggRating"])
+    .index("by_chat_weight", ["isStub", "chatReady", "bggWeight"])
+    .index("by_chat_rated", ["isStub", "chatReady", "bggRatingCount"])
+    .index("by_chat_updated", ["isStub", "chatReady", "contentUpdatedAt"])
     .searchIndex("search_text", {
       searchField: "searchText",
       filterFields: ["isExpansion", "isStub"],
@@ -563,6 +574,12 @@ export default defineSchema({
     // All expansion games (incl. stubs) — matches the admin dashboard's count.
     // Denormalized off the daily recomputeSimilarGames scan.
     expansionCount: v.optional(v.number()),
+    // Chat-ready base games, kept live by refreshChatReady (±1 on each flip)
+    // and reset by the daily reconcile. Read by libraryCount's default view.
+    chatReadyCount: v.optional(v.number()),
+    // Set once backfillChatReady has run. Until then readers fall back to the
+    // rulebook scan, so a fresh deploy is correct before the backfill.
+    chatReadyBackfilledAt: v.optional(v.number()),
     updatedAt: v.number(),
   }),
 

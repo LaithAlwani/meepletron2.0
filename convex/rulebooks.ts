@@ -3,6 +3,7 @@ import { mutation } from "./_generated/server";
 import { requireAdmin } from "./lib/auth";
 import { r2, deleteMedia } from "./r2";
 import { rulebookKey } from "./lib/r2keys";
+import { refreshChatReady } from "./games";
 
 /**
  * Admin: mint an R2 upload URL for a rulebook/download file, foldered under the
@@ -103,5 +104,6 @@ export const deleteRulebook = mutation({
 
     await deleteMedia(ctx, rb.storageKey, rb.storageId);
     await ctx.db.delete("rulebooks", rulebookId);
+    await refreshChatReady(ctx, rb.gameId);
   },
 });

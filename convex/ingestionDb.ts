@@ -10,6 +10,7 @@ import type { Id } from "./_generated/dataModel";
 import { internal } from "./_generated/api";
 import { requireAdmin } from "./lib/auth";
 import { recordUsage } from "./lib/stats";
+import { refreshChatReady } from "./games";
 
 const batchPlanValidator = v.array(
   v.object({
@@ -376,6 +377,7 @@ export const finalizeCommit = internalMutation({
     // it surfaces in the "Last updated" library sort.
     if (rb) {
       await ctx.db.patch("games", rb.gameId, { contentUpdatedAt: Date.now() });
+      await refreshChatReady(ctx, rb.gameId);
     }
     await ctx.db.patch("migrationDrafts", draftId, { status: "committed" });
     await ctx.db.insert("usageLog", {

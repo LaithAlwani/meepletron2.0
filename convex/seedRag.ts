@@ -5,6 +5,7 @@ import type { Id } from "./_generated/dataModel";
 import { slugify } from "./lib/slug";
 import { embedDocuments } from "./lib/embedding";
 import { buildSearchText } from "./lib/gameSearch";
+import { refreshChatReady } from "./games";
 
 type SeedChunk = {
   breadcrumb: string;
@@ -177,6 +178,7 @@ export const insertChunks = internalMutation({
       isIngested: true,
       ingestState: "committed",
     });
+    await refreshChatReady(ctx, gameId);
   },
 });
 
