@@ -12,6 +12,7 @@ import { getCurrentUser, requireUser, requireAdmin } from "./lib/auth";
 import { finite } from "./lib/num";
 import { thumbUrl } from "./lib/gameCover";
 import { recordMessages, recordUsage } from "./lib/stats";
+import { bumpUserTokens } from "./lib/userTotals";
 import {
   CHAT_CONFIG_DEFAULTS,
   knownContentModel,
@@ -651,6 +652,7 @@ export const saveAssistantMessage = internalMutation({
       costUsd: costUsd || undefined,
       answerModel,
     });
+    await bumpUserTokens(ctx, userId, inputTokens + outputTokens);
     await recordMessages(ctx, { ai: 1 });
     await ctx.db.patch("chats", chatId, {
       lastMessage: content.slice(0, 200),

@@ -217,7 +217,13 @@ export const unlinkAccount = mutation({
       .query("bggSyncJobs")
       .withIndex("by_user_and_kind", (q) => q.eq("userId", user._id))
       .take(10);
-    for (const j of jobs) await ctx.db.delete("bggSyncJobs", j._id);
+    for (const j of jobs) {
+      await ctx.db.delete("bggSyncJobs", j._id);
+      await ctx.scheduler.runAfter(0, internal.bggSync.clearEnrichQueue, {
+        jobId: j._id,
+        before: Number.MAX_SAFE_INTEGER,
+      });
+    }
 
     // The collection itself can be thousands of rows — cascade out of band.
     await ctx.scheduler.runAfter(0, internal.bggSync.purgeUserBggData, {
@@ -285,28 +291,143 @@ export const myJobs = query({
   },
 });
 
-/** Two-level counts for the collection tabs. Scans the user's rows (bounded). */
+type CollectionFlags = Pick<
+  Doc<"bggCollection">,
+  "own" | "wishlist" | "forTrade" | "prevOwned"
+>;
+type CollectionTally = {
+  all: number;
+  owned: number;
+  wishlist: number;
+  forTrade: number;
+  prevOwned: number;
+};
+
+/** One row's contribution to the tab counts (all zero when in no list). */
+function tallyOf(r: CollectionFlags | null): CollectionTally {
+  const inAny = !!r && !!(r.own || r.wishlist || r.forTrade || r.prevOwned);
+  return {
+    all: inAny ? 1 : 0,
+    owned: inAny && r?.own ? 1 : 0,
+    wishlist: inAny && r?.wishlist ? 1 : 0,
+    forTrade: inAny && r?.forTrade ? 1 : 0,
+    prevOwned: inAny && r?.prevOwned ? 1 : 0,
+  };
+}
+
+/** The old scan — fallback while a user has no `collectionCounts` doc. */
+async function scanCollectionCounts(
+  ctx: QueryCtx,
+  userId: Id<"users">,
+): Promise<CollectionTally> {
+  const rows = await ctx.db
+    .query("bggCollection")
+    .withIndex("by_user_and_sort_title", (q) => q.eq("userId", userId))
+    .take(5000);
+  const c = { all: 0, owned: 0, wishlist: 0, forTrade: 0, prevOwned: 0 };
+  for (const r of rows) {
+    const t = tallyOf(r);
+    c.all += t.all;
+    c.owned += t.owned;
+    c.wishlist += t.wishlist;
+    c.forTrade += t.forTrade;
+    c.prevOwned += t.prevOwned;
+  }
+  return c;
+}
+
+/**
+ * Keep a user's `collectionCounts` doc in step with one bggCollection row change.
+ * Call it in the SAME mutation as every insert / flag patch / delete of a row:
+ * `before` = the row as it was (null on insert), `after` = as it now is (null on
+ * delete). Only updates an existing doc — until the backfill creates one,
+ * readers use the scan, so a missed call before then can't skew anything.
+ */
+export async function applyCollectionCountDelta(
+  ctx: MutationCtx,
+  userId: Id<"users">,
+  before: CollectionFlags | null,
+  after: CollectionFlags | null,
+): Promise<void> {
+  const a = tallyOf(before);
+  const b = tallyOf(after);
+  if (
+    a.all === b.all &&
+    a.owned === b.owned &&
+    a.wishlist === b.wishlist &&
+    a.forTrade === b.forTrade &&
+    a.prevOwned === b.prevOwned
+  ) {
+    return;
+  }
+  const doc = await ctx.db
+    .query("collectionCounts")
+    .withIndex("by_user", (q) => q.eq("userId", userId))
+    .unique();
+  if (!doc) return;
+  await ctx.db.patch("collectionCounts", doc._id, {
+    all: Math.max(0, doc.all + b.all - a.all),
+    owned: Math.max(0, doc.owned + b.owned - a.owned),
+    wishlist: Math.max(0, doc.wishlist + b.wishlist - a.wishlist),
+    forTrade: Math.max(0, doc.forTrade + b.forTrade - a.forTrade),
+    prevOwned: Math.max(0, doc.prevOwned + b.prevOwned - a.prevOwned),
+  });
+}
+
+/** Two-level counts for the collection tabs: one small doc (scan fallback). */
 export const myCollectionCounts = query({
   args: {},
   handler: async (ctx) => {
     const zero = { all: 0, owned: 0, wishlist: 0, forTrade: 0, prevOwned: 0 };
     const user = await getCurrentUser(ctx);
     if (!user) return zero;
-    const rows = await ctx.db
-      .query("bggCollection")
-      .withIndex("by_user_and_sort_title", (q) => q.eq("userId", user._id))
-      .take(5000);
-    const c = { ...zero };
-    for (const r of rows) {
-      const inAny = r.own || r.wishlist || r.forTrade || r.prevOwned;
-      if (!inAny) continue;
-      c.all++;
-      if (r.own) c.owned++;
-      if (r.wishlist) c.wishlist++;
-      if (r.forTrade) c.forTrade++;
-      if (r.prevOwned) c.prevOwned++;
+    const doc = await ctx.db
+      .query("collectionCounts")
+      .withIndex("by_user", (q) => q.eq("userId", user._id))
+      .unique();
+    if (doc) {
+      return {
+        all: doc.all,
+        owned: doc.owned,
+        wishlist: doc.wishlist,
+        forTrade: doc.forTrade,
+        prevOwned: doc.prevOwned,
+      };
     }
-    return c;
+    return await scanCollectionCounts(ctx, user._id);
+  },
+});
+
+/**
+ * Create/refresh every user's `collectionCounts` doc from a scan. Paginates
+ * users and self-reschedules. Run ONLY once every bggCollection write path calls
+ * `applyCollectionCountDelta` (incl. collection.ts setFlags), or counts drift:
+ *   npx convex run bggSync:backfillCollectionCounts '{}'
+ */
+export const backfillCollectionCounts = internalMutation({
+  args: { cursor: v.optional(v.union(v.string(), v.null())) },
+  handler: async (ctx, { cursor }) => {
+    const res = await ctx.db
+      .query("users")
+      .paginate({ numItems: 20, cursor: cursor ?? null });
+    for (const u of res.page) {
+      const existing = await ctx.db
+        .query("collectionCounts")
+        .withIndex("by_user", (q) => q.eq("userId", u._id))
+        .unique();
+      const c = await scanCollectionCounts(ctx, u._id);
+      if (existing) {
+        await ctx.db.patch("collectionCounts", existing._id, c);
+      } else {
+        // Every user gets a doc (even at zero) so a later first add counts.
+        await ctx.db.insert("collectionCounts", { userId: u._id, ...c });
+      }
+    }
+    if (!res.isDone) {
+      await ctx.scheduler.runAfter(0, internal.bggSync.backfillCollectionCounts, {
+        cursor: res.continueCursor,
+      });
+    }
   },
 });
 
@@ -518,9 +639,18 @@ export const myCollection = query({
       categories,
       mechanics,
     };
-    const chatIds = chatOnly ? await chatEnabledBaseIds(ctx) : null;
+    // Chat-ready is a per-game flag once backfilled (one stats doc read); only
+    // before that do we fall back to the full chat-enabled id set.
+    const flagsReady =
+      !!chatOnly &&
+      (await ctx.db.query("catalogueStats").first())?.chatReadyBackfilledAt !=
+        null;
+    const chatIds =
+      chatOnly && !flagsReady ? await chatEnabledBaseIds(ctx) : null;
     const keep = (game: Doc<"games">) =>
-      matchesGameFilters(game, gf) && (!chatIds || chatIds.has(game._id));
+      matchesGameFilters(game, gf) &&
+      (!chatOnly ||
+        (flagsReady ? game.chatReady === true : !!chatIds?.has(game._id)));
 
     const searchTerm = (term ?? "").trim();
     const searching = searchTerm.length >= 2;
@@ -660,6 +790,11 @@ async function resetJob(
   if (existing) {
     await ctx.db.patch("bggSyncJobs", existing._id, fields);
     jobId = existing._id;
+    // Drop any queue rows a canceled/failed earlier run left behind.
+    await ctx.scheduler.runAfter(0, internal.bggSync.clearEnrichQueue, {
+      jobId,
+      before: now,
+    });
   } else {
     jobId = await ctx.db.insert("bggSyncJobs", fields);
   }
@@ -1001,15 +1136,22 @@ export const upsertCollectionItems = internalMutation({
         syncedAt: job.runStartedAt,
       };
       if (existing) {
-        await ctx.db.patch("bggCollection", existing._id, base);
+        // Skip the write when nothing BGG-owned changed — a re-sync of an
+        // unchanged collection then costs no writes (and no reactive reruns).
+        // `syncedAt` alone doesn't count: nothing sweeps on it any more.
+        const changed = (Object.keys(base) as (keyof typeof base)[]).some(
+          (k) => k !== "syncedAt" && existing[k] !== base[k],
+        );
+        if (changed) await ctx.db.patch("bggCollection", existing._id, base);
       } else {
-        await ctx.db.insert("bggCollection", {
-          ...base,
+        const row = {
           own,
           wishlist: seededWishlist,
           forTrade,
           prevOwned,
-        });
+        };
+        await ctx.db.insert("bggCollection", { ...base, ...row });
+        await applyCollectionCountDelta(ctx, job.userId, null, row);
       }
     }
 
@@ -1055,17 +1197,82 @@ export const finishCollection = internalMutation({
       return;
     }
 
-    // Build the queue from the collection rows only (small — no game docs), so
-    // enrichment start stays cheap even for a big collection. The driver checks
-    // each game's stub state one at a time as it walks the queue.
-    const rows = await ctx.db
+    // Enrichment begins by building its queue (buildEnrichQueue) in batches:
+    // only stubs still due are queued, so already-filled games never cost a
+    // driver step. The queue lives in `bggEnrichQueue`, not on this doc.
+    await ctx.db.patch("bggSyncJobs", jobId, {
+      status: "enriching",
+      enrichQueue: undefined,
+      enrichTotal: undefined,
+      enrichProcessed: 0,
+      currentTitle: undefined,
+      updatedAt: now,
+    });
+    await ctx.scheduler.runAfter(0, internal.bggSync.buildEnrichQueue, {
+      jobId,
+      cursor: null,
+      queued: 0,
+    });
+  },
+});
+
+/** How long a failed enrichment attempt backs off before it's retried. */
+const ENRICH_RETRY_TTL_MS = 6 * 60 * 60 * 1000;
+/** Collection rows examined per queue-building transaction. */
+const ENRICH_QUEUE_BATCH = 100;
+
+/** A stub with a BGG id whose last attempt (if any) is past the retry TTL. */
+function isEnrichDue(g: Doc<"games">, now: number): g is Doc<"games"> & {
+  bggId: string;
+} {
+  return (
+    g.isStub === true &&
+    !!g.bggId &&
+    now - (g.bggCheckedAt ?? 0) >= ENRICH_RETRY_TTL_MS
+  );
+}
+
+/**
+ * Walk the user's collection in batches, queueing each linked game that still
+ * needs enrichment. Self-reschedules; when the walk ends it records the total
+ * and starts the driver (or finishes the job when nothing is due).
+ */
+export const buildEnrichQueue = internalMutation({
+  args: {
+    jobId: v.id("bggSyncJobs"),
+    cursor: v.union(v.string(), v.null()),
+    queued: v.number(),
+  },
+  handler: async (ctx, { jobId, cursor, queued }) => {
+    const job = await ctx.db.get("bggSyncJobs", jobId);
+    if (!job || job.status !== "enriching") return;
+    const now = Date.now();
+    const res = await ctx.db
       .query("bggCollection")
       .withIndex("by_user_and_sort_title", (q) => q.eq("userId", job.userId))
-      .take(5000);
-    const queue = rows
-      .map((r) => r.gameId)
-      .filter((id): id is Id<"games"> => id != null);
-    if (queue.length === 0) {
+      .paginate({ numItems: ENRICH_QUEUE_BATCH, cursor });
+    let total = queued;
+    for (const row of res.page) {
+      if (!row.gameId) continue;
+      const g = await ctx.db.get("games", row.gameId);
+      if (!g || !isEnrichDue(g, now)) continue;
+      await ctx.db.insert("bggEnrichQueue", {
+        jobId,
+        runStartedAt: job.runStartedAt,
+        gameId: g._id,
+      });
+      total++;
+    }
+    if (!res.isDone) {
+      await ctx.db.patch("bggSyncJobs", jobId, { updatedAt: now }); // heartbeat
+      await ctx.scheduler.runAfter(0, internal.bggSync.buildEnrichQueue, {
+        jobId,
+        cursor: res.continueCursor,
+        queued: total,
+      });
+      return;
+    }
+    if (total === 0) {
       await ctx.db.patch("bggSyncJobs", jobId, {
         status: "done",
         finishedAt: now,
@@ -1074,120 +1281,97 @@ export const finishCollection = internalMutation({
       return;
     }
     await ctx.db.patch("bggSyncJobs", jobId, {
-      status: "enriching",
-      enrichQueue: queue,
-      enrichTotal: queue.length,
-      enrichProcessed: 0,
-      currentTitle: undefined,
+      enrichTotal: total,
       updatedAt: now,
     });
     await ctx.scheduler.runAfter(0, internal.bggSync.runJobEnrichment, { jobId });
   },
 });
 
-/** How long a failed enrichment attempt backs off before it's retried. */
-const ENRICH_RETRY_TTL_MS = 6 * 60 * 60 * 1000;
-
-/** One game's enrichment-relevant fields — a single-doc read, bounded. */
-export const getEnrichTarget = internalQuery({
-  args: { gameId: v.id("games") },
-  handler: async (ctx, { gameId }) => {
-    const g = await ctx.db.get("games", gameId);
-    if (!g) return null;
-    return {
-      isStub: g.isStub === true,
-      bggId: g.bggId ?? null,
-      title: g.title,
-      bggCheckedAt: g.bggCheckedAt ?? null,
-    };
-  },
-});
-
-/** Narrate the game currently being enriched (heartbeat too). */
-export const setEnrichCurrent = internalMutation({
-  args: { jobId: v.id("bggSyncJobs"), title: v.string() },
-  handler: async (ctx, { jobId, title }) => {
-    const job = await ctx.db.get("bggSyncJobs", jobId);
-    if (!job || job.status !== "enriching") return;
-    await ctx.db.patch("bggSyncJobs", jobId, {
-      currentTitle: title,
-      updatedAt: Date.now(),
-    });
-  },
-});
-
-/** One game handled — advance the enrichment counter. */
-export const bumpEnrichProcessed = internalMutation({
+/**
+ * One driver step, in one transaction: pop the next queued game, advance the
+ * counter, narrate its title, and say whether it still needs a BGG call (another
+ * user's sync may have filled it meanwhile). Finishes the job when the queue is
+ * empty. Jobs that were mid-enrichment at deploy still carry the legacy
+ * `enrichQueue` array on the doc and are drained from it instead.
+ */
+export const claimNextEnrich = internalMutation({
   args: { jobId: v.id("bggSyncJobs") },
-  handler: async (ctx, { jobId }) => {
+  handler: async (
+    ctx,
+    { jobId },
+  ): Promise<
+    | { kind: "stop" }
+    | { kind: "skip" }
+    | { kind: "enrich"; gameId: Id<"games">; bggId: string }
+  > => {
     const job = await ctx.db.get("bggSyncJobs", jobId);
-    if (!job || job.status !== "enriching") return;
+    if (!job || job.status !== "enriching") return { kind: "stop" };
+    const now = Date.now();
+
+    let gameId: Id<"games"> | null = null;
+    if (job.enrichQueue) {
+      const idx = job.enrichProcessed ?? 0;
+      gameId = idx < job.enrichQueue.length ? job.enrichQueue[idx] : null;
+    } else {
+      const next = await ctx.db
+        .query("bggEnrichQueue")
+        .withIndex("by_job_and_run", (q) =>
+          q.eq("jobId", jobId).eq("runStartedAt", job.runStartedAt),
+        )
+        .first();
+      if (next) {
+        gameId = next.gameId;
+        await ctx.db.delete("bggEnrichQueue", next._id);
+      }
+    }
+
+    if (!gameId) {
+      await ctx.db.patch("bggSyncJobs", jobId, {
+        status: "done",
+        enrichQueue: undefined,
+        currentTitle: undefined,
+        finishedAt: now,
+        updatedAt: now,
+      });
+      return { kind: "stop" };
+    }
+
+    const g = await ctx.db.get("games", gameId);
+    const due = !!g && isEnrichDue(g, now);
+    // Advance first — a bad entry is skipped, never re-looped.
     await ctx.db.patch("bggSyncJobs", jobId, {
       enrichProcessed: (job.enrichProcessed ?? 0) + 1,
-      updatedAt: Date.now(),
-    });
-  },
-});
-
-/** No stubs left — the sync (import + enrichment) is fully done. */
-export const finishEnrichment = internalMutation({
-  args: { jobId: v.id("bggSyncJobs") },
-  handler: async (ctx, { jobId }) => {
-    const job = await ctx.db.get("bggSyncJobs", jobId);
-    if (!job || job.status !== "enriching") return;
-    const now = Date.now();
-    await ctx.db.patch("bggSyncJobs", jobId, {
-      status: "done",
-      currentTitle: undefined,
-      finishedAt: now,
+      ...(due && g ? { currentTitle: g.title } : {}),
       updatedAt: now,
     });
+    return due && g && g.bggId
+      ? { kind: "enrich", gameId, bggId: g.bggId }
+      : { kind: "skip" };
   },
 });
 
 /**
- * Enrichment driver: walks the job's queue by index (enrichProcessed), reading
- * one game per step. Unfilled stubs are enriched (BGG /thing + cover, staggered);
- * anything already filled is skipped instantly. The cursor advances before the
- * BGG call and the call is wrapped, so a single failure can never break the
- * reschedule chain — the whole run always drains to done. Enriching an expansion
- * also pulls in + fills its base game (see images.enrichSyncedGame).
+ * Enrichment driver: one queued game per step (see claimNextEnrich). Due stubs
+ * are enriched (BGG /thing + cover, staggered); anything filled meanwhile is
+ * skipped instantly. The cursor advances before the BGG call and the call is
+ * wrapped, so a single failure can never break the reschedule chain — the run
+ * always drains to done. Enriching an expansion also pulls in + fills its base
+ * game (see images.enrichSyncedGame).
  */
 export const runJobEnrichment = internalAction({
   args: { jobId: v.id("bggSyncJobs") },
   handler: async (ctx, { jobId }): Promise<void> => {
-    const job = await ctx.runQuery(internal.bggSync.getJob, { jobId });
-    if (!job || job.status !== "enriching") return; // canceled / gone / done
-
-    const queue = job.enrichQueue ?? [];
-    const idx = job.enrichProcessed ?? 0;
-    if (idx >= queue.length) {
-      await ctx.runMutation(internal.bggSync.finishEnrichment, { jobId });
-      return;
-    }
-
-    const gameId = queue[idx];
-    const target = await ctx.runQuery(internal.bggSync.getEnrichTarget, {
-      gameId,
+    const step = await ctx.runMutation(internal.bggSync.claimNextEnrich, {
+      jobId,
     });
-    // Advance the cursor first — a bad entry is skipped, never re-looped.
-    await ctx.runMutation(internal.bggSync.bumpEnrichProcessed, { jobId });
+    if (step.kind === "stop") return; // canceled / gone / done
 
-    const due =
-      target &&
-      target.isStub &&
-      !!target.bggId &&
-      Date.now() - (target.bggCheckedAt ?? 0) >= ENRICH_RETRY_TTL_MS;
-
-    if (due && target.bggId) {
-      await ctx.runMutation(internal.bggSync.setEnrichCurrent, {
-        jobId,
-        title: target.title,
-      });
+    if (step.kind === "enrich") {
       try {
         await ctx.runAction(internal.images.enrichSyncedGame, {
-          gameId,
-          bggId: target.bggId,
+          gameId: step.gameId,
+          bggId: step.bggId,
         });
       } catch {
         // Leave it a stub for the backstop cron; the chain must go on.
@@ -1198,9 +1382,31 @@ export const runJobEnrichment = internalAction({
         { jobId },
       );
     } else {
-      // Already filled / not a stub — no BGG call, move straight on.
       await ctx.scheduler.runAfter(0, internal.bggSync.runJobEnrichment, {
         jobId,
+      });
+    }
+  },
+});
+
+/**
+ * Delete a job's queue rows from runs older than `before` (a canceled / failed
+ * run's leftovers, or every row once the job itself is gone). Batched.
+ */
+export const clearEnrichQueue = internalMutation({
+  args: { jobId: v.id("bggSyncJobs"), before: v.number() },
+  handler: async (ctx, { jobId, before }) => {
+    const rows = await ctx.db
+      .query("bggEnrichQueue")
+      .withIndex("by_job_and_run", (q) =>
+        q.eq("jobId", jobId).lt("runStartedAt", before),
+      )
+      .take(SWEEP_BATCH);
+    for (const r of rows) await ctx.db.delete("bggEnrichQueue", r._id);
+    if (rows.length === SWEEP_BATCH) {
+      await ctx.scheduler.runAfter(0, internal.bggSync.clearEnrichQueue, {
+        jobId,
+        before,
       });
     }
   },
@@ -1440,6 +1646,36 @@ export const stampPlaysHighWater = internalMutation({
   },
 });
 
+/** Structural equality for stored values (undefined ≡ missing, key order free). */
+function sameValue(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  if (Array.isArray(a) || Array.isArray(b)) {
+    if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) {
+      return false;
+    }
+    return a.every((x, i) => sameValue(x, b[i]));
+  }
+  if (a && b && typeof a === "object" && typeof b === "object") {
+    const ao = a as Record<string, unknown>;
+    const bo = b as Record<string, unknown>;
+    const keys = new Set([...Object.keys(ao), ...Object.keys(bo)]);
+    for (const k of keys) if (!sameValue(ao[k], bo[k])) return false;
+    return true;
+  }
+  return false;
+}
+
+/** Would patching `body` onto `existing` change anything but `updatedAt`? */
+function playBodyMatches(
+  existing: Doc<"plays">,
+  body: Record<string, unknown>,
+): boolean {
+  const e = existing as unknown as Record<string, unknown>;
+  return Object.keys(body).every(
+    (k) => k === "updatedAt" || sameValue(e[k], body[k]),
+  );
+}
+
 /**
  * Map a page of parsed BGG plays into the unified `plays` table. Idempotent via
  * `by_bgg_play_id`; a re-sync only overwrites BGG-owned rows, never a play the
@@ -1523,7 +1759,9 @@ export const upsertPlays = internalMutation({
       };
 
       if (existing) {
-        if (existing.source === "bgg") {
+        // Skip unchanged plays: an incremental re-sync re-fetches the newest
+        // page, and a full one every play — most of which haven't changed.
+        if (existing.source === "bgg" && !playBodyMatches(existing, body)) {
           await ctx.db.patch("plays", existing._id, body);
         }
       } else {
@@ -1558,13 +1796,14 @@ export const finishPlays = internalMutation({
     const now = Date.now();
     const account = await ctx.db.get("bggAccounts", job.accountId);
     if (account) {
-      // The true total (not just this run's page count — incremental syncs only
-      // process the newest plays).
-      const owned = await ctx.db
-        .query("plays")
-        .withIndex("by_user_and_date", (q) => q.eq("userId", job.userId))
-        .take(5000);
-      const playsCount = owned.filter((p) => p.source === "bgg").length;
+      // The true total without re-reading every play: a full sync walked all of
+      // the user's BGG plays (`processed`); an incremental one adds this run's
+      // newly created plays to the previous total. (A BGG play deleted in-app
+      // isn't subtracted — this is the "imported from BGG" figure.)
+      const playsCount =
+        job.mode === "full" || account.playsCount == null
+          ? Math.max(job.processed, job.created ?? 0)
+          : account.playsCount + (job.created ?? 0);
       await ctx.db.patch("bggAccounts", job.accountId, {
         playsSyncedAt: now,
         playsCount,
@@ -1723,6 +1962,20 @@ export const purgeUserBggData = internalMutation({
         userId,
       });
       return;
+    }
+    // Collection empty — zero its counts doc to match.
+    const counts = await ctx.db
+      .query("collectionCounts")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .unique();
+    if (counts && counts.all > 0) {
+      await ctx.db.patch("collectionCounts", counts._id, {
+        all: 0,
+        owned: 0,
+        wishlist: 0,
+        forTrade: 0,
+        prevOwned: 0,
+      });
     }
 
     // Only BGG-imported plays are purged; hand-logged plays are the user's own.

@@ -20,6 +20,7 @@ import type { FunctionReturnType } from "convex/server";
 import { useToast } from "@/components/ui/Toast";
 import { relativeTime } from "@/lib/format";
 import { Sheet } from "@/components/ui/Sheet";
+import { useDebounced } from "@/components/boardgames/useSearchSuggestions";
 
 /** Split a comment into text + clickable @mentions. */
 function renderBody(text: string) {
@@ -242,10 +243,11 @@ export function CommentsDrawer({
   const listRef = useRef<HTMLDivElement | null>(null);
   const sentinel = useRef<HTMLDivElement | null>(null);
 
+  const mentionTerm = useDebounced(mention?.query ?? "", 200);
   const mentionHits =
     useQuery(
       api.users.searchUsers,
-      mention && mention.query.length >= 2 ? { term: mention.query } : "skip",
+      mention && mentionTerm.length >= 2 ? { term: mentionTerm } : "skip",
     ) ?? [];
 
   useEffect(() => {

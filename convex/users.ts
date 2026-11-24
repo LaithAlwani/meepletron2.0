@@ -1,6 +1,9 @@
 import { v, ConvexError } from "convex/values";
 import { query, mutation, internalQuery, internalMutation } from "./_generated/server";
+import type { QueryCtx } from "./_generated/server";
+import type { Id } from "./_generated/dataModel";
 import { internal } from "./_generated/api";
+import { userTotalsDoc } from "./lib/userTotals";
 import { getCurrentUser, requireUser, requireAdmin } from "./lib/auth";
 import { r2, deleteMedia } from "./r2";
 import { avatarKey, publicUrl } from "./lib/r2keys";
@@ -28,8 +31,28 @@ export const me = query({
   },
 });
 
-/** The current user's lightweight profile stats: chats + all-time tokens used
- *  (summed across their chat messages). Self-only. */
+/** All-time tokens summed across a user's chat messages — the slow path, used
+ *  only to seed `userTotals` (and as the read fallback until it exists). */
+async function scanUserTokens(
+  ctx: QueryCtx,
+  chats: { _id: Id<"chats"> }[],
+): Promise<number> {
+  let tokensUsed = 0;
+  for (const chat of chats) {
+    const msgs = await ctx.db
+      .query("messages")
+      .withIndex("by_chat", (q) => q.eq("chatId", chat._id))
+      .take(2000);
+    for (const m of msgs) {
+      tokensUsed += finite(m.inputTokens) + finite(m.outputTokens);
+    }
+  }
+  return tokensUsed;
+}
+
+/** The current user's lightweight profile stats: chats + all-time tokens used.
+ *  Tokens come from the per-user `userTotals` counter (message scan fallback
+ *  until it's seeded). Self-only. */
 export const myProfileStats = query({
   args: {},
   handler: async (ctx) => {
@@ -39,17 +62,54 @@ export const myProfileStats = query({
       .query("chats")
       .withIndex("by_user", (q) => q.eq("userId", user._id))
       .take(2000);
-    let tokensUsed = 0;
-    for (const chat of chats) {
-      const msgs = await ctx.db
-        .query("messages")
-        .withIndex("by_chat", (q) => q.eq("chatId", chat._id))
-        .take(2000);
-      for (const m of msgs) {
-        tokensUsed += finite(m.inputTokens) + finite(m.outputTokens);
-      }
-    }
+    const totals = await userTotalsDoc(ctx, user._id);
+    const tokensUsed = totals
+      ? totals.tokensUsedTotal
+      : await scanUserTokens(ctx, chats);
     return { chats: chats.length, tokensUsed };
+  },
+});
+
+/** Create a user's `userTotals` from a message scan (no-op if it exists).
+ *  Scheduled by lib/userTotals.bumpUserTokens and backfillUserTotals. */
+export const seedUserTotals = internalMutation({
+  args: { userId: v.id("users") },
+  handler: async (ctx, { userId }) => {
+    if (await userTotalsDoc(ctx, userId)) return;
+    const chats = await ctx.db
+      .query("chats")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .take(2000);
+    await ctx.db.insert("userTotals", {
+      userId,
+      tokensUsedTotal: await scanUserTokens(ctx, chats),
+    });
+  },
+});
+
+/**
+ * Seed `userTotals` for every user that lacks one. Paginates users, schedules a
+ * per-user seed (each its own transaction), self-reschedules:
+ *   npx convex run users:backfillUserTotals '{}'
+ */
+export const backfillUserTotals = internalMutation({
+  args: { cursor: v.optional(v.union(v.string(), v.null())) },
+  handler: async (ctx, { cursor }) => {
+    const res = await ctx.db
+      .query("users")
+      .paginate({ numItems: 100, cursor: cursor ?? null });
+    for (const u of res.page) {
+      if (u.isAnonymous) continue; // guests are purged; scan fallback is fine
+      if (await userTotalsDoc(ctx, u._id)) continue;
+      await ctx.scheduler.runAfter(0, internal.users.seedUserTotals, {
+        userId: u._id,
+      });
+    }
+    if (!res.isDone) {
+      await ctx.scheduler.runAfter(0, internal.users.backfillUserTotals, {
+        cursor: res.continueCursor,
+      });
+    }
   },
 });
 
@@ -125,27 +185,26 @@ export const updateProfile = mutation({
 });
 
 /**
- * Find members by name or @username, for tagging players in a play log. Only
- * users with a public username are discoverable; guests are excluded. Bounded
- * scan (the caller must be signed in). Returns minimal public fields.
+ * Find members by @username prefix, for tagging players in a play log / @-
+ * mentions. Only users with a public username are discoverable; guests are
+ * excluded. An index range on `by_username_lower` (reads ~8 rows, not the users
+ * table); the caller must be signed in. Returns minimal public fields.
  */
 export const searchUsers = query({
   args: { term: v.string() },
   handler: async (ctx, { term }) => {
     const me = await getCurrentUser(ctx);
     if (!me) return [];
-    const t = term.trim().toLowerCase();
+    const t = term.trim().replace(/^@/, "").toLowerCase();
     if (t.length < 2) return [];
-    const rows = await ctx.db.query("users").take(1000);
+    const rows = await ctx.db
+      .query("users")
+      .withIndex("by_username_lower", (q) =>
+        q.gte("usernameLower", t).lt("usernameLower", t + "￿"),
+      )
+      .take(9); // 8 + room to drop the caller
     const matched = rows
-      .filter((u) => {
-        if (u._id === me._id || u.isAnonymous === true || !u.username) return false;
-        const byUsername = u.usernameLower?.includes(t) ?? false;
-        // Real name only matches for users who opted into being findable by name.
-        const findable = u.publicProfile?.findableByName ?? false;
-        const byName = findable && (u.name?.toLowerCase().includes(t) ?? false);
-        return byUsername || byName;
-      })
+      .filter((u) => u._id !== me._id && u.isAnonymous !== true && !!u.username)
       .slice(0, 8);
     return await Promise.all(
       matched.map(async (u) => {
