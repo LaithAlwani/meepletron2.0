@@ -155,7 +155,13 @@ function ChatView({
   const me = useQuery(api.users.me);
   const isGuest = me?.isAnonymous === true;
   const isAdmin = me?.role === "admin";
-  const budget = useQuery(api.users.myBudget);
+  // UTC midnight for the budget window (queries can't read the clock). Fixed
+  // at mount; the nightly reset rewrites the row, which refreshes this anyway.
+  const [todayStartMs] = useState(() => {
+    const d = new Date();
+    return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+  });
+  const budget = useQuery(api.users.myBudget, { todayStartMs });
 
   // Answer-model picker: the models this viewer may choose, their explicit pick
   // (persisted per-browser), and the effective model to send + show. Falls back

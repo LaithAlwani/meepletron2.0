@@ -140,11 +140,11 @@ export const saveBatch = internalMutation({
     // could otherwise duplicate a page range).
     const existing = await ctx.db
       .query("draftBatches")
-      .withIndex("by_draft", (q) => q.eq("draftId", args.draftId))
-      .collect();
-    for (const b of existing) {
-      if (b.index === args.index) await ctx.db.delete("draftBatches", b._id);
-    }
+      .withIndex("by_draft_and_index", (q) =>
+        q.eq("draftId", args.draftId).eq("index", args.index),
+      )
+      .take(10);
+    for (const b of existing) await ctx.db.delete("draftBatches", b._id);
 
     await ctx.db.insert("draftBatches", {
       draftId: args.draftId,
