@@ -1,8 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { useQuery, useMutation } from "convex/react";
+import { useConvex, useQuery, useMutation } from "convex/react";
+import type { FunctionReturnType } from "convex/server";
+import { buttonClasses } from "@/components/ui/buttonStyles";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { useConfirm } from "@/components/ui/Confirm";
@@ -12,8 +14,25 @@ import { friendlyError } from "@/lib/friendlyError";
 
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 
+type AdminUsers = FunctionReturnType<typeof api.users.adminListUsers>;
+
 export default function AdminUsersPage() {
-  const data = useQuery(api.users.adminListUsers);
+  // One-shot fetch, not a subscription: the query reads every user + thousands
+  // of chats, and reactively it re-ran on every message sent site-wide.
+  const convex = useConvex();
+  const [data, setData] = useState<AdminUsers | undefined>(undefined);
+  const refresh = useCallback(async () => {
+    setData(await convex.query(api.users.adminListUsers, {}));
+  }, [convex]);
+  useEffect(() => {
+    let live = true;
+    convex.query(api.users.adminListUsers, {}).then((d) => {
+      if (live) setData(d);
+    });
+    return () => {
+      live = false;
+    };
+  }, [convex]);
   const me = useQuery(api.users.me);
   // Snapshot the clock once per mount (calling Date.now() during render is impure).
   const [now] = useState(() => Date.now());
@@ -34,6 +53,7 @@ export default function AdminUsersPage() {
     try {
       await setRole({ userId, role: makeAdmin ? "admin" : "user" });
       toast("Role updated", "success");
+      void refresh();
     } catch (e) {
       toast(friendlyError(e, "Couldn't update role"), "error");
     }
@@ -56,9 +76,18 @@ export default function AdminUsersPage() {
 
   return (
     <div>
-      <h2 className="mb-3 font-display text-lg font-bold">
-        Users ({users.length})
-      </h2>
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <h2 className="font-display text-lg font-bold">
+          Users ({users.length})
+        </h2>
+        <button
+          type="button"
+          onClick={() => void refresh()}
+          className={buttonClasses("ghost", "sm")}
+        >
+          Refresh
+        </button>
+      </div>
 
       {/* Traffic at a glance. */}
       <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">

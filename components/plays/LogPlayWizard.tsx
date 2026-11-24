@@ -26,6 +26,7 @@ import { Switch } from "@/components/ui/Switch";
 import { buttonClasses } from "@/components/ui/Button";
 import { useToast } from "@/components/ui/Toast";
 import { useGameSearch } from "@/components/boardgames/useGameSearch";
+import { useDebounced } from "@/components/boardgames/useSearchSuggestions";
 import { useUsernameGate } from "@/components/feed/UsernameGate";
 import { compressImage } from "@/lib/imageCompress";
 import { putToSignedUrl } from "@/components/lib/r2Upload";
@@ -1059,11 +1060,12 @@ function PlayersStep(props: {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
 
-  // Live-search real members (users with a public @handle) as they type.
+  // Live-search real members (users with a public @handle) once typing pauses.
+  const userTerm = useDebounced(name.trim(), 200);
   const userHits =
     useQuery(
       api.users.searchUsers,
-      name.trim().length >= 2 ? { term: name.trim() } : "skip",
+      userTerm.length >= 2 ? { term: userTerm } : "skip",
     ) ?? [];
   const userMatches = userHits.filter(
     (u) => !props.players.some((p) => p.userId === u._id),

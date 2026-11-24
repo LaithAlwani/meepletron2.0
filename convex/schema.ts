@@ -736,9 +736,8 @@ export default defineSchema({
     created: v.optional(v.number()), // new (stub) games created this run
     recentTitles: v.optional(v.array(v.string())), // last few titles, for the progress detail
     // Enrichment phase progress (filling stubs with BGG metadata + covers).
-    // The queue is the collection's gameIds captured when enrichment began; the
-    // driver walks it by index (enrichProcessed) reading one game per step, so
-    // it never re-scans the whole collection (that blew the query read limit).
+    // LEGACY: the queue used to live here as an id array. It now lives in
+    // `bggEnrichQueue`; kept optional only so jobs in flight at deploy drain.
     enrichQueue: v.optional(v.array(v.id("games"))),
     enrichTotal: v.optional(v.number()), // queue length when enrichment began
     enrichProcessed: v.optional(v.number()), // items handled so far (the cursor)
@@ -752,6 +751,39 @@ export default defineSchema({
   })
     .index("by_user_and_kind", ["userId", "kind"])
     .index("by_status", ["status"]),
+
+  // A collection job's enrichment queue: one row per stub game still due when
+  // enrichment began (already-filled games are never queued). Kept off the job
+  // doc so the reactive `myJobs` progress query never re-reads a 5,000-id array;
+  // only the driver reads it, consuming (deleting) one row per step. Keyed by the
+  // run stamp so leftovers from a canceled run can't leak into the next one.
+  bggEnrichQueue: defineTable({
+    jobId: v.id("bggSyncJobs"),
+    runStartedAt: v.number(),
+    gameId: v.id("games"),
+  }).index("by_job_and_run", ["jobId", "runStartedAt"]),
+
+  // Per-user collection tab counts, kept live by `applyCollectionCountDelta`
+  // (bggSync.ts) on every bggCollection flag change, so the tabs read one doc
+  // instead of scanning the collection. Missing → readers fall back to the scan.
+  // Backfill: bggSync.backfillCollectionCounts.
+  collectionCounts: defineTable({
+    userId: v.id("users"),
+    all: v.number(),
+    owned: v.number(),
+    wishlist: v.number(),
+    forTrade: v.number(),
+    prevOwned: v.number(),
+  }).index("by_user", ["userId"]),
+
+  // Per-user running totals, kept off `users` so bumping them never invalidates
+  // every `users.me` subscription. Created lazily (see users.bumpUserTokens);
+  // missing → myProfileStats falls back to scanning messages.
+  // Backfill: users.backfillUserTotals.
+  userTotals: defineTable({
+    userId: v.id("users"),
+    tokensUsedTotal: v.number(), // all-time inputTokens + outputTokens
+  }).index("by_user", ["userId"]),
 
   // One row per collection item. A child table, not an array on the user: a
   // 1000-game collection would blow the 1MB document limit, and an embedded
@@ -796,7 +828,10 @@ export default defineSchema({
   playParticipants: defineTable(playParticipantValidator)
     .index("by_user_and_date", ["userId", "date"])
     .index("by_email", ["emailLower"])
-    .index("by_play", ["playId"]),
+    .index("by_play", ["playId"])
+    // Public plays a user/email is in (profile Plays tab + headline counts).
+    .index("by_user_and_visibility_and_date", ["userId", "visibility", "date"])
+    .index("by_email_and_visibility_and_date", ["emailLower", "visibility", "date"]),
 
   // Fixed-window counters for rate-limited public actions (see convex/rateLimit.ts).
   // High-churn and disposable, so it's a dedicated table rather than fields on

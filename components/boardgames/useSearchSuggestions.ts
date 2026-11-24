@@ -53,7 +53,7 @@ function detailLine(g: {
 }
 
 /** Hold a value back until it stops changing for `ms` — one query per pause. */
-function useDebounced<T>(value: T, ms: number): T {
+export function useDebounced<T>(value: T, ms: number): T {
   const [settled, setSettled] = useState(value);
   useEffect(() => {
     const t = setTimeout(() => setSettled(value), ms);

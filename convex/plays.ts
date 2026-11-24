@@ -42,6 +42,7 @@ const EXPANSIONS_MAX = 40;
 const STATS_SCAN = 1000; // bounded rows a stats query reads
 const SWEEP_BATCH = 200; // rows a purge pass deletes before rescheduling
 const PEOPLE_SCAN = 1000; // bounded plays scanned when editing a saved person
+const PUBLIC_LINKS_MAX = 5000; // public participant links read for a profile
 
 type PlayDoc = Doc<"plays">;
 
@@ -757,31 +758,28 @@ export const claimMyPlays = mutation({
 
 /**
  * The caller's plays, newest first — every play they took part in, whether they
- * logged it or a friend tagged them (by account **or** by their email, so a play
- * shows up the moment they sign in, even before the email-claim has run).
+ * logged it or a friend tagged them. Real index pagination over their
+ * participant links, joining only the page. Plays a friend tagged them in by
+ * *email* appear once `claimPlaysByEmail` stamps their userId on those links —
+ * which runs on sign-up and every time the plays feed mounts (claimMyPlays).
  */
 export const myPlays = query({
   args: { paginationOpts: paginationOptsValidator },
   handler: async (ctx, { paginationOpts }) => {
     const user = await getCurrentUser(ctx);
     if (!user) return { page: [], isDone: true, continueCursor: "" };
-    const email = user.email?.toLowerCase();
 
-    const byUser = await ctx.db
+    const result = await ctx.db
       .query("playParticipants")
       .withIndex("by_user_and_date", (q) => q.eq("userId", user._id))
       .order("desc")
-      .take(1000);
-    const byEmail = email
-      ? await ctx.db
-          .query("playParticipants")
-          .withIndex("by_email", (q) => q.eq("emailLower", email))
-          .take(1000)
-      : [];
+      .paginate(paginationOpts);
 
+    // A user can hold two links to one play (e.g. tagged by account and by a
+    // since-claimed email); they share a date, so they land together.
     const seen = new Set<string>();
     const playIds: Id<"plays">[] = [];
-    for (const link of [...byUser, ...byEmail]) {
+    for (const link of result.page) {
       if (seen.has(link.playId)) continue;
       seen.add(link.playId);
       playIds.push(link.playId);
@@ -789,17 +787,9 @@ export const myPlays = query({
     const plays = (
       await Promise.all(playIds.map((id) => ctx.db.get("plays", id)))
     ).filter((p): p is PlayDoc => p !== null);
-    plays.sort((a, b) =>
-      a.date < b.date ? 1 : a.date > b.date ? -1 : b.createdAt - a.createdAt,
-    );
-
-    const offset = Number(paginationOpts.cursor ?? "0") || 0;
-    const end = offset + paginationOpts.numItems;
-    const slice = plays.slice(offset, end);
     return {
-      page: await Promise.all(slice.map((p) => playCard(ctx, p, user._id))),
-      isDone: end >= plays.length,
-      continueCursor: String(end),
+      ...result,
+      page: await Promise.all(plays.map((p) => playCard(ctx, p, user._id))),
     };
   },
 });
@@ -954,17 +944,22 @@ export async function publicParticipantPlayIds(
   user: { _id: Id<"users">; email?: string | null },
 ): Promise<Id<"plays">[]> {
   const email = user.email?.toLowerCase();
+  // Index ranges on visibility, so private links are never read.
   const byUser = await ctx.db
     .query("playParticipants")
-    .withIndex("by_user_and_date", (q) => q.eq("userId", user._id))
-    .filter((q) => q.eq(q.field("visibility"), "public"))
-    .collect();
+    .withIndex("by_user_and_visibility_and_date", (q) =>
+      q.eq("userId", user._id).eq("visibility", "public"),
+    )
+    .order("desc")
+    .take(PUBLIC_LINKS_MAX);
   const byEmail = email
     ? await ctx.db
         .query("playParticipants")
-        .withIndex("by_email", (q) => q.eq("emailLower", email))
-        .filter((q) => q.eq(q.field("visibility"), "public"))
-        .collect()
+        .withIndex("by_email_and_visibility_and_date", (q) =>
+          q.eq("emailLower", email).eq("visibility", "public"),
+        )
+        .order("desc")
+        .take(PUBLIC_LINKS_MAX)
     : [];
   const links = [...byUser, ...byEmail].sort((a, b) =>
     a.date < b.date ? 1 : a.date > b.date ? -1 : 0,
@@ -1602,8 +1597,12 @@ export const purgeUserPlays = internalMutation({
  * Batched + idempotent (mirrors relinkGameToBggRows).
  */
 export const claimPlaysByEmail = internalMutation({
-  args: { userId: v.id("users"), email: v.string() },
-  handler: async (ctx, { userId, email }) => {
+  args: {
+    userId: v.id("users"),
+    email: v.string(),
+    cursor: v.optional(v.union(v.string(), v.null())),
+  },
+  handler: async (ctx, { userId, email, cursor }) => {
     const emailLower = normEmail(email);
     if (!emailLower) return { claimed: 0 };
 
@@ -1621,13 +1620,25 @@ export const claimPlaysByEmail = internalMutation({
       }
     }
 
-    const parts = await ctx.db
+    // Paginated: claiming doesn't remove a link from the by_email range, so a
+    // plain re-`take` would revisit the same batch forever.
+    const res = await ctx.db
       .query("playParticipants")
       .withIndex("by_email", (q) => q.eq("emailLower", emailLower))
-      .take(SWEEP_BATCH);
+      .paginate({ numItems: SWEEP_BATCH, cursor: cursor ?? null });
+    const parts = res.page;
     let claimed = 0;
     for (const part of parts) {
-      if (part.userId !== userId) {
+      // Already claimed (its play was stamped in that same pass) — nothing to
+      // do, and no play read: the plays feed runs this on every mount.
+      if (part.userId === userId) continue;
+      // Don't give the user a second link to a play they're already linked to
+      // by account — myPlays paginates these links one per play.
+      const siblings = await ctx.db
+        .query("playParticipants")
+        .withIndex("by_play", (q) => q.eq("playId", part.playId))
+        .take(PLAYERS_MAX + 1);
+      if (!siblings.some((s) => s._id !== part._id && s.userId === userId)) {
         await ctx.db.patch("playParticipants", part._id, { userId });
       }
       // Stamp the matching embedded player so win-% stats find the user.
@@ -1646,10 +1657,11 @@ export const claimPlaysByEmail = internalMutation({
       claimed++;
     }
 
-    if (parts.length >= SWEEP_BATCH || people.length >= SWEEP_BATCH) {
+    if (!res.isDone) {
       await ctx.scheduler.runAfter(0, internal.plays.claimPlaysByEmail, {
         userId,
         email,
+        cursor: res.continueCursor,
       });
     }
     return { claimed };
