@@ -6,6 +6,7 @@ import { usePaginatedQuery, useQuery, useMutation } from "convex/react";
 import { List, LayoutGrid } from "lucide-react";
 import { api } from "@/convex/_generated/api";
 import { GameCard } from "@/components/boardgames/GameCard";
+import { CollectionStateProvider } from "@/components/boardgames/CollectionStateProvider";
 import { GameListItem } from "@/components/boardgames/GameListItem";
 import { PreviewCard, PreviewRow } from "@/components/boardgames/PreviewCard";
 import { useBggSearch } from "@/components/boardgames/useBggSearch";
@@ -158,7 +159,7 @@ function AllBoardgamesInner() {
           </div>
         )
       ) : (
-        <>
+        <CollectionStateProvider gameIds={results.map((g) => g._id)}>
           {/* Save scroll + loaded count when a card link is clicked, so Back from
               the game's detail lands where they were. */}
           {view === "list" ? (
@@ -195,7 +196,7 @@ function AllBoardgamesInner() {
           {status === "LoadingMore" && (
             <p className="mt-8 text-center text-sm text-muted">Loading…</p>
           )}
-        </>
+        </CollectionStateProvider>
       )}
 
       <FilterDrawer

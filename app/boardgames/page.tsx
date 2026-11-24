@@ -9,6 +9,7 @@ import { api } from "@/convex/_generated/api";
 import { useTopBarTitle } from "@/components/topbar/MobileTopBar";
 import { GameCard } from "@/components/boardgames/GameCard";
 import { CardRail } from "@/components/boardgames/CardRail";
+import { CollectionStateProvider } from "@/components/boardgames/CollectionStateProvider";
 import { FilterDrawer } from "@/components/boardgames/FilterDrawer";
 import { useLibraryFilters } from "@/components/boardgames/useLibraryFilters";
 import { LibraryControls } from "@/components/boardgames/LibraryControls";
@@ -40,8 +41,10 @@ function LibraryInner() {
     restoreIfReady(results.length);
   }, [results.length, restoreIfReady]);
   // Count of everything matching the current query/filters — sits beside the
-  // row heading and tells you whether "View all" is worth a tap.
-  const total = useQuery(api.games.libraryCount, args);
+  // row heading and tells you whether "View all" is worth a tap. Skipped while
+  // searching (it would re-run the search scan); the loaded result count shows
+  // instead, with a "+" when there are more.
+  const total = useQuery(api.games.libraryCount, searching ? "skip" : args);
   useTopBarTitle("Library");
 
   const loadingFirst = status === "LoadingFirstPage";
@@ -86,11 +89,18 @@ function LibraryInner() {
         <div className="mb-3 flex items-end justify-between">
           <h2 className="font-display text-lg font-bold tracking-tight">
             {searching || activeCount > 0 ? "Results" : "Browse"}
-            {total !== undefined && (
+            {searching ? (
+              results.length > 0 && (
+                <span className="ml-2 align-middle text-base font-bold text-subtle">
+                  {results.length}
+                  {status === "CanLoadMore" || status === "LoadingMore" ? "+" : ""}
+                </span>
+              )
+            ) : total !== undefined ? (
               <span className="ml-2 align-middle text-base font-bold text-subtle">
                 {total}
               </span>
-            )}
+            ) : null}
           </h2>
           <Link
             href={allHref}
@@ -132,13 +142,15 @@ function LibraryInner() {
             }
           />
         ) : (
-          <CardRail>
-            {results.slice(0, 20).map((game, i) => (
-              <li key={game._id} className={RAIL_CELL}>
-                <GameCard game={game} index={i} />
-              </li>
-            ))}
-          </CardRail>
+          <CollectionStateProvider gameIds={results.slice(0, 20).map((g) => g._id)}>
+            <CardRail>
+              {results.slice(0, 20).map((game, i) => (
+                <li key={game._id} className={RAIL_CELL}>
+                  <GameCard game={game} index={i} />
+                </li>
+              ))}
+            </CardRail>
+          </CollectionStateProvider>
         )}
       </section>
 

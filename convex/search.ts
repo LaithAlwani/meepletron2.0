@@ -30,14 +30,14 @@ export const topSearches = query({
   args: {},
   handler: async (ctx) => {
     await requireAdmin(ctx);
-    const rows = await ctx.db.query("searches").take(2000);
-    return rows
-      .sort(
-        (a, b) =>
-          (b.lastSearchedAt ?? b._creationTime) -
-          (a.lastSearchedAt ?? a._creationTime),
-      )
-      .slice(0, 200);
+    // Index-ordered: newest lastSearchedAt first. Legacy rows without the
+    // field sort last, newest-created first (the index's _creationTime tail) —
+    // they all predate the field, so this matches the old JS fallback order.
+    return await ctx.db
+      .query("searches")
+      .withIndex("by_lastSearchedAt")
+      .order("desc")
+      .take(200);
   },
 });
 

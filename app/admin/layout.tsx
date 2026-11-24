@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useQuery } from "convex/react";
+import { useEffect, useState } from "react";
+import { useConvex, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { AdminSidebar, AdminMobileNav } from "@/components/admin/AdminNav";
 
@@ -13,10 +14,26 @@ export default function AdminLayout({
 }) {
   const me = useQuery(api.users.me);
   const pathname = usePathname() ?? "/admin";
-  const requestCount = useQuery(
-    api.rulebookRequests.pendingRequestCount,
-    me?.role === "admin" ? {} : "skip",
+  // The nav badge is a one-shot fetch, refreshed on navigation between admin
+  // pages and on window focus — not a live subscription held open on every
+  // admin page.
+  const convex = useConvex();
+  const isAdmin = me?.role === "admin";
+  const [requestCount, setRequestCount] = useState<number | undefined>(
+    undefined,
   );
+  useEffect(() => {
+    if (!isAdmin) return;
+    const load = () => {
+      convex.query(api.rulebookRequests.pendingRequestCount, {}).then(
+        setRequestCount,
+        () => {},
+      );
+    };
+    load();
+    window.addEventListener("focus", load);
+    return () => window.removeEventListener("focus", load);
+  }, [convex, isAdmin, pathname]);
 
   if (me === undefined) {
     return (

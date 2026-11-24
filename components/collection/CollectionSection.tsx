@@ -11,6 +11,7 @@ import type { LucideIcon } from "lucide-react";
 import { api } from "@/convex/_generated/api";
 import { GameCard } from "@/components/boardgames/GameCard";
 import { CardRail } from "@/components/boardgames/CardRail";
+import { CollectionStateProvider } from "@/components/boardgames/CollectionStateProvider";
 import { RAIL_CELL, RailSkeletonCells } from "@/components/boardgames/GameGrid";
 import {
   COLLECTION_STATUSES,
@@ -151,13 +152,15 @@ function CollectionRow({ status, total }: { status: CollStatus; total: number })
       {qStatus === "LoadingFirstPage" && results.length === 0 ? (
         <RailSkeletonCells count={5} />
       ) : (
-        <CardRail>
-          {results.map((game, i) => (
-            <li key={game._id} className={RAIL_CELL}>
-              <GameCard game={game} index={i} />
-            </li>
-          ))}
-        </CardRail>
+        <CollectionStateProvider gameIds={results.map((g) => g._id)}>
+          <CardRail>
+            {results.map((game, i) => (
+              <li key={game._id} className={RAIL_CELL}>
+                <GameCard game={game} index={i} />
+              </li>
+            ))}
+          </CardRail>
+        </CollectionStateProvider>
       )}
     </section>
   );

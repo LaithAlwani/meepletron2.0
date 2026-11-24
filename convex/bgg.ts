@@ -4,11 +4,12 @@ import {
   internalAction,
   internalMutation,
   internalQuery,
+  type MutationCtx,
 } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { bggStatsValidator } from "./lib/bggStats";
 import { bggSortKeys } from "./lib/gameSort";
-import type { Id } from "./_generated/dataModel";
+import type { Doc, Id } from "./_generated/dataModel";
 import {
   parseItem,
   parseFullItem,
@@ -128,17 +129,80 @@ export const search = action({
   },
 });
 
+/**
+ * games.bggCheckedAt for a curated game whose refresh stamp lives in
+ * `gameRefresh`. Sorts after any cutoff, so the game drops out of the legacy
+ * `by_isStub_and_bggCheckedAt` queue range for good.
+ */
+const IN_GAME_REFRESH = Number.MAX_SAFE_INTEGER;
+
+/** Order-insensitive structural key for a stats object, ignoring fetchedAt. */
+function statsKey(bgg: Doc<"games">["bgg"]): string {
+  if (!bgg) return "";
+  const { fetchedAt, ...rest } = bgg;
+  void fetchedAt;
+  return JSON.stringify(rest, (_k, val: unknown) =>
+    val && typeof val === "object" && !Array.isArray(val)
+      ? Object.fromEntries(
+          Object.entries(val).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)),
+        )
+      : val,
+  );
+}
+
+/**
+ * Stamp a refresh attempt in `gameRefresh`, and apply `patch` to the game in
+ * the same (single) write — plus, once, the IN_GAME_REFRESH sentinel. With an
+ * empty patch on an already-migrated game the games doc is not touched, so its
+ * library/collection subscribers don't re-run. A deleted game drops its row.
+ */
+async function stampRefresh(
+  ctx: MutationCtx,
+  gameId: Id<"games">,
+  patch: Partial<Doc<"games">> = {},
+): Promise<void> {
+  const row = await ctx.db
+    .query("gameRefresh")
+    .withIndex("by_game", (q) => q.eq("gameId", gameId))
+    .first();
+  const game = await ctx.db.get("games", gameId);
+  if (!game) {
+    if (row) await ctx.db.delete("gameRefresh", row._id);
+    return;
+  }
+  const now = Date.now();
+  if (row) await ctx.db.patch("gameRefresh", row._id, { bggCheckedAt: now });
+  else await ctx.db.insert("gameRefresh", { gameId, bggCheckedAt: now });
+  const full =
+    game.isStub || game.bggCheckedAt === IN_GAME_REFRESH
+      ? patch
+      : { ...patch, bggCheckedAt: IN_GAME_REFRESH };
+  if (Object.keys(full).length > 0) await ctx.db.patch("games", gameId, full);
+}
+
 export const setBggStats = internalMutation({
   args: { gameId: v.id("games"), bgg: bggStatsValidator },
   handler: async (ctx, { gameId, bgg }) => {
+    const game = await ctx.db.get("games", gameId);
+    if (!game) return await stampRefresh(ctx, gameId);
     // Keep the denormalized sort keys in step with the refreshed stats (title /
-    // year are untouched by a stats refresh, so their keys stay valid).
-    await ctx.db.patch("games", gameId, {
-      bgg,
-      bggCheckedAt: Date.now(),
-      ...bggSortKeys(bgg),
-    });
+    // year are untouched by a stats refresh, so their keys stay valid). Only
+    // write the game when something besides fetchedAt actually moved — a no-op
+    // refresh would otherwise re-run every library/collection subscription.
+    const keys = bggSortKeys(bgg);
+    const changed =
+      statsKey(game.bgg) !== statsKey(bgg) ||
+      game.bggRating !== keys.bggRating ||
+      game.bggRatingCount !== keys.bggRatingCount ||
+      game.bggWeight !== keys.bggWeight;
+    await stampRefresh(ctx, gameId, changed ? { bgg, ...keys } : {});
   },
+});
+
+/** The refresh queue's markChecked: stamp the attempt in `gameRefresh`. */
+export const markRefreshChecked = internalMutation({
+  args: { gameId: v.id("games") },
+  handler: async (ctx, { gameId }) => await stampRefresh(ctx, gameId),
 });
 
 /**
@@ -208,38 +272,38 @@ async function fetchThing(ids: string[], stats: boolean): Promise<string> {
 /**
  * Games most overdue for a stats refresh, oldest-checked first.
  *
- * Reads curated games through the `by_isStub_and_isExpansion` index using an
- * `isStub` prefix. Excluding stubs is load-bearing: collection sync auto-creates
- * stub games *with a bggId set*, so without the filter thousands of them would
- * flood the queue and starve the real catalogue.
- *
- * This scans the curated games (~a few hundred). If that grows past a few
- * thousand it wants its own index rather than a scan.
+ * Two sources, neither reading the whole catalogue:
+ *  1. Curated games not yet tracked in `gameRefresh` (never checked, or last
+ *     checked before it existed), via the legacy `by_isStub_and_bggCheckedAt`
+ *     range — undefined sorts first, so never-checked lead. Tracked games carry
+ *     the IN_GAME_REFRESH sentinel and sit outside the range. Excluding stubs is
+ *     load-bearing: collection sync auto-creates stubs *with a bggId*, which
+ *     would otherwise flood the queue.
+ *  2. Then the stalest `gameRefresh` rows past the TTL — small docs.
+ * Games without a bggId are returned too: refreshChunk stamps them, which
+ * moves them into (2) instead of re-reading them from (1) every run.
  */
 export const dueForRefresh = internalQuery({
   args: { limit: v.number() },
   handler: async (ctx, { limit }) => {
     const cutoff = Date.now() - REFRESH_TTL_MS;
-    // Range scan on the refresh index: only non-stub games whose last check is
-    // older than the TTL (never-checked games have `bggCheckedAt: undefined`,
-    // which sorts first, so they're picked up too), stalest-first.
-    //
-    // The headroom over `limit` is there to skip curated games with no bggId.
-    // It's deliberately small: these are full game documents (descriptions and
-    // all), so at the current batch size a 5x multiple would read ~1,500 docs —
-    // megabytes per run, against a transaction that has a size ceiling. Falling
-    // slightly short just leaves the rest for tomorrow's run.
-    const due = await ctx.db
+    const untracked = await ctx.db
       .query("games")
       .withIndex("by_isStub_and_bggCheckedAt", (q) =>
         q.eq("isStub", false).lt("bggCheckedAt", cutoff),
       )
-      .take(Math.min(limit * 2, 800));
-
-    return due
-      .filter((g) => !!g.bggId)
-      .slice(0, limit)
-      .map((g) => g._id);
+      .take(limit);
+    const ids = untracked.map((g) => g._id);
+    if (ids.length < limit) {
+      const rows = await ctx.db
+        .query("gameRefresh")
+        .withIndex("by_bggCheckedAt", (q) => q.lt("bggCheckedAt", cutoff))
+        .take(limit - ids.length);
+      ids.push(...rows.map((r) => r.gameId));
+    }
+    // A game can briefly be in both (e.g. images.ts markChecked re-stamped
+    // games.bggCheckedAt over the sentinel) — refresh it once.
+    return [...new Set(ids)];
   },
 });
 
@@ -268,7 +332,7 @@ export const refreshStale = internalAction({
 /**
  * Refresh one chunk of games' BGG stats from a single batched /thing call.
  *
- * A game missing from the response still gets stamped via `markChecked`, so a
+ * A game missing from the response still gets stamped via `markRefreshChecked`, so a
  * permanently unresolvable id can't occupy a slot in every run.
  *
  * This only refreshes stats — it never creates expansion games. Expansions are
@@ -279,6 +343,13 @@ export const refreshChunk = internalAction({
   args: { gameIds: v.array(v.id("games")) },
   handler: async (ctx, { gameIds }): Promise<void> => {
     const targets = await ctx.runQuery(internal.games.bggIdsFor, { gameIds });
+    // No bggId (or deleted): stamp anyway so it backs off like a failed fetch.
+    const withBgg = new Set(targets.map((t) => t.gameId));
+    for (const gameId of gameIds) {
+      if (!withBgg.has(gameId)) {
+        await ctx.runMutation(internal.bgg.markRefreshChecked, { gameId });
+      }
+    }
     if (targets.length === 0) return;
 
     let items: Map<string, string>;
@@ -286,7 +357,9 @@ export const refreshChunk = internalAction({
       items = itemsById(await fetchThing(targets.map((t) => t.bggId), true));
     } catch {
       for (const t of targets) {
-        await ctx.runMutation(internal.bgg.markChecked, { gameId: t.gameId });
+        await ctx.runMutation(internal.bgg.markRefreshChecked, {
+          gameId: t.gameId,
+        });
       }
       return;
     }
@@ -294,7 +367,9 @@ export const refreshChunk = internalAction({
     for (const t of targets) {
       const block = items.get(t.bggId);
       if (!block) {
-        await ctx.runMutation(internal.bgg.markChecked, { gameId: t.gameId });
+        await ctx.runMutation(internal.bgg.markRefreshChecked, {
+          gameId: t.gameId,
+        });
         continue;
       }
       await ctx.runMutation(internal.bgg.setBggStats, {

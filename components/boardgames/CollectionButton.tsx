@@ -7,6 +7,7 @@ import { Bookmark, Check } from "lucide-react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { useToast } from "@/components/ui/Toast";
+import { useSharedCollectionState } from "./CollectionStateProvider";
 
 type SetKey = "own" | "wishlist" | "forTrade" | "prevOwned";
 type StateKey = "owned" | "wishlist" | "forTrade" | "prevOwned";
@@ -39,10 +40,14 @@ export function CollectionButton({
   solidIdle?: boolean;
 }) {
   const { isAuthenticated } = useConvexAuth();
-  const state = useQuery(
+  // On list pages a CollectionStateProvider fetches every card's flags in one
+  // query; only fall back to a per-game subscription when it doesn't cover us.
+  const shared = useSharedCollectionState(gameId);
+  const own = useQuery(
     api.collection.state,
-    isAuthenticated ? { gameId } : "skip",
+    isAuthenticated && !shared.covered ? { gameId } : "skip",
   );
+  const state = shared.covered ? shared.state : own;
   const setStatus = useMutation(api.collection.setStatus);
   const toast = useToast();
   const btnRef = useRef<HTMLButtonElement>(null);

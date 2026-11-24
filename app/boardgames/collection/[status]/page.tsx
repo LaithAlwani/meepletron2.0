@@ -11,6 +11,7 @@ import {
 } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { GameCard } from "@/components/boardgames/GameCard";
+import { CollectionStateProvider } from "@/components/boardgames/CollectionStateProvider";
 import { LibraryControls } from "@/components/boardgames/LibraryControls";
 import { ActiveFilterBar } from "@/components/boardgames/ActiveFilterBar";
 import { CARD_GRID, GameGridSkeleton } from "@/components/boardgames/GameGrid";
@@ -102,7 +103,7 @@ function ListBody({ status }: { status: CollStatus }) {
         description={narrowed ? "Try clearing your filters." : status.empty}
       />
     ) : (
-      <>
+      <CollectionStateProvider gameIds={results.map((g) => g._id)}>
         {/* Save scroll + loaded count when a card link is clicked, so Back lands
             where they were. */}
         <div
@@ -119,7 +120,7 @@ function ListBody({ status }: { status: CollStatus }) {
         {qStatus === "LoadingMore" && (
           <p className="mt-8 text-center text-sm text-muted">Loading…</p>
         )}
-      </>
+      </CollectionStateProvider>
     );
 
   return (

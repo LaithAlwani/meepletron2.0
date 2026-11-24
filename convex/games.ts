@@ -13,9 +13,9 @@ import type { Doc, Id } from "./_generated/dataModel";
 import { internal } from "./_generated/api";
 import { deleteMedia } from "./r2";
 import { publicUrl } from "./lib/r2keys";
-import { requireAdmin, getCurrentUser } from "./lib/auth";
+import { requireAdmin } from "./lib/auth";
 import { slugify, slugifyUnique } from "./lib/slug";
-import { buildSearchText, gameNameMatchScore } from "./lib/gameSearch";
+import { buildSearchText } from "./lib/gameSearch";
 import {
   sortKeys,
   isGameSort,
@@ -98,19 +98,6 @@ async function rulebookWithMeta(ctx: QueryCtx, rb: Doc<"rulebooks">) {
 
 export type RulebookWithMeta = Awaited<ReturnType<typeof rulebookWithMeta>>;
 
-/** Base games (not expansions) for the library grid. Reactive. */
-export const list = query({
-  args: {},
-  handler: async (ctx) => {
-    const games = await ctx.db
-      .query("games")
-      .withIndex("by_isStub_and_isExpansion", (q) =>
-        q.eq("isStub", false).eq("isExpansion", false),
-      )
-      .take(200);
-    return await Promise.all(games.map((g) => withMedia(ctx, g)));
-  },
-});
 
 /**
  * Slugs of every indexable game detail page, for the sitemap — non-stub base
@@ -245,157 +232,7 @@ export const suggest = query({
   },
 });
 
-/**
- * Fuzzy-resolve a free-text game name to base-game candidates for the assistant,
- * best match first. Tolerant of spacing, punctuation and typos ("lord's of water
- * deep" → "Lords of Waterdeep", "blook" → Blood Rage / Blokus) so a loosely-typed
- * name still resolves. Returns a generous ranked list (with a `hasRulebooks` flag)
- * that the bubble shows a few at a time, revealing more when the user says none of
- * them fit. Scans base games (~a few hundred).
- */
-export const assistantResolve = query({
-  args: { term: v.string(), limit: v.optional(v.number()) },
-  handler: async (ctx, { term, limit }) => {
-    const q = term.trim();
-    if (q.length < 2) return [];
-    const games = await ctx.db
-      .query("games")
-      .withIndex("by_isStub_and_isExpansion", (qi) =>
-        qi.eq("isStub", false).eq("isExpansion", false),
-      )
-      .take(1000);
-    const chatIds = await chatEnabledBaseIds(ctx);
-    // 0.4 is deliberately loose: it keeps more distant matches around so the
-    // "show more options" path has something to reveal. Best matches sort first.
-    const ranked = games
-      .map((g) => ({ g, score: gameNameMatchScore(q, g.title) }))
-      .filter((s) => s.score >= 0.4)
-      .sort((a, b) => b.score - a.score)
-      .slice(0, Math.max(1, Math.min(limit ?? 12, 20)));
-    return await Promise.all(
-      ranked.map(async ({ g }) => {
-        const m = await withMedia(ctx, g);
-        return {
-          _id: g._id,
-          slug: g.slug,
-          title: g.title,
-          imageUrl: m.imageUrl,
-          thumbnailUrl: m.thumbnailUrl,
-          hasRulebooks: chatIds.has(g._id),
-        };
-      }),
-    );
-  },
-});
 
-/** Paginated base-game library with optional filters (players / time / expansions). */
-export const browsePaginated = query({
-  args: {
-    paginationOpts: paginationOptsValidator,
-    players: v.optional(v.number()),
-    time: v.optional(
-      v.union(v.literal("quick"), v.literal("standard"), v.literal("epic")),
-    ),
-    hasExpansions: v.optional(v.boolean()),
-  },
-  handler: async (ctx, { paginationOpts, players, time, hasExpansions }) => {
-    // Enriched base games only — unenriched BGG stubs are hidden until the sync
-    // has filled them in (isStub flips false), so the library never shows blanks.
-    const base = ctx.db
-      .query("games")
-      .withIndex("by_isStub_and_isExpansion", (q) =>
-        q.eq("isStub", false).eq("isExpansion", false),
-      )
-      .order("desc");
-
-    const needsFilter = players != null || time != null || hasExpansions;
-    const q = needsFilter
-      ? base.filter((fq) => {
-          const conds = [];
-          if (players != null) {
-            conds.push(
-              fq.and(
-                fq.lte(fq.field("minPlayers"), players),
-                fq.gte(fq.field("maxPlayers"), players),
-              ),
-            );
-          }
-          if (time === "quick") conds.push(fq.lte(fq.field("maxPlayTime"), 30));
-          else if (time === "standard")
-            conds.push(
-              fq.and(
-                fq.gt(fq.field("maxPlayTime"), 30),
-                fq.lte(fq.field("maxPlayTime"), 90),
-              ),
-            );
-          else if (time === "epic")
-            conds.push(fq.gt(fq.field("maxPlayTime"), 90));
-          if (hasExpansions)
-            conds.push(fq.eq(fq.field("hasExpansions"), true));
-          return fq.and(...conds);
-        })
-      : base;
-
-    const result = await q.paginate(paginationOpts);
-    return {
-      ...result,
-      page: await Promise.all(result.page.map((g) => withMedia(ctx, g))),
-    };
-  },
-});
-
-/**
- * Exact count of base games matching the library filters — for the "Board
- * games (N)" header. Scans only base games (~a few hundred), no media.
- * Keep the filter logic in sync with `browsePaginated`.
- */
-export const browseCount = query({
-  args: {
-    players: v.optional(v.number()),
-    time: v.optional(
-      v.union(v.literal("quick"), v.literal("standard"), v.literal("epic")),
-    ),
-    hasExpansions: v.optional(v.boolean()),
-  },
-  handler: async (ctx, { players, time, hasExpansions }) => {
-    const base = ctx.db
-      .query("games")
-      .withIndex("by_isStub_and_isExpansion", (q) =>
-        q.eq("isStub", false).eq("isExpansion", false),
-      );
-
-    const needsFilter = players != null || time != null || hasExpansions;
-    const q = needsFilter
-      ? base.filter((fq) => {
-          const conds = [];
-          if (players != null) {
-            conds.push(
-              fq.and(
-                fq.lte(fq.field("minPlayers"), players),
-                fq.gte(fq.field("maxPlayers"), players),
-              ),
-            );
-          }
-          if (time === "quick") conds.push(fq.lte(fq.field("maxPlayTime"), 30));
-          else if (time === "standard")
-            conds.push(
-              fq.and(
-                fq.gt(fq.field("maxPlayTime"), 30),
-                fq.lte(fq.field("maxPlayTime"), 90),
-              ),
-            );
-          else if (time === "epic")
-            conds.push(fq.gt(fq.field("maxPlayTime"), 90));
-          if (hasExpansions)
-            conds.push(fq.eq(fq.field("hasExpansions"), true));
-          return fq.and(...conds);
-        })
-      : base;
-
-    const rows = await q.collect();
-    return rows.length;
-  },
-});
 
 // ---------------------------------------------------------------------------
 // Unified library browse — one query behind the /boardgames rows + /boardgames/all
@@ -438,7 +275,7 @@ function hasAnyValue(gameVals: string[], selected: string[] | undefined): boolea
 /** When searching, how many top-relevance index hits to pull as the candidate
  *  set. Far cheaper than scanning the whole catalogue, and deep enough that the
  *  real matches for any term are covered. */
-const SEARCH_CANDIDATES = 500;
+const SEARCH_CANDIDATES = 150;
 
 async function filteredLibrary(
   ctx: QueryCtx,
@@ -459,9 +296,10 @@ async function filteredLibrary(
     search.length >= 2
       ? await ctx.db
           .query("games")
-          .withSearchIndex("search_text", (q) =>
-            q.search("searchText", search).eq("isStub", false),
-          )
+          .withSearchIndex("search_text", (q) => {
+            const sq = q.search("searchText", search).eq("isStub", false);
+            return flagChat ? sq.eq("chatReady", true) : sq;
+          })
           .take(SEARCH_CANDIDATES)
       : flagChat
         ? await ctx.db
@@ -741,32 +579,47 @@ export const libraryCount = query({
   },
 });
 
-/** Distinct genres (categories) + mechanics for the filter drawer, most common first. */
+/** The 40 most common values of a string-array field across `games`, most
+ *  common first (ties A–Z). Shared by filterFacets and the daily recompute. */
+function topFacets(
+  games: Doc<"games">[],
+  pick: (g: Doc<"games">) => string[],
+): string[] {
+  const counts = new Map<string, number>();
+  for (const g of games) {
+    for (const raw of pick(g)) {
+      const label = raw.trim();
+      if (label) counts.set(label, (counts.get(label) ?? 0) + 1);
+    }
+  }
+  return [...counts.entries()]
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .slice(0, 40)
+    .map(([label]) => label);
+}
+
+/** Distinct genres (categories) + mechanics for the filter drawer, most common
+ *  first. Reads the lists denormalized onto catalogueStats by the daily
+ *  recomputeSimilarGames; scans base games only until that has run once. */
 export const filterFacets = query({
   args: {},
   handler: async (ctx) => {
+    const stats = await ctx.db.query("catalogueStats").first();
+    if (stats?.facetCategories && stats.facetMechanics) {
+      return {
+        categories: stats.facetCategories,
+        mechanics: stats.facetMechanics,
+      };
+    }
     const base = await ctx.db
       .query("games")
       .withIndex("by_isStub_and_isExpansion", (q) =>
         q.eq("isStub", false).eq("isExpansion", false),
       )
       .take(2000);
-    const tally = (pick: (g: Doc<"games">) => string[]) => {
-      const counts = new Map<string, number>();
-      for (const g of base) {
-        for (const raw of pick(g)) {
-          const label = raw.trim();
-          if (label) counts.set(label, (counts.get(label) ?? 0) + 1);
-        }
-      }
-      return [...counts.entries()]
-        .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
-        .slice(0, 40)
-        .map(([label]) => label);
-    };
     return {
-      categories: tally((g) => g.categories),
-      mechanics: tally((g) => g.gameMechanics),
+      categories: topFacets(base, (g) => g.categories),
+      mechanics: topFacets(base, (g) => g.gameMechanics),
     };
   },
 });
@@ -952,7 +805,7 @@ export const backfillChatReady = internalMutation({
 
 type LibraryTime = "quick" | "standard" | "epic";
 
-/** JS mirror of browsePaginated's players/time/expansions filter. */
+/** JS mirror of libraryGames' players/time/expansions index filter. */
 function matchesLibraryFilters(
   g: Doc<"games">,
   players?: number,
@@ -981,166 +834,7 @@ function matchesLibraryFilters(
   return true;
 }
 
-/**
- * Every base game Meepletron can chat about (family has an ingested rulebook),
- * newest first, with the same optional players/time/expansions filters and
- * search term as the library grid. The chat-ready set is small (curated), so
- * this returns the whole filtered list in one shot — no pagination needed.
- */
-export const chatEnabledGames = query({
-  args: {
-    term: v.optional(v.string()),
-    players: v.optional(v.number()),
-    time: v.optional(
-      v.union(v.literal("quick"), v.literal("standard"), v.literal("epic")),
-    ),
-    hasExpansions: v.optional(v.boolean()),
-  },
-  handler: async (ctx, { term, players, time, hasExpansions }) => {
-    const baseIds = await chatEnabledBaseIds(ctx);
-    const games: Doc<"games">[] = [];
-    for (const id of baseIds) {
-      const g = await ctx.db.get("games", id);
-      // Stubs/expansions never qualify as a chattable library entry.
-      if (!g || g.isStub || g.isExpansion) continue;
-      if (!matchesLibraryFilters(g, players, time, hasExpansions)) continue;
-      games.push(g);
-    }
-    // Optional search: keep rows whose blob contains every typed term (matches
-    // searchPaginated's relevance rule).
-    const trimmed = (term ?? "").trim().toLowerCase();
-    const terms = trimmed.split(/\s+/).filter(Boolean);
-    const filtered = terms.length
-      ? games.filter((g) => {
-          const hay = (g.searchText ?? g.title).toLowerCase();
-          return terms.every((t) => hay.includes(t));
-        })
-      : games;
-    filtered.sort((a, b) => b._creationTime - a._creationTime);
-    return await Promise.all(filtered.map((g) => withMedia(ctx, g)));
-  },
-});
 
-type Complexity = "light" | "medium" | "heavy";
-
-/** BGG weight bands → light (≤2) / medium (≤3) / heavy (>3). */
-function matchesComplexity(g: Doc<"games">, complexity?: Complexity): boolean {
-  if (!complexity) return true;
-  const w = g.bgg?.weight;
-  if (w == null) return false; // can't honor a complexity filter without a weight
-  if (complexity === "light") return w <= 2;
-  if (complexity === "medium") return w > 2 && w <= 3;
-  return w > 3;
-}
-
-/** Compact "2–4p · 60 min · Medium" line for a recommendation card. */
-function recDetail(g: Doc<"games">): string {
-  const parts: string[] = [];
-  if (g.minPlayers != null && g.maxPlayers != null) {
-    parts.push(
-      g.minPlayers === g.maxPlayers
-        ? `${g.minPlayers}p`
-        : `${g.minPlayers}–${g.maxPlayers}p`,
-    );
-  }
-  const t = g.maxPlayTime ?? g.minPlayTime;
-  if (t) parts.push(`${t} min`);
-  const w = g.bgg?.weight;
-  if (w != null) parts.push(w <= 2 ? "Light" : w <= 3 ? "Medium" : "Heavy");
-  return parts.join(" · ");
-}
-
-/** Does this game's player poll mark `players` as its best count? (soft ranking) */
-function isBestAt(g: Doc<"games">, players: number): boolean {
-  const poll = g.bgg?.playerPoll;
-  if (!poll) return false;
-  const entry = poll.find((p) => p.count === players);
-  if (!entry) return false;
-  return entry.best >= entry.recommended && entry.best > entry.notRecommended;
-}
-
-/**
- * "What should I play?" — recommend games for a player count / time / complexity,
- * drawn either from the user's owned collection or the whole library. Ranks by
- * BGG rating, nudging games the community rates best at that player count. Returns
- * an `issue` when the owned source can't be used (guest, or empty collection) so
- * the client can steer to the library instead.
- */
-export const recommend = query({
-  args: {
-    source: v.union(v.literal("owned"), v.literal("library")),
-    players: v.optional(v.number()),
-    time: v.optional(
-      v.union(v.literal("quick"), v.literal("standard"), v.literal("epic")),
-    ),
-    complexity: v.optional(
-      v.union(v.literal("light"), v.literal("medium"), v.literal("heavy")),
-    ),
-  },
-  handler: async (ctx, { source, players, time, complexity }) => {
-    let pool: Doc<"games">[] = [];
-    let issue: null | "signin" | "no-collection" = null;
-
-    if (source === "owned") {
-      const user = await getCurrentUser(ctx);
-      if (!user) {
-        issue = "signin";
-      } else {
-        const rows = await ctx.db
-          .query("bggCollection")
-          .withIndex("by_user_and_sort_title", (q) => q.eq("userId", user._id))
-          .collect();
-        const owned = rows.filter((r) => r.own && r.gameId && !r.isExpansion);
-        if (owned.length === 0) {
-          issue = "no-collection";
-        } else {
-          const games = await Promise.all(
-            owned.map((r) => ctx.db.get("games", r.gameId as Id<"games">)),
-          );
-          pool = games.filter(
-            (g): g is Doc<"games"> => !!g && !g.isExpansion && !g.isStub,
-          );
-        }
-      }
-    } else {
-      pool = await ctx.db
-        .query("games")
-        .withIndex("by_isStub_and_isExpansion", (q) =>
-          q.eq("isStub", false).eq("isExpansion", false),
-        )
-        .take(1000);
-    }
-
-    const matched = pool.filter(
-      (g) =>
-        matchesLibraryFilters(g, players, time, undefined) &&
-        matchesComplexity(g, complexity),
-    );
-    matched.sort((a, b) => {
-      const bonus = (g: Doc<"games">) =>
-        (g.bgg?.rating ?? 0) + (players != null && isBestAt(g, players) ? 0.5 : 0);
-      return bonus(b) - bonus(a);
-    });
-
-    const chatIds = await chatEnabledBaseIds(ctx);
-    const top = matched.slice(0, 8);
-    const games = await Promise.all(
-      top.map(async (g) => {
-        const withM = await withMedia(ctx, g);
-        return {
-          _id: g._id,
-          slug: g.slug,
-          title: g.title,
-          imageUrl: withM.imageUrl,
-          thumbnailUrl: withM.thumbnailUrl,
-          detail: recDetail(g),
-          chattable: chatIds.has(g._id),
-        };
-      }),
-    );
-    return { issue, games };
-  },
-});
 
 // ---------------------------------------------------------------------------
 // Similar games. Ranked by shared mechanics/categories (+ a small designer
@@ -1258,17 +952,24 @@ export const recomputeSimilarGames = internalMutation({
         .withIndex("by_isExpansion", (q) => q.eq("isExpansion", true))
         .take(20000)
     ).length;
+    // Filter-drawer facets off the same scan (games.filterFacets reads them).
+    const facetCategories = topFacets(games, (g) => g.categories);
+    const facetMechanics = topFacets(games, (g) => g.gameMechanics);
     const stats = await ctx.db.query("catalogueStats").first();
     if (stats) {
       await ctx.db.patch("catalogueStats", stats._id, {
         baseGameCount: games.length,
         expansionCount,
+        facetCategories,
+        facetMechanics,
         updatedAt: Date.now(),
       });
     } else {
       await ctx.db.insert("catalogueStats", {
         baseGameCount: games.length,
         expansionCount,
+        facetCategories,
+        facetMechanics,
         updatedAt: Date.now(),
       });
     }
@@ -1318,7 +1019,16 @@ async function gameDetail(ctx: QueryCtx, game: Doc<"games">) {
     description: content?.description ?? game.description,
     // For expansions, the base game they belong to (null for base games).
     parent: parentDoc ? await withMedia(ctx, parentDoc) : null,
-    expansions: await Promise.all(expansions.map((e) => withMedia(ctx, e))),
+    // Lean rows: the detail page's Expansions list only shows a cover + title
+    // linking to the slug — not the full doc.
+    expansions: await Promise.all(
+      expansions.map(async (e) => ({
+        _id: e._id,
+        slug: e.slug,
+        title: e.title,
+        ...(await coverUrls(ctx, e)),
+      })),
+    ),
     rulebooks: await Promise.all(
       rulebookDocs.map((rb) => rulebookWithMeta(ctx, rb)),
     ),
@@ -2092,6 +1802,14 @@ export async function purgeGame(ctx: MutationCtx, game: Doc<"games">) {
     for (const c of chunks) await ctx.db.delete("chunks", c._id);
     await deleteMedia(ctx, rb.storageKey, rb.storageId);
     await ctx.db.delete("rulebooks", rb._id);
+  }
+
+  // BGG refresh bookkeeping (bgg.ts).
+  for (const r of await ctx.db
+    .query("gameRefresh")
+    .withIndex("by_game", (q) => q.eq("gameId", gameId))
+    .take(10)) {
+    await ctx.db.delete("gameRefresh", r._id);
   }
 
   // Detail content kept off the game doc.

@@ -3,7 +3,7 @@
 import { buttonClasses } from "@/components/ui/buttonStyles";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { useQuery, useMutation } from "convex/react";
+import { useConvex, useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { useConfirm } from "@/components/ui/Confirm";
@@ -99,10 +99,24 @@ export default function AdminGamesPage() {
   const debounced = useDebounced(q, 200);
   const settled = debounced === q;
 
-  // The plain list stays subscribed while searching: it's what the page falls
-  // back to when the box is cleared, and it's where the header tallies come
-  // from, so dropping it would only make clearing the search flicker.
-  const all = useQuery(api.games.adminList, {}) as AdminGame[] | undefined;
+  // The plain list is a one-shot fetch, not a live subscription: it reads
+  // ~1000 games + their rulebooks, and a subscription would re-run it on every
+  // game/rulebook write anywhere. Refetched on mount (returning from an edit),
+  // on window focus, and after a delete here. Kept while searching: it's what
+  // the page falls back to when the box is cleared, and the header tallies.
+  const convex = useConvex();
+  const [all, setAll] = useState<AdminGame[] | undefined>(undefined);
+  const refreshAll = useCallback(() => {
+    convex.query(api.games.adminList, {}).then(
+      (rows) => setAll(rows as AdminGame[]),
+      () => {},
+    );
+  }, [convex]);
+  useEffect(() => {
+    refreshAll();
+    window.addEventListener("focus", refreshAll);
+    return () => window.removeEventListener("focus", refreshAll);
+  }, [refreshAll]);
   const hits = useQuery(
     api.games.adminSearch,
     searching && settled ? { term: debounced } : "skip",
@@ -133,6 +147,7 @@ export default function AdminGamesPage() {
     if (!ok) return;
     try {
       await deleteGame({ gameId: id });
+      refreshAll();
       toast(`Deleted “${title}”`, "success");
     } catch (e) {
       toast(friendlyError(e, "Couldn't delete the game"), "error");

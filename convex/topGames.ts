@@ -101,39 +101,65 @@ async function profileCounts(ctx: QueryCtx, user: Doc<"users">) {
   };
 }
 
+/** The bggCollection flags a public collection list can be drawn from. */
+type CollectionFlag = "own" | "forTrade" | "wishlist" | "prevOwned";
+
+/** A user's rows with `field` set, alphabetical, via the per-status index —
+ *  reads only that status's rows, however big the whole collection is. */
+function collectionByFlag(
+  ctx: QueryCtx,
+  userId: Id<"users">,
+  field: CollectionFlag,
+) {
+  const q = ctx.db.query("bggCollection");
+  switch (field) {
+    case "own":
+      return q.withIndex("by_user_own", (i) =>
+        i.eq("userId", userId).eq("own", true),
+      );
+    case "wishlist":
+      return q.withIndex("by_user_wishlist", (i) =>
+        i.eq("userId", userId).eq("wishlist", true),
+      );
+    case "forTrade":
+      return q.withIndex("by_user_forTrade", (i) =>
+        i.eq("userId", userId).eq("forTrade", true),
+      );
+    case "prevOwned":
+      return q.withIndex("by_user_prevOwned", (i) =>
+        i.eq("userId", userId).eq("prevOwned", true),
+      );
+  }
+}
+
 /**
  * A shared "list of games" section for the public profile (owned / for-sale /
- * wishlist), drawn from the user's BGG collection. Returns the total count and a
- * bounded, cover-resolved sample.
+ * wishlist), drawn from the user's BGG collection: a small alphabetical sample
+ * (`total` is the sample size, capped at `limit`). A public profile is a
+ * showcase, not the full collection — the [list] page paginates the rest.
  */
 async function collectionSection(
   ctx: QueryCtx,
   userId: Id<"users">,
-  pick: (r: Doc<"bggCollection">) => boolean,
+  field: CollectionFlag,
   limit: number,
 ) {
-  // A bounded scan: a public profile is a showcase, not the full collection —
-  // resolving thousands of covers in one query would blow read/byte limits.
-  const rows = await ctx.db
-    .query("bggCollection")
-    .withIndex("by_user_and_sort_title", (q) => q.eq("userId", userId))
-    .take(600);
-  const matched = rows.filter(pick);
+  const rows = await collectionByFlag(ctx, userId, field).take(limit);
   const items = await Promise.all(
-    matched.slice(0, limit).map(async (r) => {
-      const g = r.gameId ? await ctx.db.get("games", r.gameId) : null;
-      // The collection row carries the BGG thumbnail URL directly — prefer it
-      // (zero egress); fall back to the game's cover only if absent.
-      const thumb = r.thumbnailUrl ?? (g ? await gameThumbUrl(ctx, g) : null);
+    rows.map(async (r) => {
+      // The row carries its own title + BGG thumbnail URL; only read the game
+      // (for its cover and slug) when the row has no thumbnail.
+      const g =
+        !r.thumbnailUrl && r.gameId ? await ctx.db.get("games", r.gameId) : null;
       return {
         gameId: r.gameId ?? null,
         title: g?.title ?? r.title,
         slug: g?.slug ?? null,
-        thumbUrl: thumb,
+        thumbUrl: r.thumbnailUrl ?? (g ? await gameThumbUrl(ctx, g) : null),
       };
     }),
   );
-  return { total: matched.length, items };
+  return { total: rows.length, items };
 }
 
 /** Rank (1-based) of a game within a list's entries, or null if absent. */
@@ -342,21 +368,6 @@ async function ownedList(
 /* -------------------------------------------------------------------------- */
 /* Owner CRUD                                                                 */
 /* -------------------------------------------------------------------------- */
-
-/** The caller's lists (newest year first), lightweight rows for the gallery. */
-export const listMine = query({
-  args: {},
-  handler: async (ctx) => {
-    const user = await getCurrentUser(ctx);
-    if (!user) return [];
-    const rows = await ctx.db
-      .query("topGamesLists")
-      .withIndex("by_user", (q) => q.eq("userId", user._id))
-      .collect();
-    rows.sort((a, b) => b.year - a.year || b.size - a.size);
-    return await Promise.all(rows.map((r) => listCard(ctx, r)));
-  },
-});
 
 /**
  * Create a draft list for (category, size, year). Surfaces an existing one for
@@ -634,25 +645,10 @@ export const publicProfile = query({
       isSelf,
       counts,
       lists,
-      owned: await collectionSection(ctx, user._id, (r) => r.own === true, 30),
-      forTrade: await collectionSection(
-        ctx,
-        user._id,
-        (r) => r.forTrade === true,
-        30,
-      ),
-      wishlist: await collectionSection(
-        ctx,
-        user._id,
-        (r) => r.wishlist === true,
-        30,
-      ),
-      prevOwned: await collectionSection(
-        ctx,
-        user._id,
-        (r) => r.prevOwned === true,
-        30,
-      ),
+      owned: await collectionSection(ctx, user._id, "own", 30),
+      forTrade: await collectionSection(ctx, user._id, "forTrade", 30),
+      wishlist: await collectionSection(ctx, user._id, "wishlist", 30),
+      prevOwned: await collectionSection(ctx, user._id, "prevOwned", 30),
     };
   },
 });
@@ -678,9 +674,7 @@ type CollectionList =
   | "prev-owned";
 
 /** The bggCollection flag field backing a list. */
-function collectionField(
-  list: CollectionList,
-): "own" | "forTrade" | "wishlist" | "prevOwned" {
+function collectionField(list: CollectionList): CollectionFlag {
   if (list === "owned") return "own";
   if (list === "wishlist") return "wishlist";
   if (list === "prev-owned") return "prevOwned";
@@ -750,11 +744,9 @@ export const publicCollectionPage = query({
     // Sorted path (game-field sorts): bounded load + join + sort + offset page.
     const sortKey = sort && isGameSort(sort) && sort !== "title" ? sort : null;
     if (sortKey) {
-      const rows = await ctx.db
-        .query("bggCollection")
-        .withIndex("by_user_and_sort_title", (q) => q.eq("userId", user._id))
-        .filter((q) => q.eq(q.field(field), true))
-        .take(2000); // the collection's practical cap
+      // Each row costs a game read for the sort key, so cap the sorted view;
+      // the default A–Z path below paginates without a cap.
+      const rows = await collectionByFlag(ctx, user._id, field).take(1000);
       const paired = await Promise.all(
         rows.map(async (r) => ({
           r,
@@ -790,11 +782,9 @@ export const publicCollectionPage = query({
       };
     }
 
-    const result = await ctx.db
-      .query("bggCollection")
-      .withIndex("by_user_and_sort_title", (q) => q.eq("userId", user._id))
-      .filter((q) => q.eq(q.field(field), true))
-      .paginate(paginationOpts);
+    const result = await collectionByFlag(ctx, user._id, field).paginate(
+      paginationOpts,
+    );
 
     return {
       ...result,

@@ -125,7 +125,12 @@ export function ChatPane({
   const target = embedded && isExpansion && game.parent ? game.parent : game;
   return (
     <Suspense fallback={<div className={loadingCls}>Loading…</div>}>
-      <ChatView gameId={target._id} slug={target.slug} embedded={embedded} />
+      <ChatView
+        gameId={target._id}
+        slug={target.slug}
+        embedded={embedded}
+        game={target}
+      />
     </Suspense>
   );
 }
@@ -134,10 +139,14 @@ function ChatView({
   gameId,
   slug,
   embedded,
+  game,
 }: {
   gameId: Id<"games">;
   slug: string;
   embedded: boolean;
+  // Title + cover of the chat's game, from ChatPane's (reactive) getByHandle —
+  // no second subscription to the same game here.
+  game: { title: string; imageUrl: string | null; thumbnailUrl: string | null };
 }) {
   const { isLoading, isAuthenticated } = useConvexAuth();
   const { signIn } = useAuthActions();
@@ -210,7 +219,6 @@ function ChatView({
     [],
   );
 
-  const game = useQuery(api.games.getById, { gameId });
   const sources = useQuery(api.games.chatSources, { gameId });
   const chat = useQuery(api.chat.getChat, chatId ? { chatId } : "skip");
   const {

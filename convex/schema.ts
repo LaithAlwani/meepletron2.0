@@ -179,10 +179,13 @@ export default defineSchema({
     // BoardGameGeek id (from the original import) + cached BGG stats.
     bggId: v.optional(v.string()),
     bgg: v.optional(bggStatsValidator),
-    // When we last *attempted* a stats refresh, success or not. Distinct from
+    // When we last *attempted* a BGG fetch, success or not. Distinct from
     // bgg.fetchedAt, which records the last *success* and stays the display
     // value: a game whose fetch keeps failing must still back off, or it would
     // occupy a refresh slot every hour and starve the rest of the catalogue.
+    // Stubs: the enrichment backoff. Curated games: the stats-refresh stamp
+    // now lives in `gameRefresh`; once a game moves there this is set to the
+    // IN_GAME_REFRESH sentinel (bgg.ts) so it leaves the legacy queue range.
     bggCheckedAt: v.optional(v.number()),
     // Auto-created by a user's BGG collection sync to hold a game we don't
     // curate. Stubs carry a title/year/thumbnail and nothing else, and are
@@ -237,8 +240,20 @@ export default defineSchema({
     .index("by_chat_updated", ["isStub", "chatReady", "contentUpdatedAt"])
     .searchIndex("search_text", {
       searchField: "searchText",
-      filterFields: ["isExpansion", "isStub"],
+      filterFields: ["isExpansion", "isStub", "chatReady"],
     }),
+
+  // BGG stats-refresh bookkeeping, one row per curated game: when the daily
+  // refresh last *attempted* it (success or not — the backoff described on
+  // games.bggCheckedAt). Kept off the `games` doc so a refresh that finds no
+  // change writes nothing there, and so the stalest-first queue reads these
+  // small rows instead of full game docs. See bgg.dueForRefresh.
+  gameRefresh: defineTable({
+    gameId: v.id("games"),
+    bggCheckedAt: v.number(),
+  })
+    .index("by_bggCheckedAt", ["bggCheckedAt"])
+    .index("by_game", ["gameId"]),
 
   // Detail-only game content, kept off the `games` doc so the hot card/list
   // reads (library, similar, collection) don't pay to read a 1–3 KB description
@@ -580,6 +595,11 @@ export default defineSchema({
     // Set once backfillChatReady has run. Until then readers fall back to the
     // rulebook scan, so a fresh deploy is correct before the backfill.
     chatReadyBackfilledAt: v.optional(v.number()),
+    // Filter-drawer facets: the 40 most common categories / mechanics across
+    // base games, denormalized off the daily recomputeSimilarGames scan. Read
+    // by games.filterFacets (falls back to the scan until first populated).
+    facetCategories: v.optional(v.array(v.string())),
+    facetMechanics: v.optional(v.array(v.string())),
     updatedAt: v.number(),
   }),
 
@@ -643,7 +663,9 @@ export default defineSchema({
     // Ms timestamp of the most recent time this term was searched. Optional so
     // rows logged before this field validate; falls back to `_creationTime`.
     lastSearchedAt: v.optional(v.number()),
-  }).index("by_query", ["query"]),
+  })
+    .index("by_query", ["query"])
+    .index("by_lastSearchedAt", ["lastSearchedAt"]),
 
   contactMessages: defineTable({
     name: v.string(),

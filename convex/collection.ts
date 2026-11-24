@@ -130,3 +130,43 @@ export const state = query({
     };
   },
 });
+
+/** Most game ids one `states` call will look up (a page or two of cards). */
+const STATES_MAX = 200;
+
+/**
+ * The current user's collection status for a list of games, in one
+ * subscription — list pages call this once (via CollectionStateProvider) instead
+ * of every card subscribing to `state`. Returns only games with a row; anything
+ * absent is in no list. Ids past STATES_MAX are ignored (cards fall back to
+ * `state`).
+ */
+export const states = query({
+  args: { gameIds: v.array(v.id("games")) },
+  handler: async (
+    ctx,
+    { gameIds },
+  ): Promise<
+    {
+      gameId: Id<"games">;
+      owned: boolean;
+      wishlist: boolean;
+      forTrade: boolean;
+      prevOwned: boolean;
+    }[]
+  > => {
+    const user = await getCurrentUser(ctx);
+    if (!user) return [];
+    const ids = [...new Set(gameIds)].slice(0, STATES_MAX);
+    const rows = await Promise.all(ids.map((id) => findRow(ctx, user._id, id)));
+    return rows
+      .filter((r): r is Doc<"bggCollection"> => r !== null && !!r.gameId)
+      .map((r) => ({
+        gameId: r.gameId as Id<"games">,
+        owned: !!r.own,
+        wishlist: !!r.wishlist,
+        forTrade: !!r.forTrade,
+        prevOwned: !!r.prevOwned,
+      }));
+  },
+});
