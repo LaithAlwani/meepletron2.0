@@ -178,14 +178,20 @@ export const adminGuestStats = query({
 
 /**
  * Aggregate recent LLM usage by purpose and model, with estimated cost.
- * Bounded to the latest {USAGE_SAMPLE} rows — move to @convex-dev/aggregate if
- * the log grows very large and you need all-time totals.
+ * Bounded to rows since `sinceMs` (via the creation-time index) and at most the
+ * latest {USAGE_SAMPLE} of them — move to @convex-dev/aggregate if you need
+ * all-time per-purpose totals. The admin page fetches this one-shot (not a live
+ * subscription), since usageLog gains rows on every chat answer.
  */
 export const usageSummary = query({
-  args: {},
-  handler: async (ctx) => {
+  args: { sinceMs: v.optional(v.number()) },
+  handler: async (ctx, { sinceMs }) => {
     await requireAdmin(ctx);
-    const rows = await ctx.db.query("usageLog").order("desc").take(USAGE_SAMPLE);
+    const rows = await ctx.db
+      .query("usageLog")
+      .withIndex("by_creation_time", (q) => q.gte("_creationTime", sinceMs ?? 0))
+      .order("desc")
+      .take(USAGE_SAMPLE);
 
     const byPurpose = new Map<string, { calls: number; tokens: number; cost: number }>();
     const byModel = new Map<string, { calls: number; tokens: number; cost: number }>();
@@ -212,6 +218,7 @@ export const usageSummary = query({
     }
 
     return {
+      sinceMs: sinceMs ?? null,
       sampled: rows.length,
       capped: rows.length >= USAGE_SAMPLE,
       totalTokens,

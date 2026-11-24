@@ -199,6 +199,16 @@ export async function buildAnswer(
   const vecTopK = Math.max(config.v2TopK, 24);
   const rerankTopN = Math.max(config.rerankTopN, 5);
 
+  // Hydrated chunks, shared across the primary and relaxed passes so the retry
+  // never re-reads a chunk doc (each carries a ~6 KB embedding) it already has.
+  // A null entry = the id was looked up but the chunk no longer exists.
+  type Hydrated = RetrievedChunk & { chunkId: Id<"chunks"> };
+  const hydratedById = new Map<Id<"chunks">, Hydrated | null>();
+  // Only the top `rerankCandidates` survivors reach the reranker; hydrate that
+  // many by score plus a few spares (legend chunks / deleted ids get dropped
+  // after hydration) instead of every vector hit.
+  const HYDRATE_SPARE = 6;
+
   // One retrieval pass: embed each query formulation → vector-search (scoped to
   // the selected rulebooks) → union the hits (keeping the best score per chunk)
   // → score threshold → rerank against `rerankText`. Unioning the raw question
@@ -235,12 +245,24 @@ export async function buildAnswer(
         if (prev === undefined || h._score > prev) scoreById.set(h._id, h._score);
       }
     }
-    const hydrated = await ctx.runQuery(internal.chat.hydrateChunks, {
-      chunkIds: [...scoreById.keys()],
-    });
-    const candidates = hydrated
-      .filter((c) => c.chunkType !== "legend")
-      .filter((c) => (scoreById.get(c.chunkId) ?? 0) >= threshold);
+    // Best-scored first, below-threshold hits dropped BEFORE hydration.
+    const wanted = [...scoreById.entries()]
+      .filter(([, score]) => score >= threshold)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, config.rerankCandidates + HYDRATE_SPARE)
+      .map(([id]) => id);
+    const missing = wanted.filter((id) => !hydratedById.has(id));
+    if (missing.length > 0) {
+      const fetched = await ctx.runQuery(internal.chat.hydrateChunks, {
+        chunkIds: missing,
+      });
+      for (const id of missing) hydratedById.set(id, null);
+      for (const c of fetched) hydratedById.set(c.chunkId, c);
+    }
+    const hydrated = wanted
+      .map((id) => hydratedById.get(id))
+      .filter((c): c is Hydrated => !!c);
+    const candidates = hydrated.filter((c) => c.chunkType !== "legend");
     // TEMP diagnostics: the union hits (best-scored first) + which survived the
     // score threshold, so we can see where the answer chunk ranked.
     console.log(

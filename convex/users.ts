@@ -54,19 +54,31 @@ export const myProfileStats = query({
 });
 
 /**
- * The current user's daily token budget. `tokensUsedToday` is authoritative
- * because the nightly cron zeroes it at UTC midnight, so we can report what's
- * left without reading wall-clock in a (reactive, cacheable) query.
+ * The current user's daily token budget, from the `userBudgets` row (kept off
+ * the user doc so per-answer writes don't rerun every user-doc reader). A
+ * missing row, or a window older than the caller's `todayStartMs` (UTC
+ * midnight, passed in since queries can't read the clock), means nothing used
+ * today. Until the row exists, the deprecated user fields are the fallback.
  */
 export const myBudget = query({
-  args: {},
-  handler: async (ctx) => {
+  args: { todayStartMs: v.number() },
+  handler: async (ctx, { todayStartMs }) => {
     const user = await getCurrentUser(ctx);
     if (!user) return null;
     const isGuest = user.isAnonymous === true;
     const unlimited = user.role === "admin";
     const limit = tokenLimitFor(user.isAnonymous);
-    const used = Math.min(finite(user.tokensUsedToday), limit);
+    const row = await ctx.db
+      .query("userBudgets")
+      .withIndex("by_user", (q) => q.eq("userId", user._id))
+      .unique();
+    const win = row ?? {
+      tokensUsedToday: user.tokensUsedToday ?? 0,
+      tokensResetAt: user.tokensResetAt ?? 0,
+    };
+    const usedToday =
+      win.tokensResetAt < todayStartMs ? 0 : finite(win.tokensUsedToday);
+    const used = Math.min(usedToday, limit);
     return {
       used,
       limit,

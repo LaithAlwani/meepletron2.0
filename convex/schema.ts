@@ -74,6 +74,10 @@ export default defineSchema({
         showPlays: v.optional(v.boolean()),
       }),
     ),
+    // DEPRECATED: the daily budget moved to `userBudgets` (a hot, per-answer
+    // counter that rerendered every reader of the user doc). Kept optional so
+    // existing rows validate; read only as a same-day fallback until the user's
+    // `userBudgets` row exists.
     tokensUsedToday: v.optional(v.number()),
     tokensResetAt: v.optional(v.number()), // ms timestamp of the current budget window's start
     // Preserved timestamps from the old (Clerk) database on import (Convex's
@@ -465,7 +469,8 @@ export default defineSchema({
     error: v.optional(v.string()),
   })
     .index("by_rulebook", ["rulebookId"])
-    .index("by_game", ["gameId"]),
+    .index("by_game", ["gameId"])
+    .index("by_status", ["status"]),
 
   draftBatches: defineTable({
     draftId: v.id("migrationDrafts"),
@@ -473,7 +478,9 @@ export default defineSchema({
     startPage: v.number(),
     endPage: v.number(),
     markdown: v.string(),
-  }).index("by_draft", ["draftId"]),
+  })
+    .index("by_draft", ["draftId"])
+    .index("by_draft_and_index", ["draftId", "index"]),
 
   draftChunks: defineTable({
     draftId: v.id("migrationDrafts"),
@@ -616,6 +623,17 @@ export default defineSchema({
     emptyGuests: v.number(), // guests who never chatted (bots/crawlers)
     updatedAt: v.number(),
   }),
+
+  // Per-user daily token budget, split off `users` because it's written on every
+  // chat answer (keeping it on the user doc reran every query reading the user).
+  // Missing row / stale `tokensResetAt` = nothing used today.
+  userBudgets: defineTable({
+    userId: v.id("users"),
+    tokensUsedToday: v.number(),
+    tokensResetAt: v.number(), // ms timestamp of the current budget window's start
+  })
+    .index("by_user", ["userId"])
+    .index("by_tokensUsedToday", ["tokensUsedToday"]),
 
   // Running counters for the admin dashboard, maintained incrementally so the
   // dashboard reads a couple of small docs instead of scanning messages/usageLog

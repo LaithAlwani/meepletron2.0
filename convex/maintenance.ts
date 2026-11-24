@@ -14,33 +14,33 @@ const EMPTY_GUEST_MS = 48 * 60 * 60 * 1000;
 const DELETE_PAGE = 500;
 
 /**
- * Nightly safety net: zero every user's daily token counter and stamp the new
- * window. `reserveBudget` already resets lazily on the next request, but a user
- * who never comes back would otherwise keep a stale counter — and it lets the
- * "tokens left today" display stay accurate without wall-clock math in queries.
- * Batched + self-rescheduling so it scales past a single transaction.
+ * Nightly safety net: zero every non-zero daily token counter (`userBudgets`)
+ * and stamp the new window. `reserveBudget` already resets lazily on the next
+ * request, but a user who never comes back would otherwise keep a stale counter
+ * — and it lets the "tokens left today" display stay accurate. Reads only rows
+ * with tokensUsedToday > 0 (via index), not every user. Each zeroed row leaves
+ * that index range, so a batch that fills up just reschedules itself.
+ * `cursor` is unused (kept so the cron's call signature is unchanged).
  */
+const BUDGET_RESET_PAGE = 100;
 export const resetDailyBudgets = internalMutation({
   args: { cursor: v.optional(v.union(v.string(), v.null())) },
-  handler: async (ctx, { cursor }) => {
+  handler: async (ctx) => {
     const now = Date.now();
-    const page = await ctx.db
-      .query("users")
-      .paginate({ cursor: cursor ?? null, numItems: 100 });
+    const rows = await ctx.db
+      .query("userBudgets")
+      .withIndex("by_tokensUsedToday", (q) => q.gt("tokensUsedToday", 0))
+      .take(BUDGET_RESET_PAGE);
 
-    for (const user of page.page) {
-      if ((user.tokensUsedToday ?? 0) !== 0) {
-        await ctx.db.patch("users", user._id, {
-          tokensUsedToday: 0,
-          tokensResetAt: now,
-        });
-      }
+    for (const row of rows) {
+      await ctx.db.patch("userBudgets", row._id, {
+        tokensUsedToday: 0,
+        tokensResetAt: now,
+      });
     }
 
-    if (!page.isDone) {
-      await ctx.scheduler.runAfter(0, internal.maintenance.resetDailyBudgets, {
-        cursor: page.continueCursor,
-      });
+    if (rows.length === BUDGET_RESET_PAGE) {
+      await ctx.scheduler.runAfter(0, internal.maintenance.resetDailyBudgets, {});
     }
   },
 });
@@ -185,9 +185,19 @@ export const cleanupStaleDrafts = internalMutation({
   args: {},
   handler: async (ctx) => {
     const cutoff = Date.now() - STALE_DRAFT_MS;
-    const drafts = await ctx.db.query("migrationDrafts").take(200);
-    for (const draft of drafts) {
-      if (draft.status !== "committed" && draft._creationTime < cutoff) {
+    // Read only non-committed drafts older than the cutoff (committed drafts are
+    // kept forever, so an unfiltered scan mostly read rows it would skip).
+    let budget = 200;
+    for (const status of ["parsing", "parsed", "reviewing"] as const) {
+      if (budget <= 0) break;
+      const drafts = await ctx.db
+        .query("migrationDrafts")
+        .withIndex("by_status", (q) =>
+          q.eq("status", status).lt("_creationTime", cutoff),
+        )
+        .take(budget);
+      budget -= drafts.length;
+      for (const draft of drafts) {
         await ctx.scheduler.runAfter(0, internal.maintenance.deleteDraftCascade, {
           draftId: draft._id,
         });

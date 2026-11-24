@@ -74,6 +74,34 @@ async function familyRulebookIds(
 }
 
 /**
+ * Validate specific rulebook ids against a base game's family WITHOUT
+ * enumerating the family: keep each id whose rulebook exists, is ingested, and
+ * belongs to the base game or one of its expansions (game.parentId === base) —
+ * the same set `familyRulebookIds` would allow. Preserves input order and
+ * returns each kept id with its game id.
+ */
+async function validFamilyRulebooks(
+  ctx: QueryCtx,
+  baseGameId: Id<"games">,
+  rulebookIds: Id<"rulebooks">[],
+): Promise<{ id: Id<"rulebooks">; gameId: Id<"games"> }[]> {
+  const inFamily = new Map<Id<"games">, boolean>([[baseGameId, true]]);
+  const out: { id: Id<"rulebooks">; gameId: Id<"games"> }[] = [];
+  for (const id of rulebookIds) {
+    const rb = await ctx.db.get("rulebooks", id);
+    if (!rb || !rb.isIngested) continue;
+    let ok = inFamily.get(rb.gameId);
+    if (ok === undefined) {
+      const game = await ctx.db.get("games", rb.gameId);
+      ok = game?.parentId === baseGameId;
+      inFamily.set(rb.gameId, ok);
+    }
+    if (ok) out.push({ id, gameId: rb.gameId });
+  }
+  return out;
+}
+
+/**
  * Keep only selected rulebooks that still exist, are ingested, and belong to the
  * chat's game family (base game + its expansions). If none survive (e.g. deleted/
  * re-ingested), fall back to the base game's own ingested rulebooks — so a chat
@@ -84,9 +112,8 @@ async function effectiveRulebookIds(
   baseGameId: Id<"games">,
   selected: Id<"rulebooks">[],
 ): Promise<Id<"rulebooks">[]> {
-  const allowed = await familyRulebookIds(ctx, baseGameId);
-  const valid = selected.filter((rid) => allowed.has(rid));
-  if (valid.length > 0) return valid;
+  const valid = await validFamilyRulebooks(ctx, baseGameId, selected);
+  if (valid.length > 0) return valid.map((r) => r.id);
   return await ingestedRulebookIds(ctx, baseGameId);
 }
 
@@ -250,8 +277,9 @@ export const setSelectedRulebooks = mutation({
     const user = await requireUser(ctx);
     const chat = await loadOwnedChat(ctx, chatId, user._id);
     // Only allow rulebooks from this chat's game family (retrieval trusts this).
-    const allowed = await familyRulebookIds(ctx, chat.gameId);
-    const filtered = rulebookIds.filter((id) => allowed.has(id));
+    const filtered = (
+      await validFamilyRulebooks(ctx, chat.gameId, rulebookIds)
+    ).map((r) => r.id);
     await ctx.db.patch("chats", chatId, { selectedRulebookIds: filtered });
   },
 });
@@ -266,10 +294,13 @@ export const addModuleRulebooks = mutation({
   handler: async (ctx, { chatId, moduleGameId }) => {
     const user = await requireUser(ctx);
     const chat = await loadOwnedChat(ctx, chatId, user._id);
-    const allowed = await familyRulebookIds(ctx, chat.gameId);
-    const toAdd = (await ingestedRulebookIds(ctx, moduleGameId)).filter((id) =>
-      allowed.has(id),
-    );
+    const toAdd = (
+      await validFamilyRulebooks(
+        ctx,
+        chat.gameId,
+        await ingestedRulebookIds(ctx, moduleGameId),
+      )
+    ).map((r) => r.id);
     if (toAdd.length === 0) return;
     const next = new Set([...chat.selectedRulebookIds, ...toAdd]);
     await ctx.db.patch("chats", chatId, {
@@ -292,9 +323,15 @@ export const listMyChats = query({
     // Collapse each game family to a single entry anchored on the base game —
     // chat is base-game-scoped, so a legacy expansion-anchored chat and the base
     // chat lead to the same place. Keep the most-recently-active of the family.
+    // Each distinct game is read once (many chats can share a family).
+    const games = new Map<Id<"games">, Doc<"games"> | null>();
+    const getGame = async (id: Id<"games">) => {
+      if (!games.has(id)) games.set(id, await ctx.db.get("games", id));
+      return games.get(id) ?? null;
+    };
     const byBase = new Map<Id<"games">, (typeof chats)[number]>();
     for (const chat of chats) {
-      const game = await ctx.db.get("games", chat.gameId);
+      const game = await getGame(chat.gameId);
       const baseId =
         game?.isExpansion && game.parentId ? game.parentId : chat.gameId;
       const existing = byBase.get(baseId);
@@ -305,7 +342,7 @@ export const listMyChats = query({
 
     const resolved = await Promise.all(
       [...byBase.entries()].map(async ([baseId, chat]) => {
-        const baseGame = await ctx.db.get("games", baseId);
+        const baseGame = await getGame(baseId);
         const thumbnailUrl = baseGame ? await thumbUrl(ctx, baseGame) : null;
         return {
           ...chat,
@@ -394,13 +431,27 @@ export const getStreamContext = internalQuery({
     // Valid = still-ingested rulebooks anywhere in this chat's game family
     // (base game + expansions). A non-empty selection that went entirely stale
     // falls back to the base game's own rulebooks.
+    // Validate the stored ids directly (no whole-family enumeration per message).
     const stored = chat.selectedRulebookIds;
-    const allowed = await familyRulebookIds(ctx, chat.gameId);
-    const valid = stored.filter((rid) => allowed.has(rid));
-    const baseIngested = await ingestedRulebookIds(ctx, chat.gameId);
-    const selectedRulebookIds =
-      stored.length === 0 ? [] : valid.length > 0 ? valid : baseIngested;
-    const hasIngested = allowed.size > 0;
+    const valid = await validFamilyRulebooks(ctx, chat.gameId, stored);
+    let selectedRulebookIds: Id<"rulebooks">[];
+    // Distinct games behind the effective selection, for the source titles.
+    const gameIds = new Set<Id<"games">>();
+    if (stored.length === 0) {
+      selectedRulebookIds = [];
+    } else if (valid.length > 0) {
+      selectedRulebookIds = valid.map((r) => r.id);
+      for (const r of valid) gameIds.add(r.gameId);
+    } else {
+      selectedRulebookIds = await ingestedRulebookIds(ctx, chat.gameId);
+      if (selectedRulebookIds.length > 0) gameIds.add(chat.gameId);
+    }
+    // Does the family have ANY ingested rulebook? Trivially yes when something is
+    // selected (every selected id is a family member); only the empty case, which
+    // picks the static reply, needs the full family enumeration.
+    const hasIngested =
+      selectedRulebookIds.length > 0 ||
+      (await familyRulebookIds(ctx, chat.gameId)).size > 0;
 
     const config = await ctx.db.query("siteConfig").order("desc").take(1);
     // A limit of 0 is valid — it means "no prior conversation." Floor the FETCH
@@ -428,11 +479,6 @@ export const getStreamContext = internalQuery({
     const query = lastUser?.content ?? "";
 
     // Source titles for the effective rulebooks (distinct games).
-    const gameIds = new Set<Id<"games">>();
-    for (const rid of selectedRulebookIds) {
-      const rb = await ctx.db.get("rulebooks", rid);
-      if (rb) gameIds.add(rb.gameId);
-    }
     const sourceTitles: string[] = [];
     for (const gid of gameIds) {
       const g = await ctx.db.get("games", gid);
@@ -564,12 +610,30 @@ export const reserveBudget = internalMutation({
   handler: async (ctx, { userId, todayStartMs }) => {
     const user = await ctx.db.get("users", userId);
     if (!user) throw new Error("User not found");
-    let used = user.tokensUsedToday ?? 0;
-    if ((user.tokensResetAt ?? 0) < todayStartMs) {
-      used = 0;
-      await ctx.db.patch("users", userId, {
-        tokensUsedToday: 0,
-        tokensResetAt: todayStartMs,
+    const budget = await ctx.db
+      .query("userBudgets")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .unique();
+    let used: number;
+    if (budget) {
+      used = finite(budget.tokensUsedToday);
+      if (budget.tokensResetAt < todayStartMs) {
+        used = 0;
+        await ctx.db.patch("userBudgets", budget._id, {
+          tokensUsedToday: 0,
+          tokensResetAt: todayStartMs,
+        });
+      }
+    } else {
+      // First request since the budget moved off `users`: carry over today's
+      // usage from the deprecated user fields if they're from today.
+      const legacyResetAt = user.tokensResetAt ?? 0;
+      const fresh = legacyResetAt >= todayStartMs;
+      used = fresh ? finite(user.tokensUsedToday) : 0;
+      await ctx.db.insert("userBudgets", {
+        userId,
+        tokensUsedToday: used,
+        tokensResetAt: fresh ? legacyResetAt : todayStartMs,
       });
     }
     // Admins have no daily cap.
@@ -639,7 +703,8 @@ export const saveAssistantMessage = internalMutation({
       costUsd += rowCost(u.model, promptTokens, completionTokens);
       if (u.purpose === "chat-answer") answerModel = u.model;
     }
-    await recordUsage(ctx, usage);
+    // One adminCounters write for both the usage tokens and the +1 AI message.
+    await recordUsage(ctx, usage, { ai: 1 });
 
     await ctx.db.insert("messages", {
       chatId,
@@ -651,17 +716,30 @@ export const saveAssistantMessage = internalMutation({
       costUsd: costUsd || undefined,
       answerModel,
     });
-    await recordMessages(ctx, { ai: 1 });
     await ctx.db.patch("chats", chatId, {
       lastMessage: content.slice(0, 200),
       lastMessageAt: Date.now(),
     });
 
-    const user = await ctx.db.get("users", userId);
-    if (user) {
-      await ctx.db.patch("users", userId, {
-        tokensUsedToday: finite(user.tokensUsedToday) + total,
-      });
+    // The budget lives in `userBudgets` (not `users`) so this per-answer write
+    // doesn't rerun every query that reads the user doc. reserveBudget creates
+    // the row before any token-spending answer; the insert is only a fallback.
+    if (total > 0) {
+      const budget = await ctx.db
+        .query("userBudgets")
+        .withIndex("by_user", (q) => q.eq("userId", userId))
+        .unique();
+      if (budget) {
+        await ctx.db.patch("userBudgets", budget._id, {
+          tokensUsedToday: finite(budget.tokensUsedToday) + total,
+        });
+      } else if (await ctx.db.get("users", userId)) {
+        await ctx.db.insert("userBudgets", {
+          userId,
+          tokensUsedToday: total,
+          tokensResetAt: Date.now(),
+        });
+      }
     }
   },
 });

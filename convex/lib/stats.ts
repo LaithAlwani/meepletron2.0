@@ -63,12 +63,17 @@ export async function recordMessages(
 /**
  * Add LLM usage to the all-time counters and the current month's bucket. Rows
  * are aggregated per model. Called from the same mutation that writes usageLog.
+ * `messages` optionally folds message-count deltas into the SAME adminCounters
+ * patch, so a saved answer costs one singleton write instead of two.
  */
 export async function recordUsage(
   ctx: MutationCtx,
   rows: { model: string; promptTokens: number; completionTokens: number }[],
+  messages: { user?: number; ai?: number } = {},
 ): Promise<void> {
-  if (rows.length === 0) return;
+  const user = messages.user ?? 0;
+  const ai = messages.ai ?? 0;
+  if (rows.length === 0 && user === 0 && ai === 0) return;
   const folded = rows.map((r) => ({
     model: r.model,
     input: finite(r.promptTokens),
@@ -77,8 +82,18 @@ export async function recordUsage(
 
   const c = await counterRow(ctx);
   await ctx.db.patch("adminCounters", c._id, {
-    tokensByModel: foldTokens(c.tokensByModel, folded),
+    ...(folded.length > 0
+      ? { tokensByModel: foldTokens(c.tokensByModel, folded) }
+      : {}),
+    ...(user !== 0 || ai !== 0
+      ? {
+          messagesByUser: Math.max(0, c.messagesByUser + user),
+          messagesByAi: Math.max(0, c.messagesByAi + ai),
+          messagesTotal: Math.max(0, c.messagesTotal + user + ai),
+        }
+      : {}),
   });
+  if (folded.length === 0) return;
 
   const mk = monthKey(Date.now());
   const existing = await ctx.db

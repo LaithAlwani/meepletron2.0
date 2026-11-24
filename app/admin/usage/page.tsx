@@ -1,20 +1,81 @@
 "use client";
 
-import { useQuery } from "convex/react";
+import { useEffect, useState } from "react";
+import { useConvex } from "convex/react";
+import type { FunctionReturnType } from "convex/server";
 import { api } from "@/convex/_generated/api";
+import { buttonClasses } from "@/components/ui/buttonStyles";
 
 const usd = (n: number) =>
   `$${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}`;
 const num = (n: number) => n.toLocaleString();
 
-export default function AdminUsagePage() {
-  const summary = useQuery(api.admin.usageSummary);
-  const ingestion = useQuery(api.admin.ingestionCosts);
+/** How far back the usage summary looks. */
+const WINDOW_DAYS = 30;
 
-  if (summary === undefined) return <p className="text-muted">Loading…</p>;
+type Summary = FunctionReturnType<typeof api.admin.usageSummary>;
+type Ingestion = FunctionReturnType<typeof api.admin.ingestionCosts>;
+
+export default function AdminUsagePage() {
+  // One-shot fetches (+ a Refresh button) instead of live subscriptions: the
+  // usage log gains rows on every chat answer, so a subscription re-read up to
+  // 20k rows per message while this page was open.
+  const convex = useConvex();
+  const [summary, setSummary] = useState<Summary | undefined>(undefined);
+  const [ingestion, setIngestion] = useState<Ingestion | undefined>(undefined);
+  const [error, setError] = useState<string | null>(null);
+  // Bumped by Refresh; `loaded` trails it until that fetch settles.
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [loaded, setLoaded] = useState(-1);
+  const loading = loaded !== refreshKey;
+
+  useEffect(() => {
+    let cancelled = false;
+    const sinceMs = Date.now() - WINDOW_DAYS * 24 * 60 * 60 * 1000;
+    Promise.all([
+      convex.query(api.admin.usageSummary, { sinceMs }),
+      convex.query(api.admin.ingestionCosts, {}),
+    ])
+      .then(([s, i]) => {
+        if (cancelled) return;
+        setSummary(s);
+        setIngestion(i);
+        setError(null);
+      })
+      .catch((e: unknown) => {
+        if (!cancelled) {
+          setError(e instanceof Error ? e.message : "Failed to load usage");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoaded(refreshKey);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [convex, refreshKey]);
+
+  if (summary === undefined) {
+    return (
+      <p className="text-muted">{error ? `Couldn't load usage: ${error}` : "Loading…"}</p>
+    );
+  }
 
   return (
     <div className="space-y-6">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-xs text-muted">
+          Last {WINDOW_DAYS} days{error ? ` · refresh failed: ${error}` : ""}
+        </p>
+        <button
+          type="button"
+          onClick={() => setRefreshKey((k) => k + 1)}
+          disabled={loading}
+          className={buttonClasses("ghost", "sm")}
+        >
+          {loading ? "Refreshing…" : "Refresh"}
+        </button>
+      </div>
       <div className="grid gap-4 sm:grid-cols-3">
         <Stat label="Estimated cost" value={usd(summary.totalCost)} />
         <Stat label="Total tokens" value={num(summary.totalTokens)} />
