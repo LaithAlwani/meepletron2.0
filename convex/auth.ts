@@ -72,15 +72,6 @@ export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
         tokensUsedToday: 0,
         tokensResetAt: Date.now(),
       });
-      // Claim any plays a friend recorded them in by email, so a new sign-up
-      // inherits their history. Scheduled so it can batch out of band.
-      const user = await ctx.db.get("users", userId);
-      if (user?.email) {
-        await ctx.scheduler.runAfter(0, internal.plays.claimPlaysByEmail, {
-          userId,
-          email: user.email,
-        });
-      }
     },
   },
 });

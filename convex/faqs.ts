@@ -1,4 +1,4 @@
-import { v, ConvexError } from "convex/values";
+import { v } from "convex/values";
 import {
   query,
   mutation,
@@ -9,7 +9,7 @@ import {
 } from "./_generated/server";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
-import { getCurrentUser, requireUser, requireAdmin } from "./lib/auth";
+import { getCurrentUser, requireAdmin } from "./lib/auth";
 import { generateText } from "ai";
 import { resolveContentModel, buildAnswer, type Annotation } from "./rag";
 import { stripIconTokens } from "./lib/prompts";
@@ -225,41 +225,3 @@ export const listForGame = query({
   },
 });
 
-/** Cast/toggle a helpfulness vote on a FAQ item (one vote per user). */
-export const voteFaq = mutation({
-  args: {
-    faqId: v.id("gameFaqs"),
-    vote: v.union(v.literal("up"), v.literal("down")),
-  },
-  handler: async (ctx, { faqId, vote }) => {
-    const user = await requireUser(ctx);
-    const faq = await ctx.db.get("gameFaqs", faqId);
-    if (!faq) throw new ConvexError("That FAQ no longer exists.");
-    const existing = await ctx.db
-      .query("faqVotes")
-      .withIndex("by_user_and_faq", (q) =>
-        q.eq("userId", user._id).eq("faqId", faqId),
-      )
-      .unique();
-
-    let helpful = faq.helpful;
-    let notHelpful = faq.notHelpful;
-    const inc = (vt: "up" | "down", d: number) => {
-      if (vt === "up") helpful = Math.max(0, helpful + d);
-      else notHelpful = Math.max(0, notHelpful + d);
-    };
-
-    if (!existing) {
-      await ctx.db.insert("faqVotes", { userId: user._id, faqId, vote });
-      inc(vote, +1);
-    } else if (existing.vote === vote) {
-      await ctx.db.delete("faqVotes", existing._id);
-      inc(vote, -1);
-    } else {
-      await ctx.db.patch("faqVotes", existing._id, { vote });
-      inc(existing.vote, -1);
-      inc(vote, +1);
-    }
-    await ctx.db.patch("gameFaqs", faqId, { helpful, notHelpful });
-  },
-});

@@ -3,6 +3,7 @@ import { query, mutation } from "./_generated/server";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
 import { getCurrentUser, requireUser } from "./lib/auth";
+import { applyCollectionCountDelta } from "./bggSync";
 
 /**
  * Collection status. A game the user has any relationship with is one
@@ -68,18 +69,19 @@ async function setFlags(
   if (!existing) {
     const game = await ctx.db.get("games", gameId);
     if (!game) throw new ConvexError("Game not found");
-    await ctx.db.insert("bggCollection", {
-      ...newRowFields(user._id, game),
-      ...patch,
-    });
+    const row = { ...newRowFields(user._id, game), ...patch };
+    await ctx.db.insert("bggCollection", row);
+    await applyCollectionCountDelta(ctx, user._id, null, row);
     return;
   }
 
   const merged = { ...existing, ...patch };
   if (!isMeaningful(merged)) {
     await ctx.db.delete("bggCollection", existing._id);
+    await applyCollectionCountDelta(ctx, user._id, existing, null);
   } else {
     await ctx.db.patch("bggCollection", existing._id, patch);
+    await applyCollectionCountDelta(ctx, user._id, existing, merged);
   }
 }
 

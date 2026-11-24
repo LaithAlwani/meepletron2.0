@@ -51,12 +51,6 @@ export async function deleteUserAppData(
   ctx: MutationCtx,
   userId: Id<"users">,
 ): Promise<void> {
-  const favorites = await ctx.db
-    .query("favorites")
-    .withIndex("by_user", (q) => q.eq("userId", userId))
-    .take(1000);
-  for (const f of favorites) await ctx.db.delete("favorites", f._id);
-
   const chats = await ctx.db
     .query("chats")
     .withIndex("by_user", (q) => q.eq("userId", userId))
@@ -96,7 +90,4 @@ export async function deleteUserAppData(
   // than awaited on purpose: `deleteUserAndAuth` removes the user row moments
   // later, so the cascade keys off the raw id and never reads the user.
   await ctx.scheduler.runAfter(0, internal.bggSync.purgeUserBggData, { userId });
-  // All of the user's plays (hand-logged + imported), their participant links,
-  // and their saved people cascade the same way.
-  await ctx.scheduler.runAfter(0, internal.plays.purgeUserPlays, { userId });
 }

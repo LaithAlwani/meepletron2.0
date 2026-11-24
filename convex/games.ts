@@ -5,7 +5,6 @@ import {
   mutation,
   internalQuery,
   internalMutation,
-  internalAction,
   type QueryCtx,
   type MutationCtx,
 } from "./_generated/server";
@@ -1045,38 +1044,6 @@ export const getById = query({
 });
 
 /**
- * A base game's expansions, for the log-play wizard's checklist. Pass any game
- * in the family — an expansion resolves to its parent first, since a play is
- * always logged against the base game.
- */
-export const expansionsOf = query({
-  args: { gameId: v.id("games") },
-  handler: async (ctx, { gameId }) => {
-    const game = await ctx.db.get("games", gameId);
-    if (!game) return [];
-    const baseId = game.isExpansion && game.parentId ? game.parentId : game._id;
-    const rows = await ctx.db
-      .query("games")
-      .withIndex("by_parent", (q) => q.eq("parentId", baseId))
-      .take(100);
-    rows.sort((a, b) =>
-      (a.sortTitle ?? a.title.toLowerCase()).localeCompare(
-        b.sortTitle ?? b.title.toLowerCase(),
-      ),
-    );
-    return await Promise.all(
-      rows.map(async (e) => ({
-        _id: e._id,
-        title: e.title,
-        bggId: e.bggId ?? null,
-        year: e.year ?? null,
-        thumbUrl: (await coverUrls(ctx, e)).thumbnailUrl,
-      })),
-    );
-  },
-});
-
-/**
  * A game detail by slug (SEO-friendly URLs), falling back to id so old
  * `/boardgames/<id>` links keep resolving.
  */
@@ -1526,17 +1493,17 @@ const ENRICH_RETRY_TTL_MS = 6 * 60 * 60 * 1000;
 export const dueForEnrich = internalQuery({
   args: { limit: v.number() },
   handler: async (ctx, { limit }) => {
-    const now = Date.now();
+    // Range on the check time so we read only due stubs (never-checked sort
+    // first), not 500 stubs to keep a dozen.
+    const cutoff = Date.now() - ENRICH_RETRY_TTL_MS;
     const stubs = await ctx.db
       .query("games")
-      .withIndex("by_isStub_and_isExpansion", (q) => q.eq("isStub", true))
-      .take(500);
-    return stubs
-      .filter(
-        (g) =>
-          !!g.bggId &&
-          now - (g.bggCheckedAt ?? 0) >= ENRICH_RETRY_TTL_MS,
+      .withIndex("by_isStub_and_bggCheckedAt", (q) =>
+        q.eq("isStub", true).lte("bggCheckedAt", cutoff),
       )
+      .take(limit * 4);
+    return stubs
+      .filter((g) => !!g.bggId)
       .slice(0, limit)
       .map((g) => ({ gameId: g._id, bggId: g.bggId as string }));
   },
@@ -1564,27 +1531,6 @@ const enrichMetaValidator = v.object({
  * already been curated — an automated import must never clobber an admin's work.
  * Always stamps `bggCheckedAt` so a failed family doesn't re-loop the sweep.
  */
-/**
- * One-off backfill of the denormalized sort keys on games created before they
- * existed. Batched + idempotent (only touches rows still missing sortTitle) —
- * re-run until it reports done.
- */
-export const backfillSortKeys = internalMutation({
-  args: {},
-  handler: async (ctx) => {
-    const rows = await ctx.db
-      .query("games")
-      .filter((q) => q.eq(q.field("sortTitle"), undefined))
-      .take(400);
-    for (const g of rows) {
-      await ctx.db.patch("games", g._id, {
-        ...sortKeys({ title: g.title, year: g.year, bgg: g.bgg }),
-      });
-    }
-    return { patched: rows.length, done: rows.length < 400 };
-  },
-});
-
 export const applyStubEnrichment = internalMutation({
   args: {
     gameId: v.id("games"),
@@ -1670,50 +1616,6 @@ export const applyStubEnrichment = internalMutation({
       if (game.parentId) await refreshChatReady(ctx, game.parentId);
       await refreshChatReady(ctx, gameId);
     }
-  },
-});
-
-/**
- * One-time, idempotent, resumable migration: move each game's `description` into
- * the gameContent sidecar and clear it off the game doc, so card/list reads stop
- * paying for it. Safe to run while serving traffic — gameDetail falls back to
- * the game doc for any row not yet moved. Drive it with the action below:
- *
- *   npx convex run games:backfillGameContentAll        (dev)
- *   npx convex run games:backfillGameContentAll --prod  (prod)
- */
-export const backfillGameContentPage = internalMutation({
-  args: { cursor: v.union(v.string(), v.null()) },
-  handler: async (ctx, { cursor }) => {
-    const res = await ctx.db.query("games").paginate({ numItems: 200, cursor });
-    let moved = 0;
-    for (const g of res.page) {
-      if (g.description === undefined) continue;
-      await setGameDescription(ctx, g._id, g.description);
-      await ctx.db.patch("games", g._id, { description: undefined });
-      moved++;
-    }
-    return { moved, isDone: res.isDone, cursor: res.continueCursor };
-  },
-});
-
-export const backfillGameContentAll = internalAction({
-  args: {},
-  handler: async (ctx): Promise<{ moved: number; pages: number }> => {
-    let cursor: string | null = null;
-    let moved = 0;
-    let pages = 0;
-    for (;;) {
-      const r: { moved: number; isDone: boolean; cursor: string } =
-        await ctx.runMutation(internal.games.backfillGameContentPage, {
-          cursor,
-        });
-      moved += r.moved;
-      pages++;
-      if (r.isDone) break;
-      cursor = r.cursor;
-    }
-    return { moved, pages };
   },
 });
 

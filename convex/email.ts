@@ -6,7 +6,6 @@ import { Resend } from "resend";
 import { render } from "@react-email/render";
 import { internalAction } from "./_generated/server";
 import { VerificationCodeEmail } from "./emails/VerificationCodeEmail";
-import { PlayTagEmail } from "./emails/PlayTagEmail";
 import { NotificationEmail } from "./emails/NotificationEmail";
 import { ContactAdminEmail } from "./emails/ContactAdminEmail";
 import { ContactAutoReplyEmail } from "./emails/ContactAutoReplyEmail";
@@ -78,37 +77,6 @@ export const sendContactEmails = internalAction({
       if (error) console.error("Failed to send contact auto-reply:", error);
     } catch (err) {
       console.error("Failed to send contact auto-reply:", err);
-    }
-  },
-});
-
-/**
- * Tell someone they were added to a logged play by email, with a CTA to view it.
- * Best-effort; a send failure is logged, never thrown (mustn't block logging).
- */
-export const sendPlayTagEmail = internalAction({
-  args: {
-    to: v.string(),
-    recipientName: v.optional(v.string()),
-    ownerName: v.string(),
-    playTitle: v.string(),
-    playUrl: v.string(),
-  },
-  handler: async (_ctx, { to, recipientName, ownerName, playTitle, playUrl }) => {
-    try {
-      const { error } = await sendEmail({
-        to,
-        subject: `${ownerName} added you to a play of ${playTitle}`,
-        element: React.createElement(PlayTagEmail, {
-          ownerName,
-          playTitle,
-          playUrl,
-          recipientName,
-        }),
-      });
-      if (error) console.error("Failed to send play-tag email:", error);
-    } catch (err) {
-      console.error("Failed to send play-tag email:", err);
     }
   },
 });

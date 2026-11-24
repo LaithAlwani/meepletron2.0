@@ -3,13 +3,10 @@ import { paginationOptsValidator } from "convex/server";
 import {
   query,
   mutation,
-  internalMutation,
   type QueryCtx,
 } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
 import { getCurrentUser, requireUser } from "./lib/auth";
-import { canViewProfile, friendCount } from "./friends";
-import { publicParticipantPlayIds } from "./plays";
 import { DEFAULT_CATEGORY, isTopCategory } from "./lib/topGamesCategories";
 import { isGameSort } from "./lib/gameSort";
 import { thumbUrl as gameThumbUrl } from "./lib/gameCover";
@@ -81,24 +78,9 @@ async function authorInfo(ctx: QueryCtx, userId: Id<"users">) {
   };
 }
 
-/**
- * The three headline counts shown on a profile (public content only) — surfaced
- * even for a private profile, whose counts are visible while its content isn't.
- */
-async function profileCounts(ctx: QueryCtx, user: Doc<"users">) {
-  const lists = await ctx.db
-    .query("topGamesLists")
-    .withIndex("by_user", (q) => q.eq("userId", user._id))
-    .collect();
-  // Plays counts every public play the user is in (own + tagged), matching the
-  // profile Plays tab.
-  const playIds = await publicParticipantPlayIds(ctx, user);
-  return {
-    plays: playIds.length,
-    lists: lists.filter((r) => r.visibility === "public" && r.status === "finalized")
-      .length,
-    friends: await friendCount(ctx, user._id),
-  };
+/** A profile's content is visible to everyone when public, else only to its owner. */
+function canViewProfile(target: Doc<"users">, viewerId: Id<"users"> | null): boolean {
+  return (target.publicProfile?.isPublic ?? false) || viewerId === target._id;
 }
 
 /** The bggCollection flags a public collection list can be drawn from. */
@@ -130,36 +112,6 @@ function collectionByFlag(
         i.eq("userId", userId).eq("prevOwned", true),
       );
   }
-}
-
-/**
- * A shared "list of games" section for the public profile (owned / for-sale /
- * wishlist), drawn from the user's BGG collection: a small alphabetical sample
- * (`total` is the sample size, capped at `limit`). A public profile is a
- * showcase, not the full collection — the [list] page paginates the rest.
- */
-async function collectionSection(
-  ctx: QueryCtx,
-  userId: Id<"users">,
-  field: CollectionFlag,
-  limit: number,
-) {
-  const rows = await collectionByFlag(ctx, userId, field).take(limit);
-  const items = await Promise.all(
-    rows.map(async (r) => {
-      // The row carries its own title + BGG thumbnail URL; only read the game
-      // (for its cover and slug) when the row has no thumbnail.
-      const g =
-        !r.thumbnailUrl && r.gameId ? await ctx.db.get("games", r.gameId) : null;
-      return {
-        gameId: r.gameId ?? null,
-        title: g?.title ?? r.title,
-        slug: g?.slug ?? null,
-        thumbUrl: r.thumbnailUrl ?? (g ? await gameThumbUrl(ctx, g) : null),
-      };
-    }),
-  );
-  return { total: rows.length, items };
 }
 
 /** Rank (1-based) of a game within a list's entries, or null if absent. */
@@ -517,25 +469,6 @@ export const setVisibility = mutation({
   },
 });
 
-/**
- * One-off backfill: stamp the default category on any list created before the
- * category field existed. Safe to re-run (only patches missing values).
- */
-export const backfillCategory = internalMutation({
-  args: {},
-  handler: async (ctx) => {
-    const rows = await ctx.db.query("topGamesLists").collect();
-    let patched = 0;
-    for (const r of rows) {
-      if (r.category === undefined) {
-        await ctx.db.patch("topGamesLists", r._id, { category: DEFAULT_CATEGORY });
-        patched++;
-      }
-    }
-    return { patched };
-  },
-});
-
 /** Delete a list (owner only; silent no-op otherwise). */
 export const remove = mutation({
   args: { id: v.id("topGamesLists") },
@@ -577,20 +510,6 @@ export const getList = query({
   },
 });
 
-/** Public lists for the sitemap — id + updatedAt only, cheap to read in bulk. */
-export const sitemapLists = query({
-  args: {},
-  handler: async (ctx) => {
-    const lists = await ctx.db
-      .query("topGamesLists")
-      .withIndex("by_visibility_category_year", (q) =>
-        q.eq("visibility", "public"),
-      )
-      .take(10000);
-    return lists.map((l) => ({ id: l._id, updatedAt: l.updatedAt }));
-  },
-});
-
 /** A user's public profile: their public finalized lists. Null if no such user. */
 export const publicProfile = query({
   args: { username: v.string() },
@@ -606,25 +525,15 @@ export const publicProfile = query({
     const viewer = await getCurrentUser(ctx);
     const isSelf = viewer?._id === user._id;
     const author = await authorInfo(ctx, user._id);
-    // Counts show even for a private profile — the numbers are public, the
-    // content behind them isn't.
-    const counts = await profileCounts(ctx, user);
-
-    // A private profile only opens up to the owner or an accepted friend;
-    // everyone else sees just the handle + avatar + counts and an "Add friend"
-    // prompt (real name withheld — private shows the handle only).
-    const canView = await canViewProfile(ctx, user, viewer?._id ?? null);
+    // A private profile only opens up to its owner; everyone else sees just
+    // the handle + avatar (real name withheld).
+    const canView = canViewProfile(user, viewer?._id ?? null);
     if (!canView) {
       return {
         author: author ? { ...author, realName: null } : null,
         private: true,
         isSelf,
-        counts,
         lists: [],
-        owned: null,
-        forTrade: null,
-        wishlist: null,
-        prevOwned: null,
       };
     }
 
@@ -643,12 +552,7 @@ export const publicProfile = query({
       author,
       private: false,
       isSelf,
-      counts,
       lists,
-      owned: await collectionSection(ctx, user._id, "own", 30),
-      forTrade: await collectionSection(ctx, user._id, "forTrade", 30),
-      wishlist: await collectionSection(ctx, user._id, "wishlist", 30),
-      prevOwned: await collectionSection(ctx, user._id, "prevOwned", 30),
     };
   },
 });
@@ -699,7 +603,7 @@ export const publicCollectionMeta = query({
     return {
       author: await authorInfo(ctx, user._id),
       // Collections are visible whenever the profile is (public / friend / self).
-      shared: await canViewProfile(ctx, user, viewer?._id ?? null),
+      shared: canViewProfile(user, viewer?._id ?? null),
     };
   },
 });
@@ -722,7 +626,7 @@ export const publicCollectionPage = query({
     const user = await userByUsername(ctx, username);
     if (!user) return empty;
     const viewer = await getCurrentUser(ctx);
-    if (!(await canViewProfile(ctx, user, viewer?._id ?? null))) return empty;
+    if (!(canViewProfile(user, viewer?._id ?? null))) return empty;
 
     const field = collectionField(list);
     const thumbItem = async (

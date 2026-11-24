@@ -149,91 +149,12 @@ export const myBudget = query({
   },
 });
 
-/** The current user's activity stats for the profile page. */
-export const myStats = query({
-  args: {},
-  handler: async (ctx) => {
-    const user = await getCurrentUser(ctx);
-    if (!user) return null;
-    const chats = await ctx.db
-      .query("chats")
-      .withIndex("by_user", (q) => q.eq("userId", user._id))
-      .take(500);
-    let userMessages = 0;
-    let aiMessages = 0;
-    let correctRatings = 0;
-    let wrongRatings = 0;
-    for (const c of chats) {
-      const msgs = await ctx.db
-        .query("messages")
-        .withIndex("by_chat", (q) => q.eq("chatId", c._id))
-        .take(1000);
-      for (const m of msgs) {
-        if (m.role === "user") userMessages++;
-        else {
-          aiMessages++;
-          if (m.rating === "up") correctRatings++;
-          else if (m.rating === "down") wrongRatings++;
-        }
-      }
-    }
-    return {
-      totalChats: chats.length,
-      userMessages,
-      aiMessages,
-      correctRatings,
-      wrongRatings,
-    };
-  },
-});
-
 /** Update the current user's display name. */
 export const updateProfile = mutation({
   args: { name: v.string() },
   handler: async (ctx, { name }) => {
     const user = await requireUser(ctx);
     await ctx.db.patch("users", user._id, { name: name.trim() || undefined });
-  },
-});
-
-/**
- * Find members by @username prefix, for tagging players in a play log / @-
- * mentions. Only users with a public username are discoverable; guests are
- * excluded. An index range on `by_username_lower` (reads ~8 rows, not the users
- * table); the caller must be signed in. Returns minimal public fields.
- */
-export const searchUsers = query({
-  args: { term: v.string() },
-  handler: async (ctx, { term }) => {
-    const me = await getCurrentUser(ctx);
-    if (!me) return [];
-    const t = term.trim().replace(/^@/, "").toLowerCase();
-    if (t.length < 2) return [];
-    const rows = await ctx.db
-      .query("users")
-      .withIndex("by_username_lower", (q) =>
-        q.gte("usernameLower", t).lt("usernameLower", t + "￿"),
-      )
-      .take(9); // 8 + room to drop the caller
-    const matched = rows
-      .filter((u) => u._id !== me._id && u.isAnonymous !== true && !!u.username)
-      .slice(0, 8);
-    return await Promise.all(
-      matched.map(async (u) => {
-        // Show the real name in results only for users findable by name;
-        // otherwise the public username stands in for it.
-        const findable = u.publicProfile?.findableByName ?? false;
-        return {
-          _id: u._id,
-          name: (findable ? u.name : null) ?? u.username ?? "Player",
-          username: u.username ?? null,
-          avatarUrl:
-            (await imageUrl(ctx, u.avatarKey, u.avatarStorageId)) ??
-            u.image ??
-            null,
-        };
-      }),
-    );
   },
 });
 
@@ -461,6 +382,14 @@ export const adminListUsers = query({
       if (c.lastMessageAt > cur.lastActiveAt) cur.lastActiveAt = c.lastMessageAt;
       activity.set(c.userId, cur);
     }
+    // Today's usage lives in userBudgets (zeroed nightly); only non-zero rows.
+    const used = new Map<string, number>();
+    for (const b of await ctx.db
+      .query("userBudgets")
+      .withIndex("by_tokensUsedToday", (q) => q.gt("tokensUsedToday", 0))
+      .take(1000)) {
+      used.set(b.userId, b.tokensUsedToday);
+    }
 
     return {
       hitLimit: chats.length === CHAT_SCAN,
@@ -472,7 +401,7 @@ export const adminListUsers = query({
           email: u.email,
           role: u.role ?? "user",
           isAnonymous: u.isAnonymous ?? false,
-          tokensUsedToday: finite(u.tokensUsedToday),
+          tokensUsedToday: used.get(u._id) ?? 0,
           joinedAt: u._creationTime,
           chats: a?.chats ?? 0,
           // Best available "last seen" — the site tracks no login timestamp, so
@@ -491,13 +420,17 @@ export const adminGetUser = query({
     await requireAdmin(ctx);
     const u = await ctx.db.get("users", userId);
     if (!u) return null;
+    const budget = await ctx.db
+      .query("userBudgets")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .unique();
     return {
       _id: u._id,
       name: u.name,
       email: u.email,
       role: u.role ?? "user",
       isAnonymous: u.isAnonymous ?? false,
-      tokensUsedToday: finite(u.tokensUsedToday),
+      tokensUsedToday: finite(budget?.tokensUsedToday),
     };
   },
 });
@@ -571,9 +504,5 @@ export const adoptReservedRow = internalMutation({
       updatedAt: reserved.updatedAt,
     });
     await ctx.db.delete("users", reserved._id);
-    await ctx.scheduler.runAfter(0, internal.plays.claimPlaysByEmail, {
-      userId,
-      email: user.email,
-    });
   },
 });

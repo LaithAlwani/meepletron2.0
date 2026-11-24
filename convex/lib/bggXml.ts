@@ -1,9 +1,6 @@
 import { XMLParser } from "fast-xml-parser";
 import type { Infer } from "convex/values";
-import type {
-  bggCollectionItemValidator,
-  bggPlayItemValidator,
-} from "./bggSyncTypes";
+import type { bggCollectionItemValidator } from "./bggSyncTypes";
 import { decodeEntities } from "./bggThing";
 
 /**
@@ -20,7 +17,6 @@ import { decodeEntities } from "./bggThing";
  */
 
 export type BggCollectionItem = Infer<typeof bggCollectionItemValidator>;
-export type BggPlayItem = Infer<typeof bggPlayItemValidator>;
 
 const parser = new XMLParser({
   ignoreAttributes: false,
@@ -98,10 +94,6 @@ export type ParseFailure = {
 
 export type ParsedCollection =
   | { ok: true; items: BggCollectionItem[]; total: number }
-  | ParseFailure;
-
-export type ParsedPlays =
-  | { ok: true; plays: BggPlayItem[]; total: number }
   | ParseFailure;
 
 /**
@@ -188,62 +180,3 @@ export function parseCollectionXml(xml: string): ParsedCollection {
   };
 }
 
-export function parsePlaysXml(xml: string): ParsedPlays {
-  let doc: Node;
-  try {
-    doc = parser.parse(xml);
-  } catch {
-    return { ok: false, reason: "unparseable" };
-  }
-
-  const failure = classify(doc);
-  if (failure) return failure;
-
-  const container = doc?.plays;
-  if (!container) return { ok: false, reason: "unparseable" };
-
-  const raw: Node[] = Array.isArray(container.play) ? container.play : [];
-  const plays: BggPlayItem[] = [];
-
-  for (const node of raw) {
-    const playId = attr(node, "id");
-    const item = node.item;
-    const bggId = attr(item, "objectid");
-    const date = attr(node, "date");
-    if (!playId || !bggId || !date) continue;
-
-    const playerNodes: Node[] = Array.isArray(node.players?.player)
-      ? node.players.player
-      : [];
-    const players = playerNodes
-      .map((p) => ({
-        name: attr(p, "name") ?? "",
-        username: attr(p, "username"),
-        score: attr(p, "score"),
-        win: boolAttr(p, "win") || undefined,
-        isNew: boolAttr(p, "new") || undefined,
-        color: attr(p, "color"),
-      }))
-      .filter((p) => p.name);
-
-    plays.push({
-      playId,
-      bggId,
-      title: attr(item, "name") ?? "Unknown game",
-      date,
-      quantity: numAttr(node, "quantity") ?? 1,
-      lengthMinutes: positive(numAttr(node, "length")),
-      incomplete: boolAttr(node, "incomplete") || undefined,
-      location: attr(node, "location"),
-      comments: text(node.comments),
-      players: players.length ? players : undefined,
-    });
-  }
-
-  const total = Number(attr(container, "total") ?? plays.length);
-  return {
-    ok: true,
-    plays,
-    total: Number.isFinite(total) ? total : plays.length,
-  };
-}

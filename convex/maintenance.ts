@@ -45,20 +45,6 @@ export const resetDailyBudgets = internalMutation({
   },
 });
 
-/**
- * One-off repair: rewrite any NaN/Infinity token counters left behind by the
- * earlier bug (a NaN passes `v.number()` and can't be caught by `?? 0`).
- * Idempotent — safe to run repeatedly. Kicks off both table repairs. Convex
- * allows only one paginated query per function, so each table gets its own.
- */
-export const repairTokenCounters = internalMutation({
-  args: {},
-  handler: async (ctx) => {
-    await ctx.scheduler.runAfter(0, internal.maintenance.repairUserCounters, {});
-    await ctx.scheduler.runAfter(0, internal.maintenance.repairUsageLog, {});
-  },
-});
-
 export const repairUserCounters = internalMutation({
   args: { cursor: v.optional(v.union(v.string(), v.null())) },
   handler: async (ctx, { cursor }) => {

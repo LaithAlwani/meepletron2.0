@@ -7,7 +7,7 @@
  *
  * Run: npm run test:bgg-xml
  */
-import { parseCollectionXml, parsePlaysXml } from "../convex/lib/bggXml.ts";
+import { parseCollectionXml } from "../convex/lib/bggXml.ts";
 
 let failures = 0;
 function check(label: string, cond: boolean, extra?: unknown) {
@@ -123,48 +123,6 @@ check("still an array of 1", single.ok && single.items.length === 1, single);
 console.log("\nempty collection:");
 const empty = parseCollectionXml(`<items totalitems="0"></items>`);
 check("ok with zero items", empty.ok && empty.items.length === 0, empty);
-
-// --- 6. Plays ---------------------------------------------------------------
-const PLAYS = `<?xml version="1.0" encoding="utf-8"?>
-<plays username="someone" userid="42" total="215" page="1">
-  <play id="9001" date="2025-07-14" quantity="1" length="95" incomplete="0" nowinstats="0" location="Kitchen table">
-    <item name="CATAN" objecttype="thing" objectid="13" />
-    <comments>Close game &lt;3</comments>
-    <players>
-      <player username="alice" name="Alice" score="10" new="0" win="1" color="red" />
-      <player name="Bob" score="8" new="1" win="0" />
-    </players>
-  </play>
-  <play id="9002" date="2025-07-02" quantity="2" length="0">
-    <item name="Azul" objecttype="thing" objectid="230802" />
-  </play>
-</plays>`;
-
-console.log("\nplays:");
-const plays = parsePlaysXml(PLAYS);
-check("parsed ok", plays.ok, plays);
-if (plays.ok) {
-  check("2 plays", plays.plays.length === 2, plays.plays.length);
-  check("total is the grand total, not the page", plays.total === 215, plays.total);
-
-  const [p1, p2] = plays.plays;
-  check("playId", p1.playId === "9001", p1.playId);
-  check("bggId from nested item", p1.bggId === "13", p1.bggId);
-  check("title from nested item", p1.title === "CATAN", p1.title);
-  check("date", p1.date === "2025-07-14", p1.date);
-  check("length", p1.lengthMinutes === 95, p1.lengthMinutes);
-  check("location", p1.location === "Kitchen table", p1.location);
-  check("comments entity-decoded", p1.comments === "Close game <3", p1.comments);
-  check("2 players", p1.players?.length === 2, p1.players);
-  check("winner flagged", p1.players?.[0].win === true);
-  check("score kept as free-form string", p1.players?.[0].score === "10");
-  check("loser: win omitted not false", p1.players?.[1].win === undefined);
-  check("new player flagged", p1.players?.[1].isNew === true);
-
-  check("quantity", p2.quantity === 2, p2.quantity);
-  check("length 0 dropped", p2.lengthMinutes === undefined, p2.lengthMinutes);
-  check("no players is undefined", p2.players === undefined);
-}
 
 // --- 7. Garbage -------------------------------------------------------------
 console.log("\ngarbage input:");

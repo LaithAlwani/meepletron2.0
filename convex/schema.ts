@@ -9,19 +9,6 @@ import {
   bggSyncKindValidator,
   bggSyncStatusValidator,
 } from "./lib/bggSyncTypes";
-import {
-  playRowValidator,
-  playPersonValidator,
-  playParticipantValidator,
-} from "./lib/playTypes";
-import {
-  postRowValidator,
-  postReactionValidator,
-  postCommentValidator,
-  postCommentReactionValidator,
-  notificationValidator,
-  friendshipValidator,
-} from "./lib/postTypes";
 
 /**
  * Meepletron 2.0 data model — everything lives in Convex.
@@ -340,13 +327,6 @@ export default defineSchema({
     // All chats for a game — used by the game-delete cascade (an unindexed
     // filter scan would re-read the whole chats table per deleted game).
     .index("by_game", ["gameId"]),
-
-  favorites: defineTable({
-    userId: v.id("users"),
-    gameId: v.id("games"),
-  })
-    .index("by_user", ["userId"])
-    .index("by_user_and_game", ["userId", "gameId"]),
 
   messages: defineTable({
     chatId: v.id("chats"),
@@ -809,30 +789,6 @@ export default defineSchema({
       filterFields: ["userId", "own", "wishlist", "forTrade", "prevOwned"],
     }),
 
-  // One row per recorded play session (hand-logged or imported from BGG).
-  plays: defineTable(playRowValidator)
-    .index("by_user_and_date", ["userId", "date"])
-    .index("by_game_and_date", ["gameId", "date"])
-    .index("by_visibility_and_date", ["visibility", "date"]) // public feed (later)
-    .index("by_bgg_play_id", ["bggPlayId"]), // idempotent BGG import dedupe
-
-  // An owner's saved non-system players, reused across their plays.
-  playPeople: defineTable(playPersonValidator)
-    .index("by_owner", ["ownerId"])
-    .index("by_owner_and_name", ["ownerId", "name"])
-    .index("by_owner_and_email", ["ownerId", "emailLower"])
-    .index("by_email", ["emailLower"]), // claim-on-signup
-
-  // Indexed play↔participant links: "plays I was in" + email-claim are index
-  // scans (the embedded players[] array isn't queryable).
-  playParticipants: defineTable(playParticipantValidator)
-    .index("by_user_and_date", ["userId", "date"])
-    .index("by_email", ["emailLower"])
-    .index("by_play", ["playId"])
-    // Public plays a user/email is in (profile Plays tab + headline counts).
-    .index("by_user_and_visibility_and_date", ["userId", "visibility", "date"])
-    .index("by_email_and_visibility_and_date", ["emailLower", "visibility", "date"]),
-
   // Fixed-window counters for rate-limited public actions (see convex/rateLimit.ts).
   // High-churn and disposable, so it's a dedicated table rather than fields on
   // `users`; a daily prune drops windows that have closed.
@@ -841,40 +797,6 @@ export default defineSchema({
     windowStart: v.number(),
     count: v.number(),
   }).index("by_key", ["key"]),
-
-  // The social feed. One post per shared item (play / image / toplist). Holds
-  // only shared content and references plays/lists rather than duplicating them.
-  posts: defineTable(postRowValidator)
-    .index("by_visibility_and_created", ["visibility", "createdAt"]) // the feed
-    .index("by_user_and_created", ["userId", "createdAt"]) // a user's posts
-    .index("by_play", ["playId"]), // upsert/unshare a play's post
-
-  // Likes on posts — one per user, toggled (count denormalized on the post).
-  postReactions: defineTable(postReactionValidator)
-    .index("by_user_and_post", ["userId", "postId"])
-    .index("by_post", ["postId"]),
-
-  // Comments on public posts (count denormalized on the post).
-  postComments: defineTable(postCommentValidator)
-    .index("by_post_and_created", ["postId", "createdAt"])
-    .index("by_user", ["userId"]), // aggregate a user's received comment likes
-
-  // Likes on post comments — one per user, toggled (count on the comment).
-  postCommentReactions: defineTable(postCommentReactionValidator)
-    .index("by_user_and_comment", ["userId", "commentId"])
-    .index("by_comment", ["commentId"]),
-
-  // In-app notifications (likes / comments / mentions / friend requests).
-  notifications: defineTable(notificationValidator)
-    .index("by_user_and_created", ["userId", "createdAt"]) // the list
-    .index("by_user_and_read", ["userId", "read"]) // unread badge count
-    .index("by_post", ["postId"]), // cleanup on post delete
-
-  // Friendships + pending requests, one row per pair (userA id < userB id).
-  friendships: defineTable(friendshipValidator)
-    .index("by_userA", ["userA"])
-    .index("by_userB", ["userB"])
-    .index("by_pair", ["userA", "userB"]),
 
   // A user's ranked "Top N games" list for a given year. Entries are a bounded
   // (≤ ~250) inline array — array index = rank − 1 — so a drag-reorder is one

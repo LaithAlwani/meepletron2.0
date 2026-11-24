@@ -8,17 +8,6 @@ import { v } from "convex/values";
  * `*Row` validators extend them with the fields we add on write.
  */
 
-/** One participant in a logged play. Bounded (~≤20), so it stays embedded. */
-export const bggPlayPlayerValidator = v.object({
-  name: v.string(),
-  username: v.optional(v.string()),
-  // BGG scores are free-form text ("12", "3.5", "-4", ""), not numbers.
-  score: v.optional(v.string()),
-  win: v.optional(v.boolean()),
-  isNew: v.optional(v.boolean()),
-  color: v.optional(v.string()),
-});
-
 /** One item as parsed out of a /collection response. */
 export const bggCollectionItemValidator = v.object({
   bggId: v.string(),
@@ -54,27 +43,6 @@ export const bggCollectionRowValidator = bggCollectionItemValidator.extend({
   // Stamped with the run's `runStartedAt`. Once set on import, `own`/`wishlist`
   // are the user's to edit (heart = wishlist, bookmark = owned); a re-sync only
   // adds new rows and never overwrites these on existing rows.
-  syncedAt: v.number(),
-});
-
-/** One play as parsed out of a /plays response. */
-export const bggPlayItemValidator = v.object({
-  playId: v.string(),
-  bggId: v.string(),
-  title: v.string(),
-  date: v.string(), // "YYYY-MM-DD" — lexicographically sortable
-  quantity: v.number(),
-  lengthMinutes: v.optional(v.number()),
-  incomplete: v.optional(v.boolean()),
-  location: v.optional(v.string()),
-  comments: v.optional(v.string()),
-  players: v.optional(v.array(bggPlayPlayerValidator)),
-});
-
-/** A stored play row. */
-export const bggPlayRowValidator = bggPlayItemValidator.extend({
-  userId: v.id("users"),
-  gameId: v.optional(v.id("games")),
   syncedAt: v.number(),
 });
 

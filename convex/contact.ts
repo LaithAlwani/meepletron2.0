@@ -1,7 +1,6 @@
 import { v } from "convex/values";
-import { query, mutation } from "./_generated/server";
+import { mutation } from "./_generated/server";
 import { internal } from "./_generated/api";
-import { requireAdmin } from "./lib/auth";
 
 const RATE_WINDOW_MS = 60 * 1000; // 1 minute
 const MAX_PER_WINDOW = 3;
@@ -55,11 +54,3 @@ export const submit = mutation({
   },
 });
 
-/** Admin: recent contact messages. */
-export const list = query({
-  args: {},
-  handler: async (ctx) => {
-    await requireAdmin(ctx);
-    return await ctx.db.query("contactMessages").order("desc").take(200);
-  },
-});

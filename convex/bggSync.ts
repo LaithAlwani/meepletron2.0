@@ -21,16 +21,11 @@ import {
   MAX_ATTEMPTS,
 } from "./lib/bggFetch";
 import { seal } from "./lib/bggCrypto";
-import { resolveGameAndExpansions } from "./plays";
 import {
   parseCollectionXml,
-  parsePlaysXml,
   type BggCollectionItem,
 } from "./lib/bggXml";
-import {
-  bggCollectionItemValidator,
-  bggPlayItemValidator,
-} from "./lib/bggSyncTypes";
+import { bggCollectionItemValidator } from "./lib/bggSyncTypes";
 import { slugifyUnique } from "./lib/slug";
 import { sortKeys, isGameSort, type GameSortKey } from "./lib/gameSort";
 import { coverUrls } from "./lib/gameCover";
@@ -257,8 +252,6 @@ export const myAccount = query({
       linkedAt: account.linkedAt,
       collectionSyncedAt: account.collectionSyncedAt,
       collectionCount: account.collectionCount,
-      playsSyncedAt: account.playsSyncedAt,
-      playsCount: account.playsCount,
     };
   },
 });
@@ -884,110 +877,6 @@ export const syncNow = mutation({
   },
 });
 
-export const cancelSync = mutation({
-  args: {},
-  handler: async (ctx) => {
-    const user = await requireUser(ctx);
-    const job = await ctx.db
-      .query("bggSyncJobs")
-      .withIndex("by_user_and_kind", (q) =>
-        q.eq("userId", user._id).eq("kind", "collection"),
-      )
-      .unique();
-    if (!job) return;
-    await ctx.db.patch("bggSyncJobs", job._id, {
-      status: "canceled",
-      finishedAt: Date.now(),
-      updatedAt: Date.now(),
-    });
-  },
-});
-
-/* -------------------------------------------------------------------------- */
-/* Plays sync kickoff                                                         */
-/* -------------------------------------------------------------------------- */
-
-/** Reset the plays job and schedule the first page. */
-async function startPlaysSync(
-  ctx: MutationCtx,
-  userId: Id<"users">,
-): Promise<Id<"bggSyncJobs"> | null> {
-  const account = await ctx.db
-    .query("bggAccounts")
-    .withIndex("by_user", (q) => q.eq("userId", userId))
-    .unique();
-  if (!account) return null;
-  // After the first full import, only fetch plays on/after the high-water mark.
-  const minDate = account.playsSyncedThrough;
-  const jobId = await resetJob(ctx, {
-    userId,
-    accountId: account._id,
-    username: account.username,
-    kind: "plays",
-    mode: minDate ? "incremental" : "full",
-    minDate: minDate ?? undefined,
-  });
-  await ctx.scheduler.runAfter(0, internal.bggSync.runPlays, { jobId });
-  return jobId;
-}
-
-export const beginPlaysSync = internalMutation({
-  args: { userId: v.id("users") },
-  handler: async (ctx, { userId }) => await startPlaysSync(ctx, userId),
-});
-
-/** User-triggered plays import (same cooldown + in-flight lock as collection). */
-export const syncPlaysNow = mutation({
-  args: {},
-  handler: async (ctx) => {
-    const user = await requireUser(ctx);
-    const account = await ctx.db
-      .query("bggAccounts")
-      .withIndex("by_user", (q) => q.eq("userId", user._id))
-      .unique();
-    if (!account) {
-      throw new ConvexError("Link your BoardGameGeek account first.");
-    }
-    const job = await ctx.db
-      .query("bggSyncJobs")
-      .withIndex("by_user_and_kind", (q) =>
-        q.eq("userId", user._id).eq("kind", "plays"),
-      )
-      .unique();
-    if (job && isInFlight(job.status)) {
-      throw new ConvexError("A plays sync is already running.");
-    }
-    if (
-      account.playsSyncedAt &&
-      Date.now() - account.playsSyncedAt < MIN_SYNC_INTERVAL_MS
-    ) {
-      throw new ConvexError(
-        "Your plays were synced in the last 15 minutes — try again a bit later.",
-      );
-    }
-    await startPlaysSync(ctx, user._id);
-  },
-});
-
-export const cancelPlaysSync = mutation({
-  args: {},
-  handler: async (ctx) => {
-    const user = await requireUser(ctx);
-    const job = await ctx.db
-      .query("bggSyncJobs")
-      .withIndex("by_user_and_kind", (q) =>
-        q.eq("userId", user._id).eq("kind", "plays"),
-      )
-      .unique();
-    if (!job) return;
-    await ctx.db.patch("bggSyncJobs", job._id, {
-      status: "canceled",
-      finishedAt: Date.now(),
-      updatedAt: Date.now(),
-    });
-  },
-});
-
 /* -------------------------------------------------------------------------- */
 /* Job bookkeeping                                                            */
 /* -------------------------------------------------------------------------- */
@@ -1446,33 +1335,6 @@ export const enrichStubs = internalAction({
   },
 });
 
-/**
- * Test helper: create-or-find a game for a single BGG id and enrich it, running
- * the same pipeline a real sync uses (metadata, cover, and — for an expansion —
- * fetching + linking its base game). Lets the expansion logic be exercised on a
- * couple of ids instead of a whole 238-game collection.
- *
- *   npx convex run bggSync:testEnrichByBgg '{"bggId":"266524"}'
- *
- * (266524 = "Wingspan: European Expansion"; its base, Wingspan 266192, is
- * created and linked automatically if absent.)
- */
-export const testEnrichByBgg = internalAction({
-  args: { bggId: v.string() },
-  handler: async (ctx, { bggId }): Promise<{ gameId: Id<"games"> }> => {
-    const { gameId } = await ctx.runMutation(internal.games.ensureStubForBgg, {
-      bggId,
-      title: `BGG ${bggId}`,
-    });
-    await ctx.runAction(internal.images.enrichSyncedGame, { gameId, bggId });
-    return { gameId };
-  },
-});
-
-/* -------------------------------------------------------------------------- */
-/* The fetch loop                                                             */
-/* -------------------------------------------------------------------------- */
-
 /** Record a transient failure and re-schedule, or give up past the ceiling. */
 async function retryLater(
   ctx: ActionCtx,
@@ -1590,355 +1452,6 @@ export const runCollection = internalAction({
 });
 
 /* -------------------------------------------------------------------------- */
-/* Plays import                                                               */
-/* -------------------------------------------------------------------------- */
-
-const PLAYS_PER_PAGE = 100; // BGG's fixed /plays page size
-
-/**
- * Resolve/create the local game for a play (stub if we don't curate it). Lookup
- * + insert stay in one mutation so Convex OCC dedupes concurrent syncs, exactly
- * like `linkOrCreateGame`.
- */
-async function linkPlayGame(
-  ctx: MutationCtx,
-  bggId: string,
-  title: string,
-): Promise<Id<"games">> {
-  const existing = await ctx.db
-    .query("games")
-    .withIndex("by_bgg_id", (q) => q.eq("bggId", bggId))
-    .first();
-  if (existing) return existing._id;
-  return await ctx.db.insert("games", {
-    title,
-    slug: await slugifyUnique(ctx, title),
-    isExpansion: false,
-    isStub: true,
-    bggId,
-    designers: [],
-    artists: [],
-    publishers: [],
-    categories: [],
-    gameMechanics: [],
-    ...sortKeys({ title }),
-  });
-}
-
-export const setPlaysPage = internalMutation({
-  args: { jobId: v.id("bggSyncJobs"), page: v.number() },
-  handler: async (ctx, { jobId, page }) => {
-    const job = await ctx.db.get("bggSyncJobs", jobId);
-    if (!job) return;
-    await ctx.db.patch("bggSyncJobs", jobId, { page, updatedAt: Date.now() });
-  },
-});
-
-/** Newest play date (BGG returns most-recent first) → incremental high-water. */
-export const stampPlaysHighWater = internalMutation({
-  args: { jobId: v.id("bggSyncJobs"), date: v.string() },
-  handler: async (ctx, { jobId, date }) => {
-    const job = await ctx.db.get("bggSyncJobs", jobId);
-    if (!job) return;
-    await ctx.db.patch("bggAccounts", job.accountId, {
-      playsSyncedThrough: date,
-    });
-  },
-});
-
-/** Structural equality for stored values (undefined ≡ missing, key order free). */
-function sameValue(a: unknown, b: unknown): boolean {
-  if (a === b) return true;
-  if (Array.isArray(a) || Array.isArray(b)) {
-    if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) {
-      return false;
-    }
-    return a.every((x, i) => sameValue(x, b[i]));
-  }
-  if (a && b && typeof a === "object" && typeof b === "object") {
-    const ao = a as Record<string, unknown>;
-    const bo = b as Record<string, unknown>;
-    const keys = new Set([...Object.keys(ao), ...Object.keys(bo)]);
-    for (const k of keys) if (!sameValue(ao[k], bo[k])) return false;
-    return true;
-  }
-  return false;
-}
-
-/** Would patching `body` onto `existing` change anything but `updatedAt`? */
-function playBodyMatches(
-  existing: Doc<"plays">,
-  body: Record<string, unknown>,
-): boolean {
-  const e = existing as unknown as Record<string, unknown>;
-  return Object.keys(body).every(
-    (k) => k === "updatedAt" || sameValue(e[k], body[k]),
-  );
-}
-
-/**
- * Map a page of parsed BGG plays into the unified `plays` table. Idempotent via
- * `by_bgg_play_id`; a re-sync only overwrites BGG-owned rows, never a play the
- * user has since edited/made public. Format is inferred (see the plan) and the
- * row is flagged `needsReview` so the UI can offer "confirm format".
- */
-export const upsertPlays = internalMutation({
-  args: { jobId: v.id("bggSyncJobs"), plays: v.array(bggPlayItemValidator) },
-  handler: async (ctx, { jobId, plays }) => {
-    const job = await ctx.db.get("bggSyncJobs", jobId);
-    if (!job || job.status === "canceled") return;
-    const meUsername = job.username.toLowerCase();
-
-    let created = 0;
-    const titles: string[] = [];
-    for (const play of plays) {
-      const gameId = await linkPlayGame(ctx, play.bggId, play.title);
-      // An expansion is never the logged game: BGG happily records a play
-      // against one, so fold it into its base game and note the expansion.
-      const subject = await resolveGameAndExpansions(ctx, {
-        gameId,
-        bggId: play.bggId,
-        title: play.title,
-      });
-
-      const players = (play.players ?? []).map((p) => {
-        const scoreNum = p.score != null ? Number(p.score) : NaN;
-        const isMe = !!p.username && p.username.toLowerCase() === meUsername;
-        return {
-          name: p.name || (isMe ? "You" : "Player"),
-          userId: isMe ? job.userId : undefined,
-          score: Number.isFinite(scoreNum) ? scoreNum : undefined,
-          isWinner: p.win,
-          color: p.color,
-          isNew: p.isNew,
-        };
-      });
-
-      // Format inference: everyone shares one win value ⇒ cooperative; else
-      // competitive (points if any numeric score, otherwise placement).
-      const winVals = players.map((p) => p.isWinner);
-      const allSame =
-        winVals.length > 0 && winVals.every((w) => w === winVals[0]);
-      const anyScore = players.some((p) => p.score != null);
-      let format: "cooperative" | "competitive" = "competitive";
-      let coopOutcome: "win" | "loss" | undefined;
-      let scoreMode: "highest" | "placement" | undefined = anyScore
-        ? "highest"
-        : "placement";
-      if (allSame && winVals[0] !== undefined) {
-        format = "cooperative";
-        coopOutcome = winVals[0] ? "win" : "loss";
-        scoreMode = undefined;
-      }
-
-      const existing = await ctx.db
-        .query("plays")
-        .withIndex("by_bgg_play_id", (q) => q.eq("bggPlayId", play.playId))
-        .first();
-
-      const now = Date.now();
-      const body = {
-        userId: job.userId,
-        gameId: subject.gameId,
-        bggId: subject.bggId,
-        title: subject.title || play.title,
-        expansions: subject.expansions,
-        date: play.date,
-        lengthMinutes: play.lengthMinutes,
-        location: play.location,
-        comments: play.comments,
-        format,
-        scoreMode,
-        coopOutcome,
-        players,
-        visibility: "private" as const,
-        source: "bgg" as const,
-        bggPlayId: play.playId,
-        needsReview: true,
-        updatedAt: now,
-      };
-
-      if (existing) {
-        // Skip unchanged plays: an incremental re-sync re-fetches the newest
-        // page, and a full one every play — most of which haven't changed.
-        if (existing.source === "bgg" && !playBodyMatches(existing, body)) {
-          await ctx.db.patch("plays", existing._id, body);
-        }
-      } else {
-        const playId = await ctx.db.insert("plays", { ...body, createdAt: now });
-        await ctx.db.insert("playParticipants", {
-          playId,
-          ownerId: job.userId,
-          gameId: subject.gameId,
-          date: play.date,
-          visibility: "private",
-          userId: job.userId,
-        });
-        created++;
-      }
-      titles.push(play.title);
-    }
-
-    await ctx.db.patch("bggSyncJobs", jobId, {
-      processed: job.processed + plays.length,
-      created: (job.created ?? 0) + created,
-      recentTitles: [...(job.recentTitles ?? []), ...titles].slice(-8),
-      updatedAt: Date.now(),
-    });
-  },
-});
-
-export const finishPlays = internalMutation({
-  args: { jobId: v.id("bggSyncJobs") },
-  handler: async (ctx, { jobId }) => {
-    const job = await ctx.db.get("bggSyncJobs", jobId);
-    if (!job || job.status === "canceled") return;
-    const now = Date.now();
-    const account = await ctx.db.get("bggAccounts", job.accountId);
-    if (account) {
-      // The true total without re-reading every play: a full sync walked all of
-      // the user's BGG plays (`processed`); an incremental one adds this run's
-      // newly created plays to the previous total. (A BGG play deleted in-app
-      // isn't subtracted — this is the "imported from BGG" figure.)
-      const playsCount =
-        job.mode === "full" || account.playsCount == null
-          ? Math.max(job.processed, job.created ?? 0)
-          : account.playsCount + (job.created ?? 0);
-      await ctx.db.patch("bggAccounts", job.accountId, {
-        playsSyncedAt: now,
-        playsCount,
-      });
-    }
-    await ctx.db.patch("bggSyncJobs", jobId, {
-      status: "done",
-      finishedAt: now,
-      updatedAt: now,
-    });
-  },
-});
-
-/** Record a transient plays-fetch failure and re-schedule, or give up. */
-async function retryPlaysLater(
-  ctx: ActionCtx,
-  jobId: Id<"bggSyncJobs">,
-  reason: string,
-  userMessage: string,
-): Promise<void> {
-  const attempts = await ctx.runMutation(internal.bggSync.markJobWaiting, {
-    jobId,
-    error: reason,
-  });
-  if (attempts === null) return;
-  if (attempts > MAX_ATTEMPTS) {
-    await ctx.runMutation(internal.bggSync.failJob, { jobId, error: userMessage });
-    return;
-  }
-  await ctx.scheduler.runAfter(backoffMs(attempts), internal.bggSync.runPlays, {
-    jobId,
-  });
-}
-
-export const runPlays = internalAction({
-  args: { jobId: v.id("bggSyncJobs") },
-  handler: async (ctx, { jobId }): Promise<void> => {
-    const job = await ctx.runQuery(internal.bggSync.getJob, { jobId });
-    if (!job || job.status === "canceled" || job.status === "done") return;
-
-    const token = process.env.BGG_API_TOKEN;
-    if (!token) {
-      await ctx.runMutation(internal.bggSync.failJob, {
-        jobId,
-        error: "BoardGameGeek access isn't configured on the server.",
-      });
-      return;
-    }
-
-    let res;
-    try {
-      res = await bggGet(
-        "/xmlapi2/plays",
-        { username: job.username, page: job.page, mindate: job.minDate },
-        { token },
-      );
-    } catch {
-      await retryPlaysLater(
-        ctx,
-        jobId,
-        "bgg_unreachable",
-        "Couldn't reach BoardGameGeek. Try again shortly.",
-      );
-      return;
-    }
-    if (isRetryableStatus(res.status)) {
-      await retryPlaysLater(
-        ctx,
-        jobId,
-        `http_${res.status}`,
-        "BoardGameGeek is still preparing your plays. Try again in a few minutes.",
-      );
-      return;
-    }
-    if (res.status >= 400) {
-      await ctx.runMutation(internal.bggSync.failJob, {
-        jobId,
-        error: `BoardGameGeek returned an error (${res.status}).`,
-      });
-      return;
-    }
-
-    const parsed = parsePlaysXml(res.xml);
-    if (!parsed.ok) {
-      if (parsed.reason === "queued") {
-        await retryPlaysLater(
-          ctx,
-          jobId,
-          "queued",
-          "BoardGameGeek is still preparing your plays. Try again in a few minutes.",
-        );
-        return;
-      }
-      await ctx.runMutation(internal.bggSync.failJob, {
-        jobId,
-        error:
-          parsed.reason === "invalid_user"
-            ? `BoardGameGeek doesn't recognise the username "${job.username}".`
-            : "BoardGameGeek sent a response we couldn't read.",
-      });
-      return;
-    }
-
-    const totalPages = Math.max(1, Math.ceil(parsed.total / PLAYS_PER_PAGE));
-    if (job.page <= 1) {
-      await ctx.runMutation(internal.bggSync.markJobRunning, {
-        jobId,
-        total: parsed.total,
-        totalPages,
-      });
-      if (parsed.plays[0]?.date) {
-        await ctx.runMutation(internal.bggSync.stampPlaysHighWater, {
-          jobId,
-          date: parsed.plays[0].date,
-        });
-      }
-    }
-    await ctx.runMutation(internal.bggSync.upsertPlays, {
-      jobId,
-      plays: parsed.plays,
-    });
-
-    if (job.page < totalPages && parsed.plays.length > 0) {
-      await ctx.runMutation(internal.bggSync.setPlaysPage, {
-        jobId,
-        page: job.page + 1,
-      });
-      await ctx.scheduler.runAfter(0, internal.bggSync.runPlays, { jobId });
-    } else {
-      await ctx.runMutation(internal.bggSync.finishPlays, { jobId });
-    }
-  },
-});
-
-/* -------------------------------------------------------------------------- */
 /* Maintenance                                                                */
 /* -------------------------------------------------------------------------- */
 
@@ -1950,8 +1463,8 @@ export const runPlays = internalAction({
 export const purgeUserBggData = internalMutation({
   args: { userId: v.id("users") },
   handler: async (ctx, { userId }) => {
-    // Drain the collection first, then plays. Each pass reschedules while it
-    // still deleted something, so this terminates only once both are empty.
+    // Drain the collection; each pass reschedules while it still deleted
+    // something, so this terminates once it's empty.
     const rows = await ctx.db
       .query("bggCollection")
       .withIndex("by_user_and_sort_title", (q) => q.eq("userId", userId))
@@ -1978,25 +1491,6 @@ export const purgeUserBggData = internalMutation({
       });
     }
 
-    // Only BGG-imported plays are purged; hand-logged plays are the user's own.
-    const plays = await ctx.db
-      .query("plays")
-      .withIndex("by_user_and_date", (q) => q.eq("userId", userId))
-      .filter((q) => q.eq(q.field("source"), "bgg"))
-      .take(SWEEP_BATCH);
-    for (const p of plays) {
-      const parts = await ctx.db
-        .query("playParticipants")
-        .withIndex("by_play", (q) => q.eq("playId", p._id))
-        .collect();
-      for (const pt of parts) await ctx.db.delete("playParticipants", pt._id);
-      await ctx.db.delete("plays", p._id);
-    }
-    if (plays.length > 0) {
-      await ctx.scheduler.runAfter(0, internal.bggSync.purgeUserBggData, {
-        userId,
-      });
-    }
   },
 });
 
@@ -2063,53 +1557,5 @@ export const watchStalledJob = internalMutation({
       internal.bggSync.watchStalledJob,
       { jobId },
     );
-  },
-});
-
-/**
- * Manual backstop for the per-job watchdog (kept for `npx convex run`): fails
- * any in-flight job that's been idle past STALL_MS. Not scheduled by a cron.
- */
-export const failStalledJobs = internalMutation({
-  args: {},
-  handler: async (ctx) => {
-    const cutoff = Date.now() - STALL_MS;
-    let failed = 0;
-    for (const status of IN_FLIGHT) {
-      const jobs = await ctx.db
-        .query("bggSyncJobs")
-        .withIndex("by_status", (q) => q.eq("status", status))
-        .take(200);
-      for (const job of jobs) {
-        if (job.updatedAt < cutoff) {
-          await ctx.db.patch("bggSyncJobs", job._id, {
-            status: "error",
-            error: "The sync stopped responding. Try again.",
-            finishedAt: Date.now(),
-            updatedAt: Date.now(),
-          });
-          failed++;
-        }
-      }
-    }
-    return { failed };
-  },
-});
-
-/**
- * One-off diagnostic: how many curated games carry a BGG id. Collection rows
- * can only link to games that have one, so poor coverage caps the match rate
- * no matter how good the sync is. Run with `npx convex run`.
- */
-export const auditBggIdCoverage = internalQuery({
-  args: {},
-  handler: async (ctx) => {
-    const games = await ctx.db.query("games").take(5000);
-    const real = games.filter((g) => !g.isStub);
-    return {
-      curated: real.length,
-      withBggId: real.filter((g) => !!g.bggId).length,
-      stubs: games.length - real.length,
-    };
   },
 });

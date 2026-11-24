@@ -32,7 +32,7 @@ export function GuestUpgradeClaimer() {
     localStorage.removeItem(GUEST_UPGRADE_KEY);
     void complete({ token })
       .then((r) => {
-        if (r?.migrated && (r.chats > 0 || r.favorites > 0)) {
+        if (r?.migrated && r.chats > 0) {
           toast("Your guest chats were saved to your account", "success");
         }
       })
