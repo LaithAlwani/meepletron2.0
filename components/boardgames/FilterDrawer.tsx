@@ -75,7 +75,7 @@ function FilterDropdown({
         <span className="flex items-center gap-2 text-sm font-semibold">
           {title}
           {selected.length > 0 && (
-            <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-accent px-1 text-[11px] font-bold text-accent-foreground">
+            <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-accent px-1 text-2xs font-bold text-accent-foreground">
               {selected.length}
             </span>
           )}

@@ -152,7 +152,7 @@ function Shell({
 
         {/* Details */}
         <div className="min-w-0">
-          <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-accent">
+          <p className="text-2xs font-bold uppercase tracking-[0.18em] text-accent">
             {info?.isExpansion ? "Expansion · not in the library yet" : "Not in the library yet"}
           </p>
           <h1 className="font-display mt-1 text-2xl font-extrabold tracking-tight sm:text-3xl">

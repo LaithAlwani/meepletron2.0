@@ -92,7 +92,7 @@ export const FORMAT_LABEL: Record<string, string> = {
 /** The little uppercase play-format pill shown in play card metadata rows. */
 export function FormatPill({ format }: { format: string }) {
   return (
-    <span className="rounded-full bg-surface-2 px-1.5 py-px text-[10px] font-bold uppercase tracking-wide text-muted">
+    <span className="rounded-full bg-surface-2 px-1.5 py-px text-2xs font-bold uppercase tracking-wide text-muted">
       {FORMAT_LABEL[format] ?? format}
     </span>
   );

@@ -1,5 +1,6 @@
 "use client";
 
+import { buttonClasses } from "@/components/ui/buttonStyles";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import Image from "next/image";
@@ -53,7 +54,7 @@ export function Header() {
   const signIn = (
     <Link
       href="/auth"
-      className="inline-flex items-center gap-2 rounded-xl border border-border px-4 py-2 text-sm font-medium text-muted transition-all hover:bg-surface-2 hover:text-foreground"
+      className={buttonClasses("ghost", "md")}
     >
       <LogIn className="h-4 w-4" />
       Sign in

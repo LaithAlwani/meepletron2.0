@@ -124,16 +124,16 @@ export function GameStatsModal({
                         className="flex items-center gap-3 py-2 text-sm"
                       >
                         {r.isWinner ? (
-                          <span className="inline-flex h-6 shrink-0 items-center gap-1 rounded-full bg-accent-2/12 px-2 text-[11px] font-bold text-accent-2">
+                          <span className="inline-flex h-6 shrink-0 items-center gap-1 rounded-full bg-accent-2/12 px-2 text-2xs font-bold text-accent-2">
                             <Trophy className="h-3 w-3" />
                             Won
                           </span>
                         ) : r.isWinner === false ? (
-                          <span className="inline-flex h-6 shrink-0 items-center rounded-full bg-surface-2 px-2 text-[11px] font-semibold text-subtle">
+                          <span className="inline-flex h-6 shrink-0 items-center rounded-full bg-surface-2 px-2 text-2xs font-semibold text-subtle">
                             Lost
                           </span>
                         ) : (
-                          <span className="inline-flex h-6 shrink-0 items-center rounded-full bg-surface-2 px-2 text-[11px] font-semibold text-subtle">
+                          <span className="inline-flex h-6 shrink-0 items-center rounded-full bg-surface-2 px-2 text-2xs font-semibold text-subtle">
                             —
                           </span>
                         )}
@@ -176,10 +176,10 @@ function Tile({
       <div className="text-2xl font-extrabold tabular-nums text-foreground">
         {value}
       </div>
-      <div className="text-[11px] uppercase tracking-wider text-subtle">
+      <div className="text-2xs uppercase tracking-wider text-subtle">
         {label}
       </div>
-      {sub && <div className="mt-0.5 text-[11px] text-subtle">{sub}</div>}
+      {sub && <div className="mt-0.5 text-2xs text-subtle">{sub}</div>}
     </div>
   );
 }

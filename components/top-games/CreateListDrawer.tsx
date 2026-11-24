@@ -22,7 +22,7 @@ const PRESETS = [10, 25, 50, 100];
 const CURRENT_YEAR = new Date().getFullYear();
 
 const LABEL =
-  "mb-1.5 block text-[11px] font-bold uppercase tracking-[0.12em] text-subtle";
+  "mb-1.5 block text-2xs font-bold uppercase tracking-[0.12em] text-subtle";
 const TRACK =
   "inline-flex items-center rounded-xl border border-border bg-surface-2 p-1";
 const NO_SPIN =

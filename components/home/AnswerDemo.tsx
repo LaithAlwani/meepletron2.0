@@ -193,12 +193,12 @@ export function AnswerDemo() {
           </span>
           <div className="min-w-0 flex-1 leading-tight">
             <p className="truncate text-sm font-semibold">{demo.game}</p>
-            <p className="flex items-center gap-1 text-[11px] text-muted">
+            <p className="flex items-center gap-1 text-2xs text-muted">
               <BookOpenCheck className="h-3 w-3" />
               Rulebook indexed
             </p>
           </div>
-          <span className="shrink-0 rounded-full border border-border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-subtle">
+          <span className="shrink-0 rounded-full border border-border px-2 py-0.5 text-2xs font-semibold uppercase tracking-wide text-subtle">
             Example
           </span>
         </div>

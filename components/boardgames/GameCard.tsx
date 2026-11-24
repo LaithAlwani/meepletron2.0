@@ -91,7 +91,7 @@ export function GameCard({
           </Link>
         </h3>
         <div className="mt-auto flex items-center justify-between gap-1.5 pt-2">
-          <div className="flex min-w-0 items-center gap-x-2 overflow-hidden text-[11px] text-muted">
+          <div className="flex min-w-0 items-center gap-x-2 overflow-hidden text-2xs text-muted">
             {players && (
               <span className="inline-flex shrink-0 items-center gap-0.5 whitespace-nowrap">
                 <Users className="h-3.5 w-3.5" />
@@ -107,7 +107,7 @@ export function GameCard({
           </div>
           {rating != null && (
             <span
-              className="inline-flex shrink-0 items-center gap-0.5 text-[11px] font-bold text-accent"
+              className="inline-flex shrink-0 items-center gap-0.5 text-2xs font-bold text-accent"
               title={`BoardGameGeek average ${rating.toFixed(1)} / 10`}
             >
               <Star className="h-3 w-3 fill-current" />

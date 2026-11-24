@@ -1,5 +1,6 @@
 "use client";
 
+import { buttonClasses } from "@/components/ui/buttonStyles";
 import { use, useState } from "react";
 import Link from "next/link";
 import { useQuery, useMutation, useAction } from "convex/react";
@@ -196,7 +197,7 @@ function DoneButton({ onClick }: { onClick: () => void }) {
   return (
     <button
       onClick={onClick}
-      className="rounded-lg border border-border px-4 py-1.5 text-sm font-medium text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
+      className={buttonClasses("ghost", "sm")}
     >
       Done
     </button>

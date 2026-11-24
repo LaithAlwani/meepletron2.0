@@ -1,5 +1,6 @@
 "use client";
 
+import { buttonClasses } from "@/components/ui/buttonStyles";
 import { use, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useQuery, useAction, useMutation } from "convex/react";
@@ -25,7 +26,7 @@ function Stat({
     <div className="rounded-lg border border-border bg-surface px-3 py-2">
       <div
         className={`font-display text-lg font-bold ${
-          tone === "warn" ? "text-red-600 dark:text-red-400" : "text-foreground"
+          tone === "warn" ? "text-danger" : "text-foreground"
         }`}
       >
         {value}
@@ -193,7 +194,7 @@ export default function IngestReviewPage({
           <button
             onClick={handleRestart}
             disabled={working}
-            className="mt-3 rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-accent-foreground disabled:opacity-50"
+            className={buttonClasses("primary", "md", "mt-3")}
           >
             Start ingestion
           </button>
@@ -201,7 +202,7 @@ export default function IngestReviewPage({
       ) : (
         <div className="rounded-lg border border-border bg-surface p-4">
           {status.error && (
-            <p className="mb-2 text-sm text-red-600 dark:text-red-400">
+            <p className="mb-2 text-sm text-danger">
               Error: {status.error}
             </p>
           )}
@@ -251,7 +252,7 @@ export default function IngestReviewPage({
                 {status.control !== "stopped" && (
                   <button
                     onClick={() => stop({ rulebookId: rbId })}
-                    className="rounded-lg border border-border px-3 py-1.5 text-sm font-medium text-red-600 hover:bg-surface-2 dark:text-red-400"
+                    className="rounded-lg border border-border px-3 py-1.5 text-sm font-medium text-danger hover:bg-surface-2"
                   >
                     Stop
                   </button>
@@ -259,7 +260,7 @@ export default function IngestReviewPage({
                 <button
                   onClick={handleRestart}
                   disabled={working}
-                  className="rounded-lg border border-border px-3 py-1.5 text-sm font-medium hover:bg-surface-2 disabled:opacity-50"
+                  className={buttonClasses("ghost", "sm")}
                 >
                   Restart
                 </button>
@@ -290,7 +291,7 @@ export default function IngestReviewPage({
               <button
                 onClick={handleRestart}
                 disabled={working}
-                className="rounded-lg border border-border px-4 py-2 text-sm font-medium hover:bg-surface-2 disabled:opacity-50"
+                className={buttonClasses("ghost", "md")}
               >
                 Re-ingest
               </button>
@@ -341,14 +342,14 @@ export default function IngestReviewPage({
               {stats.flagCounts.map(([f, n], i) => (
                 <span key={f}>
                   {i > 0 && ", "}
-                  <span className="text-red-600 dark:text-red-400">{f}</span> ×{n}
+                  <span className="text-danger">{f}</span> ×{n}
                 </span>
               ))}
             </p>
           )}
 
           {stats.missingPages.length > 0 && (
-            <p className="rounded-md bg-red-500/10 px-3 py-2 text-xs text-red-700 dark:text-red-300">
+            <p className="rounded-lg bg-danger/10 px-3 py-2 text-xs text-danger">
               <span className="font-semibold">
                 {stats.missingPages.length} page
                 {stats.missingPages.length === 1 ? "" : "s"} produced no chunks
@@ -411,7 +412,7 @@ export default function IngestReviewPage({
                 <div className="flex gap-1">
                   <button
                     onClick={() => setCollapsed(new Set())}
-                    className="rounded-md px-2 py-0.5 text-xs text-muted transition-colors hover:bg-surface hover:text-foreground"
+                    className="rounded-lg px-2 py-0.5 text-xs text-muted transition-colors hover:bg-surface hover:text-foreground"
                   >
                     Expand all
                   </button>
@@ -419,7 +420,7 @@ export default function IngestReviewPage({
                     onClick={() =>
                       setCollapsed(new Set(groups.map((g) => g.id)))
                     }
-                    className="rounded-md px-2 py-0.5 text-xs text-muted transition-colors hover:bg-surface hover:text-foreground"
+                    className="rounded-lg px-2 py-0.5 text-xs text-muted transition-colors hover:bg-surface hover:text-foreground"
                   >
                     Collapse all
                   </button>
@@ -510,7 +511,7 @@ export default function IngestReviewPage({
             <button
               onClick={handleCommit}
               disabled={working || acceptedCount === 0}
-              className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-accent-foreground disabled:opacity-50"
+              className={buttonClasses("primary", "md")}
             >
               {working ? "Committing…" : `Commit ${acceptedCount} chunks`}
             </button>

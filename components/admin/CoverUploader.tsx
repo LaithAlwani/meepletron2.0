@@ -1,5 +1,6 @@
 "use client";
 
+import { buttonClasses } from "@/components/ui/buttonStyles";
 import { useState } from "react";
 import { useAction } from "convex/react";
 import { api } from "@/convex/_generated/api";
@@ -101,13 +102,13 @@ export function CoverUploader({
               type="button"
               onClick={handleSave}
               disabled={busy || !url.trim()}
-              className="flex items-center justify-center gap-2 rounded-lg bg-accent px-4 py-2.5 text-sm font-semibold text-accent-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
+              className={buttonClasses("primary", "md")}
             >
               {busy ? "Saving…" : "Fetch & save"}
             </button>
           </div>
           {error && (
-            <p className="mt-1.5 text-sm text-red-600 dark:text-red-400">{error}</p>
+            <p className="mt-1.5 text-sm text-danger">{error}</p>
           )}
           <p className="mt-1.5 text-xs text-muted">
             Paste an image link — it&apos;s downloaded, compressed, and stored.

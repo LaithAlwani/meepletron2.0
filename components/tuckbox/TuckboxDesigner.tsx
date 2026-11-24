@@ -1,5 +1,6 @@
 "use client";
 
+import { buttonClasses } from "@/components/ui/buttonStyles";
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useQuery, useMutation } from "convex/react";
@@ -688,7 +689,7 @@ export function TuckboxDesigner({
               }}
               placeholder="Untitled box"
               aria-label="Box name"
-              className="w-full rounded-md border border-border bg-surface px-2.5 py-2 text-sm font-semibold text-foreground outline-none focus:ring-2 focus:ring-ring"
+              className="w-full rounded-lg border border-border bg-surface px-2.5 py-2 text-sm font-semibold text-foreground outline-none focus:ring-2 focus:ring-ring"
             />
 
             <div className="flex items-center justify-between gap-2">
@@ -722,7 +723,7 @@ export function TuckboxDesigner({
                       <Check className="h-3.5 w-3.5 text-accent-2" /> Saved
                     </>
                   ) : saveState === "error" ? (
-                    <span className="text-red-500">Save failed</span>
+                    <span className="text-danger">Save failed</span>
                   ) : (
                     "Autosaves"
                   )}
@@ -749,7 +750,7 @@ export function TuckboxDesigner({
               )}
               <Link
                 href="/boardgames"
-                className="flex flex-1 items-center justify-center rounded-lg border border-border px-3 py-1.5 text-xs font-semibold text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
+                className={buttonClasses("ghost", "sm", "flex-1")}
               >
                 Open from a game
               </Link>
@@ -812,7 +813,7 @@ export function TuckboxDesigner({
               </Field>
             </div>
             <div className="rounded-lg border-l-2 border-accent bg-surface-2 px-3 py-2">
-              <span className="text-[11px] font-bold uppercase tracking-wide text-subtle">
+              <span className="text-2xs font-bold uppercase tracking-wide text-subtle">
                 Stack
               </span>{" "}
               <span className="font-display text-lg font-bold text-foreground">
@@ -872,7 +873,7 @@ export function TuckboxDesigner({
               <h3 className="font-display text-lg font-bold text-foreground">
                 {activeName}
               </h3>
-              <span className="text-[11px] text-subtle">
+              <span className="text-2xs text-subtle">
                 {activeIdeal.width} × {activeIdeal.height} px @300DPI
               </span>
             </div>
@@ -958,7 +959,7 @@ export function TuckboxDesigner({
                 </div>
                 <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
                   <div className="flex items-center gap-2">
-                    <span className="text-[11px] font-bold uppercase tracking-wide text-subtle">
+                    <span className="text-2xs font-bold uppercase tracking-wide text-subtle">
                       Orientation
                     </span>
                     <SegmentedControl
@@ -973,7 +974,7 @@ export function TuckboxDesigner({
                     />
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="text-[11px] font-bold uppercase tracking-wide text-subtle">
+                    <span className="text-2xs font-bold uppercase tracking-wide text-subtle">
                       Units
                     </span>
                     <SegmentedControl
@@ -1069,7 +1070,7 @@ function NumSection({
           <span className="text-accent">{n} / </span>
           <span className="text-foreground">{title}</span>
         </h2>
-        {meta && <span className="text-[11px] text-subtle">{meta}</span>}
+        {meta && <span className="text-2xs text-subtle">{meta}</span>}
       </div>
       {children}
     </section>
@@ -1114,7 +1115,7 @@ function SmallButton({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className="rounded-lg border border-border px-3 py-1.5 text-sm font-medium text-muted transition-colors hover:bg-surface-2 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+      className={buttonClasses("ghost", "sm")}
     >
       {children}
     </button>
@@ -1141,7 +1142,7 @@ function Field({
 }) {
   return (
     <label className="block min-w-0">
-      <span className="mb-1 block text-[11px] font-bold uppercase tracking-wide text-subtle">
+      <span className="mb-1 block text-2xs font-bold uppercase tracking-wide text-subtle">
         {label}
       </span>
       <div className="flex items-center gap-2">
@@ -1192,7 +1193,7 @@ function NumberInput({
           onChange(parsed);
         }
       }}
-      className="w-full rounded-md border border-border bg-surface px-3 py-1.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+      className="w-full rounded-lg border border-border bg-surface px-3 py-1.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
     />
   );
 }
@@ -1248,7 +1249,7 @@ function ImageDropzone({
       tabIndex={0}
       onClick={() => inputRef.current?.click()}
       onKeyDown={(event) => {
-        if (event.key === "Enter" || event.key === " ") {
+        if (event.key === "Enter" || event.key === "") {
           event.preventDefault();
           inputRef.current?.click();
         }

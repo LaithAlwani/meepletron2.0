@@ -64,7 +64,7 @@ export function PreviewCard({ hit, index = 0 }: { hit: BggHit; index?: number })
           </Link>
         </h3>
         <div className="mt-auto flex items-center justify-between gap-1.5 pt-2">
-          <div className="flex min-w-0 items-center gap-x-2 overflow-hidden text-[11px] text-muted">
+          <div className="flex min-w-0 items-center gap-x-2 overflow-hidden text-2xs text-muted">
             {players && (
               <span className="inline-flex shrink-0 items-center gap-0.5 whitespace-nowrap">
                 <Users className="h-3.5 w-3.5" />

@@ -61,7 +61,7 @@ function LibraryInner() {
           on desktop. (Search lives in the top nav.) */}
       <div className="mb-4 sm:mb-5">
         <div>
-          <p className="mb-1 hidden text-[11px] font-bold uppercase tracking-[0.18em] text-accent nav:block">
+          <p className="mb-1 hidden text-2xs font-bold uppercase tracking-[0.18em] text-accent nav:block">
             The library
           </p>
           <h1 className="font-display hidden nav:block text-2xl font-extrabold tracking-tight text-foreground sm:text-4xl">

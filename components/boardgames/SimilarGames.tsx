@@ -47,7 +47,7 @@ export function SimilarGames({ gameId }: { gameId: Id<"games"> }) {
 
   return (
     <section className="animate-in mb-8">
-      <h2 className="mb-3 text-[11px] font-bold uppercase tracking-[0.16em] text-subtle">
+      <h2 className="mb-3 text-2xs font-bold uppercase tracking-[0.16em] text-subtle">
         You might also like
       </h2>
       <div className="relative">

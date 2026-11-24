@@ -75,7 +75,7 @@ export function ThemeMenu() {
               aria-pressed={active}
               title={o.label}
               className={cn(
-                "flex h-7 w-7 items-center justify-center rounded-md transition-colors",
+                "flex h-7 w-7 items-center justify-center rounded-lg transition-colors",
                 active
                   ? "bg-surface text-accent shadow-sm"
                   : "text-muted hover:text-foreground",

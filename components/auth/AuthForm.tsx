@@ -1,5 +1,6 @@
 "use client";
 
+import { buttonClasses } from "@/components/ui/buttonStyles";
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthActions } from "@convex-dev/auth/react";
@@ -134,14 +135,14 @@ export function AuthForm() {
             className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-center text-lg tracking-[0.4em] outline-none focus:ring-2 focus:ring-ring"
           />
           {error && (
-            <p role="alert" className="text-sm text-red-600 dark:text-red-400">
+            <p role="alert" className="text-sm text-danger">
               {error}
             </p>
           )}
           <button
             type="submit"
             disabled={submitting}
-            className="w-full rounded-lg bg-accent px-4 py-2.5 font-semibold text-accent-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
+            className={buttonClasses("primary", "md", "w-full")}
           >
             {submitting ? "Verifying…" : "Verify"}
           </button>
@@ -224,7 +225,7 @@ export function AuthForm() {
         </div>
 
         {error && (
-          <p role="alert" className="text-sm text-red-600 dark:text-red-400">
+          <p role="alert" className="text-sm text-danger">
             {error}
           </p>
         )}
@@ -232,7 +233,7 @@ export function AuthForm() {
         <button
           type="submit"
           disabled={submitting}
-          className="w-full rounded-lg bg-accent px-4 py-2.5 font-semibold text-accent-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
+          className={buttonClasses("primary", "md", "w-full")}
         >
           {submitting
             ? "Please wait…"

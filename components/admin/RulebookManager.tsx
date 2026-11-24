@@ -1,5 +1,6 @@
 "use client";
 
+import { buttonClasses } from "@/components/ui/buttonStyles";
 import { useRef, useState } from "react";
 import Link from "next/link";
 import { useMutation, useAction } from "convex/react";
@@ -94,7 +95,7 @@ function RulebookRow({
                   cancelEdit();
                 }
               }}
-              className="w-full rounded-md border border-border bg-surface px-2 py-1 text-sm outline-none focus:ring-2 focus:ring-ring"
+              className="w-full rounded-lg border border-border bg-surface px-2 py-1 text-sm outline-none focus:ring-2 focus:ring-ring"
             />
             <button
               onClick={() => void saveLabel()}
@@ -142,7 +143,7 @@ function RulebookRow({
               href={rulebook.downloadUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="rounded-md border border-border px-3 py-1.5 text-xs hover:bg-surface-2"
+              className={buttonClasses("ghost", "sm")}
             >
               Download
             </a>
@@ -157,14 +158,14 @@ function RulebookRow({
             <button
               onClick={handleIngest}
               disabled={pending}
-              className="rounded-md bg-accent px-3 py-1.5 text-xs font-semibold text-accent-foreground disabled:opacity-50"
+              className={buttonClasses("primary", "sm")}
             >
               {pending ? "Starting…" : "Ingest"}
             </button>
           ) : (
             <Link
               href={`/admin/boardgames/${gameId}/ingest/${rulebook._id}`}
-              className="rounded-md border border-border px-3 py-1.5 text-xs hover:bg-surface-2"
+              className={buttonClasses("ghost", "sm")}
             >
               Review
             </Link>
@@ -174,7 +175,7 @@ function RulebookRow({
 
       <button
         onClick={() => onDelete(rulebook._id, rulebook.label)}
-        className="text-xs text-red-600 hover:underline dark:text-red-400"
+        className="text-xs text-danger hover:underline"
       >
         Delete
       </button>
@@ -287,7 +288,7 @@ export function RulebookManager({
               key={k}
               type="button"
               onClick={() => setKind(k)}
-              className={`rounded-md px-3 py-1 font-medium transition-colors ${
+              className={`rounded-lg px-3 py-1 font-medium transition-colors ${
                 kind === k
                   ? "bg-accent text-accent-foreground"
                   : "text-muted hover:text-foreground"
@@ -334,7 +335,7 @@ export function RulebookManager({
           </button>
         </div>
         {error && (
-          <p className="mt-2 text-sm text-red-600 dark:text-red-400">{error}</p>
+          <p className="mt-2 text-sm text-danger">{error}</p>
         )}
         <p className="mt-2 text-xs text-muted">
           {kind === "rulebook"

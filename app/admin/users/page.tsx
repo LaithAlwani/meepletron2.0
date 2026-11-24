@@ -135,7 +135,7 @@ export default function AdminUsersPage() {
                     {!u.isAnonymous && !isSelf && (
                       <button
                         onClick={() => toggleAdmin(u._id, u.role !== "admin")}
-                        className="rounded-md border border-border px-2.5 py-1 text-xs hover:bg-surface-2"
+                        className="rounded-lg border border-border px-2.5 py-1 text-xs hover:bg-surface-2"
                       >
                         {u.role === "admin" ? "Revoke admin" : "Make admin"}
                       </button>

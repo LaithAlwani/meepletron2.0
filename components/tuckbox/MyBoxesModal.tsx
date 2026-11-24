@@ -116,7 +116,7 @@ export function MyBoxesModal({
                         <p className="truncate text-sm font-semibold text-foreground">
                           {b.name || "Untitled box"}
                         </p>
-                        <p className="mt-0.5 text-[11px] text-subtle">
+                        <p className="mt-0.5 text-2xs text-subtle">
                           {relativeTime(b.updatedAt)}
                           {active && " · current"}
                         </p>
@@ -133,7 +133,7 @@ export function MyBoxesModal({
                         if (ok) void remove({ id: b._id });
                       }}
                       aria-label="Delete box"
-                      className="absolute right-1.5 top-1.5 rounded-md bg-background/80 p-1.5 text-subtle opacity-0 shadow-sm backdrop-blur transition-opacity hover:text-red-600 group-hover:opacity-100"
+                      className="absolute right-1.5 top-1.5 rounded-lg bg-background/80 p-1.5 text-subtle opacity-0 shadow-sm backdrop-blur transition-opacity hover:text-danger group-hover:opacity-100"
                     >
                       <Trash2 className="h-3.5 w-3.5" />
                     </button>

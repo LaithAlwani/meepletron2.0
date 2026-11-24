@@ -85,7 +85,7 @@ function NavLinks({
                   {badge}
                 </span>
               ) : (
-                <span className="absolute right-1 top-1 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-accent px-1 text-[10px] font-semibold leading-none text-accent-foreground tabular-nums">
+                <span className="absolute right-1 top-1 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-accent px-1 text-2xs font-semibold leading-none text-accent-foreground tabular-nums">
                   {badge}
                 </span>
               ))}
@@ -142,7 +142,7 @@ export function AdminSidebar({
           onClick={toggle}
           aria-label={collapsed ? "Expand menu" : "Collapse menu"}
           title={collapsed ? "Expand menu" : "Collapse menu"}
-          className="rounded-md p-1.5 text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
+          className="rounded-lg p-1.5 text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
         >
           {collapsed ? (
             <ChevronsRight className="h-4 w-4" />

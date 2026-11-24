@@ -1,5 +1,6 @@
 "use client";
 
+import { buttonClasses } from "@/components/ui/buttonStyles";
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import {
@@ -114,7 +115,7 @@ function CommentRow({
               onClick={onLike}
               className={cn(
                 "inline-flex items-center gap-1 rounded-lg px-1.5 py-0.5 text-xs font-semibold transition-colors",
-                c.myLike ? "text-red-500" : "text-subtle hover:text-foreground",
+                c.myLike ? "text-danger" : "text-subtle hover:text-foreground",
               )}
             >
               <Heart className={cn("h-3.5 w-3.5", c.myLike && "fill-current")} />
@@ -150,7 +151,7 @@ function CommentRow({
                           onDelete();
                           setMenuOpen(false);
                         }}
-                        className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-sm font-medium text-muted transition-colors hover:bg-red-500/10 hover:text-red-500"
+                        className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-sm font-medium text-muted transition-colors hover:bg-danger/10 hover:text-danger"
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                         Delete
@@ -181,7 +182,7 @@ function CommentRow({
               <button
                 onClick={save}
                 disabled={!draft.trim()}
-                className="rounded-lg bg-accent px-2.5 py-1 text-xs font-semibold text-accent-foreground hover:opacity-90 disabled:opacity-50"
+                className={buttonClasses("primary", "sm")}
               >
                 Save
               </button>
@@ -368,7 +369,7 @@ export function CommentsDrawer({
                           className="h-6 w-6 shrink-0 rounded-full object-cover"
                         />
                       ) : (
-                        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-accent/15 text-[11px] font-bold text-accent">
+                        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-accent/15 text-2xs font-bold text-accent">
                           {u.name.charAt(0).toUpperCase()}
                         </span>
                       )}
@@ -376,7 +377,7 @@ export function CommentsDrawer({
                         {u.name}
                       </span>
                       {u.username && (
-                        <span className="shrink-0 text-[11px] font-semibold text-accent">
+                        <span className="shrink-0 text-2xs font-semibold text-accent">
                           @{u.username}
                         </span>
                       )}

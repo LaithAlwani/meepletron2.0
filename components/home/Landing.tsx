@@ -270,7 +270,7 @@ export function Landing() {
       {/* About — moved here from the old /about page. Always shown. */}
       <section className="mx-auto max-w-site px-4 pb-16">
         <Reveal className="rounded-2xl border border-border bg-surface/60 p-6 backdrop-blur sm:p-8">
-          <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-accent">
+          <p className="text-2xs font-bold uppercase tracking-[0.18em] text-accent">
             Why it exists
           </p>
           <div className="mt-3 space-y-4 text-base leading-relaxed text-muted">

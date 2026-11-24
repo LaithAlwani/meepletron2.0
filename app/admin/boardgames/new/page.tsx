@@ -1,5 +1,6 @@
 "use client";
 
+import { fieldClasses } from "@/components/ui/Field";
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useMutation, useAction } from "convex/react";
@@ -57,8 +58,7 @@ export default function NewGamePage() {
     router.push(`/admin/boardgames/${gameId}`);
   }
 
-  const inputClass =
-    "w-full rounded-lg border border-border bg-surface px-3 py-2 outline-none focus:ring-2 focus:ring-ring";
+  const inputClass = `${fieldClasses} px-3.5 py-2.5`;
 
   return (
     <div className="max-w-2xl space-y-6">
@@ -99,7 +99,7 @@ export default function NewGamePage() {
                         ),
                       )
                     }
-                    className="flex-1 rounded-md border border-border bg-surface px-2 py-1 text-sm outline-none focus:ring-2 focus:ring-ring"
+                    className="flex-1 rounded-lg border border-border bg-surface px-2 py-1 text-sm outline-none focus:ring-2 focus:ring-ring"
                   />
                   <span className="max-w-[40%] truncate text-xs text-muted">
                     {p.file.name}
@@ -109,7 +109,7 @@ export default function NewGamePage() {
                     onClick={() =>
                       setPdfs((prev) => prev.filter((_, j) => j !== i))
                     }
-                    className="text-xs text-red-600 hover:underline dark:text-red-400"
+                    className="text-xs text-danger hover:underline"
                   >
                     Remove
                   </button>

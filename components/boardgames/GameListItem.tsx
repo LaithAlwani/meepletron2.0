@@ -24,7 +24,7 @@ export function GameListItem({ game }: { game: GameCardData }) {
   const rating = game.bggRating;
   const morph = useCoverMorph(game.slug, cover);
   const iconBtn =
-    "flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted transition-colors hover:text-accent";
+    "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-muted transition-colors hover:text-accent";
 
   return (
     <div className="flex items-center gap-3 py-3">

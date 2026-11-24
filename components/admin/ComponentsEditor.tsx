@@ -1,5 +1,7 @@
 "use client";
 
+import { buttonClasses } from "@/components/ui/buttonStyles";
+import { fieldClasses } from "@/components/ui/Field";
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useMutation, useAction } from "convex/react";
 import { Plus, Trash2, Sparkles, GripVertical } from "lucide-react";
@@ -347,10 +349,9 @@ export function ComponentsEditor({
     }
   }
 
-  const inputCls =
-    "min-w-0 flex-1 rounded-md border border-border bg-background px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-ring";
+  const inputCls = `${fieldClasses} min-w-0 !w-auto flex-1 px-3 py-1.5`;
   const countCls =
-    "w-20 shrink-0 rounded-md border border-border bg-background px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-ring";
+    "w-20 shrink-0 rounded-lg border border-border bg-background px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-ring";
   const gripCls =
     "shrink-0 cursor-grab touch-none select-none text-subtle hover:text-foreground active:cursor-grabbing";
 
@@ -374,7 +375,7 @@ export function ComponentsEditor({
             {/* Top-level row */}
             <div
               data-row-id={r.id}
-              className={`flex items-center gap-2 rounded-md ${rowDropCls(r.id)} ${rowDim(r.id)}`}
+              className={`flex items-center gap-2 rounded-lg ${rowDropCls(r.id)} ${rowDim(r.id)}`}
             >
               <span
                 {...gripHandlers({ kind: "row", rowId: r.id })}
@@ -411,14 +412,14 @@ export function ComponentsEditor({
                 onClick={() => addChild(r.id)}
                 aria-label="Add sub-item"
                 title="Add sub-item"
-                className="shrink-0 rounded-md p-2 text-subtle transition-colors hover:bg-surface-2 hover:text-foreground"
+                className="shrink-0 rounded-lg p-2 text-subtle transition-colors hover:bg-surface-2 hover:text-foreground"
               >
                 <Plus className="h-4 w-4" />
               </button>
               <button
                 onClick={() => removeRow(r.id)}
                 aria-label="Remove component"
-                className="shrink-0 rounded-md p-2 text-subtle transition-colors hover:bg-surface-2 hover:text-red-600"
+                className="shrink-0 rounded-lg p-2 text-subtle transition-colors hover:bg-surface-2 hover:text-danger"
               >
                 <Trash2 className="h-4 w-4" />
               </button>
@@ -432,7 +433,7 @@ export function ComponentsEditor({
                     key={c.id}
                     data-child-id={c.id}
                     data-parent-id={r.id}
-                    className={`flex items-center gap-2 rounded-md ${childDropCls(r.id, c.id)} ${childDim(r.id, c.id)}`}
+                    className={`flex items-center gap-2 rounded-lg ${childDropCls(r.id, c.id)} ${childDim(r.id, c.id)}`}
                   >
                     <span
                       {...gripHandlers({
@@ -471,7 +472,7 @@ export function ComponentsEditor({
                     <button
                       onClick={() => removeChild(r.id, c.id)}
                       aria-label="Remove sub-item"
-                      className="shrink-0 rounded-md p-2 text-subtle transition-colors hover:bg-surface-2 hover:text-red-600"
+                      className="shrink-0 rounded-lg p-2 text-subtle transition-colors hover:bg-surface-2 hover:text-danger"
                     >
                       <Trash2 className="h-4 w-4" />
                     </button>
@@ -486,7 +487,7 @@ export function ComponentsEditor({
       <div className="flex flex-wrap items-center gap-2">
         <button
           onClick={addRow}
-          className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm font-medium text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
+          className={buttonClasses("ghost", "sm")}
         >
           <Plus className="h-4 w-4" />
           Add component
@@ -494,7 +495,7 @@ export function ComponentsEditor({
         <button
           onClick={onRegenerate}
           disabled={busy}
-          className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm font-medium text-muted transition-colors hover:bg-surface-2 hover:text-foreground disabled:opacity-50"
+          className={buttonClasses("ghost", "sm")}
         >
           <Sparkles className="h-4 w-4" />
           {busy ? "Regenerating…" : "Regenerate with AI"}
@@ -502,7 +503,7 @@ export function ComponentsEditor({
         {onDone && (
           <button
             onClick={onDone}
-            className="ml-auto rounded-lg border border-border px-4 py-1.5 text-sm font-medium text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
+            className={buttonClasses("ghost", "sm", "ml-auto")}
           >
             Cancel
           </button>

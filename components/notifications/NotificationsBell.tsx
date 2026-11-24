@@ -80,7 +80,7 @@ function RowIcon({ type }: { type: NotifItem["type"] }) {
               : MessageCircle;
   const color =
     type === "post_like" || type === "comment_like"
-      ? "text-red-500"
+      ? "text-danger"
       : type === "comment_mention" ||
           type === "friend_request" ||
           type === "friend_accept"
@@ -236,7 +236,7 @@ export function NotificationsBell({
       >
         <Bell className={variant === "bar" ? "h-[23px] w-[23px]" : "h-5 w-5"} />
         {badge && (
-          <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-accent px-1 text-[10px] font-bold leading-none text-accent-foreground">
+          <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-accent px-1 text-2xs font-bold leading-none text-accent-foreground">
             {badge}
           </span>
         )}

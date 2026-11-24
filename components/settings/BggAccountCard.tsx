@@ -1,5 +1,6 @@
 "use client";
 
+import { fieldClasses } from "@/components/ui/Field";
 import { useState } from "react";
 import { useAction, useMutation, useQuery } from "convex/react";
 import { RefreshCw, Unlink } from "lucide-react";
@@ -10,8 +11,7 @@ import { useConfirm } from "@/components/ui/Confirm";
 import { friendlyError } from "@/lib/friendlyError";
 import { relativeTime } from "@/lib/format";
 
-const inputCls =
-  "w-full rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-accent/50 disabled:opacity-50";
+const inputCls = `${fieldClasses} px-3.5 py-2.5`;
 
 /**
  * Link + sync controls for a BoardGameGeek account.
@@ -118,7 +118,7 @@ export function BggAccountCard() {
           </p>
         </div>
         {account?.status === "error" && (
-          <p className="text-xs text-red-500">
+          <p className="text-xs text-danger">
             {account.lastError === "bad_credentials"
               ? "That username and password didn't work."
               : "BoardGameGeek couldn't be reached last time. Try again."}
@@ -204,7 +204,7 @@ export function BggAccountCard() {
           ) : null}
 
           {(job.created != null || job.recentTitles?.length) && (
-            <p className="truncate text-[11px] text-subtle">
+            <p className="truncate text-2xs text-subtle">
               {job.created != null && (
                 <span>
                   {job.created} new · {Math.max(0, job.processed - job.created)}{" "}
@@ -247,14 +247,14 @@ export function BggAccountCard() {
           ) : null}
 
           {job.currentTitle && (
-            <p className="truncate text-[11px] text-subtle">
+            <p className="truncate text-2xs text-subtle">
               Now importing: {job.currentTitle}
             </p>
           )}
         </div>
       )}
       {job?.status === "error" && job.error && (
-        <p className="text-xs text-red-500">{job.error}</p>
+        <p className="text-xs text-danger">{job.error}</p>
       )}
 
       {/* Plays import — paged, so it shows page progress. */}
@@ -294,7 +294,7 @@ export function BggAccountCard() {
           </div>
         )}
         {playsJob?.status === "error" && playsJob.error && (
-          <p className="mt-1 text-xs text-red-500">{playsJob.error}</p>
+          <p className="mt-1 text-xs text-danger">{playsJob.error}</p>
         )}
       </div>
 
@@ -319,7 +319,7 @@ export function BggAccountCard() {
           onClick={doUnlink}
           aria-label="Unlink account"
           title="Unlink account"
-          className="ml-auto flex h-8 w-8 items-center justify-center rounded-lg text-muted transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-500/10 dark:hover:text-red-400"
+          className="ml-auto flex h-8 w-8 items-center justify-center rounded-lg text-muted transition-colors hover:bg-red-50 hover:text-danger dark:hover:bg-danger/10 dark:hover:text-danger"
         >
           <Unlink className="h-4 w-4" />
         </button>

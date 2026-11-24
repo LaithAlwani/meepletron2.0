@@ -85,15 +85,15 @@ function FaqItem({ faq }: { faq: Faq }) {
 
           {faq.annotations.length > 0 && (
             <div className="mt-3 flex flex-wrap items-center gap-1.5 border-t border-border pt-2">
-              <span className="text-[11px] font-semibold uppercase tracking-wide text-muted">
+              <span className="text-2xs font-semibold uppercase tracking-wide text-muted">
                 Sources
               </span>
               {faq.annotations.map((a) => (
                 <span
                   key={a.n}
-                  className="inline-flex items-center gap-1 rounded-full border border-border bg-surface-2 px-2 py-0.5 text-[11px] text-muted"
+                  className="inline-flex items-center gap-1 rounded-full border border-border bg-surface-2 px-2 py-0.5 text-2xs text-muted"
                 >
-                  <span className="inline-flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-accent/15 px-1 text-[9px] font-bold text-accent">
+                  <span className="inline-flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-accent/15 px-1 text-2xs font-bold text-accent">
                     {a.n}
                   </span>
                   <span className="max-w-[180px] truncate">
@@ -124,7 +124,7 @@ function FaqItem({ faq }: { faq: Faq }) {
               aria-pressed={faq.myVote === "down"}
               aria-label="Not helpful"
               className={`flex items-center gap-1.5 rounded-lg px-2 py-1 transition-colors hover:bg-surface-2 ${
-                faq.myVote === "down" ? "text-red-500" : ""
+                faq.myVote === "down" ? "text-danger" : ""
               }`}
             >
               <ThumbsDown className="h-4 w-4" />

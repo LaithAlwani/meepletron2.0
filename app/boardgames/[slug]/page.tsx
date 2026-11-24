@@ -50,7 +50,7 @@ function InfoSection({
       className="animate-in mb-8"
       style={delay ? { animationDelay: `${delay}s` } : undefined}
     >
-      <h2 className="mb-3 text-[11px] font-bold uppercase tracking-[0.16em] text-subtle">
+      <h2 className="mb-3 text-2xs font-bold uppercase tracking-[0.16em] text-subtle">
         {title}
       </h2>
       {children}
@@ -74,7 +74,7 @@ function CreditRow({
   if (!text && (!items || items.length === 0)) return null;
   return (
     <div className="flex gap-4 px-4 py-3">
-      <span className="w-24 shrink-0 pt-0.5 text-[11px] font-bold uppercase tracking-wide text-subtle sm:w-28">
+      <span className="w-24 shrink-0 pt-0.5 text-2xs font-bold uppercase tracking-wide text-subtle sm:w-28">
         {label}
       </span>
       <div className="min-w-0 flex-1">
