@@ -289,7 +289,10 @@ export default defineSchema({
     .index("by_game", ["gameId"])
     .index("by_game_and_user", ["gameId", "userId"]),
 
-  // One row per retrievable chunk, with its embedding inline.
+  // One row per retrievable chunk. The ~6 KB embedding is moving off this doc
+  // into `chunkEmbeddings` (see chunkMigration.ts) so RAG hydration reads only
+  // text-sized docs. `embedding` + the `by_embedding` vector index here are the
+  // legacy copy — removed in the cleanup deploy once every chunk is stripped.
   chunks: defineTable({
     rulebookId: v.id("rulebooks"),
     gameId: v.id("games"), // denormalized for TOC / grouping
@@ -304,16 +307,49 @@ export default defineSchema({
     scope: v.union(v.literal("main"), v.literal("variant")),
     variantName: v.optional(v.string()),
     text: v.string(),
-    embedding: v.array(v.float64()),
+    // Legacy inline embedding (optional while the split migration runs).
+    embedding: v.optional(v.array(v.float64())),
+    // This chunk's `chunkEmbeddings` row — what a vector hit maps back through
+    // (via `by_embedding_id`) without re-reading the 6 KB embedding doc.
+    embeddingId: v.optional(v.id("chunkEmbeddings")),
   })
     .index("by_rulebook", ["rulebookId"])
     .index("by_rulebook_and_type", ["rulebookId", "chunkType"])
     .index("by_game", ["gameId"])
+    .index("by_embedding_id", ["embeddingId"])
     .vectorIndex("by_embedding", {
       vectorField: "embedding",
       dimensions: 768, // gemini-embedding-001 @ 768 dims (see lib/embedding.ts)
       filterFields: ["rulebookId", "chunkType"],
     }),
+
+  // One embedding per chunk, split off `chunks` so text reads stay small. Only
+  // vector search touches these; nothing on the hot path reads the docs.
+  chunkEmbeddings: defineTable({
+    chunkId: v.id("chunks"),
+    rulebookId: v.id("rulebooks"),
+    chunkType: v.union(
+      v.literal("text"),
+      v.literal("table"),
+      v.literal("list"),
+      v.literal("legend"),
+    ),
+    embedding: v.array(v.float64()),
+  })
+    .index("by_chunk", ["chunkId"])
+    .vectorIndex("by_embedding", {
+      vectorField: "embedding",
+      dimensions: 768, // gemini-embedding-001 @ 768 dims (see lib/embedding.ts)
+      filterFields: ["rulebookId", "chunkType"],
+    }),
+
+  // One-off migration switches (key → done). `chunkEmbeddingsCopied` flips RAG
+  // retrieval from `chunks.by_embedding` to `chunkEmbeddings.by_embedding`.
+  migrationFlags: defineTable({
+    key: v.string(),
+    done: v.boolean(),
+    updatedAt: v.number(),
+  }).index("by_key", ["key"]),
 
   chats: defineTable({
     userId: v.id("users"),
@@ -344,22 +380,9 @@ export default defineSchema({
     answerModel: v.optional(v.string()),
     // persisted citation snapshots (bounded to rerankTopN). Our own field —
     // unrelated to the deprecated AI SDK message-annotations API.
-    annotations: v.optional(
-      v.array(
-        v.object({
-          n: v.number(),
-          gameId: v.id("games"),
-          rulebookId: v.id("rulebooks"),
-          bgTitle: v.string(),
-          breadcrumb: v.optional(v.string()),
-          page: v.optional(v.number()),
-          chunkType: v.string(),
-          scope: v.string(),
-          variantName: v.optional(v.string()),
-          text: v.string(),
-        }),
-      ),
-    ),
+    // New rows store a short `text` snippet + `chunkId` (the full passage is
+    // fetched on open via chat.citationText); older rows carry full text.
+    annotations: v.optional(v.array(annotationValidator)),
     rating: v.optional(v.union(v.literal("up"), v.literal("down"))),
   }).index("by_chat", ["chatId"]),
 
@@ -618,7 +641,11 @@ export default defineSchema({
   // Running counters for the admin dashboard, maintained incrementally so the
   // dashboard reads a couple of small docs instead of scanning messages/usageLog
   // (and stops re-scanning them on every insert). Backfill: admin.backfillStats.
+  // Sharded: writers bump one of N rows picked at random (`shard` set) so the
+  // per-message writes don't all contend on one doc; readers sum every row. The
+  // original singleton (no `shard`) is kept and summed in as-is.
   adminCounters: defineTable({
+    shard: v.optional(v.number()),
     messagesTotal: v.number(),
     messagesByUser: v.number(),
     messagesByAi: v.number(),
@@ -628,17 +655,21 @@ export default defineSchema({
       v.string(),
       v.object({ input: v.number(), output: v.number() }),
     ),
-  }),
+  }).index("by_shard", ["shard"]),
 
   // Per-month LLM token totals (key = "YYYY-MM", UTC), for the dashboard's
-  // "this month" figures. One tiny row per month.
+  // "this month" figures. Sharded like adminCounters (written per answer):
+  // up to N rows per month, summed on read; legacy unsharded rows included.
   usageMonthly: defineTable({
     month: v.string(),
+    shard: v.optional(v.number()),
     tokensByModel: v.record(
       v.string(),
       v.object({ input: v.number(), output: v.number() }),
     ),
-  }).index("by_month", ["month"]),
+  })
+    .index("by_month", ["month"])
+    .index("by_month_and_shard", ["month", "shard"]),
 
   usageLog: defineTable({
     purpose: v.union(

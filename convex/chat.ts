@@ -20,6 +20,8 @@ import {
 } from "./lib/chatConfig";
 import { rowCost } from "./lib/pricing";
 import { stripCitationMarkers } from "./lib/prompts";
+import { annotationValidator, slimAnnotation } from "./lib/annotations";
+import { embeddingsCopied } from "./lib/chunks";
 
 /** Daily token budgets: guests get a smaller allowance to nudge sign-up. */
 export const DAILY_TOKEN_LIMIT = 50_000;
@@ -377,6 +379,21 @@ export const rateMessage = mutation({
   },
 });
 
+/**
+ * Full passage for a citation chip, fetched only when the user opens it (chat
+ * messages store a snippet + chunkId). Null if the chunk is gone (re-ingested
+ * / deleted) — the UI then shows the stored snippet.
+ */
+export const citationText = query({
+  args: { chunkId: v.id("chunks") },
+  handler: async (ctx, { chunkId }): Promise<string | null> => {
+    const user = await getCurrentUser(ctx);
+    if (!user) return null;
+    const c = await ctx.db.get("chunks", chunkId);
+    return c?.text ?? null;
+  },
+});
+
 /** Admin: a user's chats (with game title + last message). */
 export const adminUserChats = query({
   args: { userId: v.id("users") },
@@ -531,16 +548,38 @@ async function titleFor(
   return title;
 }
 
-/** Hydrate vector-search hits into chunks (with game titles), preserving order. */
+/**
+ * Hydrate vector-search hits into chunks (with game titles), preserving order.
+ * Accepts either hit kind (see lib/chunks.searchChunkVectors): a legacy
+ * `chunks` id, or a `chunkEmbeddings` id resolved through the
+ * `chunks.by_embedding_id` index — so the ~6 KB embedding doc is never read.
+ * Each result carries `hitId` (the id passed in) for score lookup.
+ */
 export const hydrateChunks = internalQuery({
-  args: { chunkIds: v.array(v.id("chunks")) },
+  args: {
+    chunkIds: v.array(v.union(v.id("chunks"), v.id("chunkEmbeddings"))),
+  },
   handler: async (ctx, { chunkIds }) => {
     const cache = new Map<string, string>();
     const out = [];
     for (const id of chunkIds) {
-      const c = await ctx.db.get("chunks", id);
+      const legacyId = ctx.db.normalizeId("chunks", id);
+      const embeddingId = legacyId
+        ? null
+        : ctx.db.normalizeId("chunkEmbeddings", id);
+      const c = legacyId
+        ? await ctx.db.get("chunks", legacyId)
+        : embeddingId
+          ? await ctx.db
+              .query("chunks")
+              .withIndex("by_embedding_id", (q) =>
+                q.eq("embeddingId", embeddingId),
+              )
+              .first()
+          : null;
       if (!c) continue;
       out.push({
+        hitId: id,
         chunkId: c._id,
         gameId: c.gameId,
         rulebookId: c.rulebookId,
@@ -598,6 +637,8 @@ export const getActiveConfig = internalQuery({
     const merged = { ...CHAT_CONFIG_DEFAULTS, ...rows[0] };
     return {
       ...merged,
+      // Embeddings-split gate (chunkMigration.ts): which vector index RAG uses.
+      chunkEmbeddingsReady: await embeddingsCopied(ctx),
       contentModel: knownContentModel(merged.contentModel),
       // Token count — coerce a stray fractional (e.g. a mis-typed 0.5) to int.
       answerThinkingBudget: Math.round(merged.answerThinkingBudget),
@@ -642,19 +683,6 @@ export const reserveBudget = internalMutation({
       throw new Error("Daily token limit reached");
     }
   },
-});
-
-const annotationValidator = v.object({
-  n: v.number(),
-  gameId: v.id("games"),
-  rulebookId: v.id("rulebooks"),
-  bgTitle: v.string(),
-  breadcrumb: v.optional(v.string()),
-  page: v.optional(v.number()),
-  chunkType: v.string(),
-  scope: v.string(),
-  variantName: v.optional(v.string()),
-  text: v.string(),
 });
 
 /** Persist the assistant reply + citations, and account for token usage. */
@@ -711,7 +739,10 @@ export const saveAssistantMessage = internalMutation({
       chatId,
       role: "assistant",
       content,
-      annotations: annotations.length > 0 ? annotations : undefined,
+      // Snippets only (full passage fetched on open via citationText), so the
+      // message list + history reads stay small.
+      annotations:
+        annotations.length > 0 ? annotations.map(slimAnnotation) : undefined,
       inputTokens: inputTokens || undefined,
       outputTokens: outputTokens || undefined,
       costUsd: costUsd || undefined,

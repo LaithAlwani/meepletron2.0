@@ -267,9 +267,14 @@ export const commitIngestion = action({
       embedding: embeddings[i],
     }));
 
-    await ctx.runMutation(internal.ingestionDb.clearRulebookChunks, {
-      rulebookId,
-    });
+    // Batched: each call deletes one page of old chunks, true = more remain.
+    while (
+      await ctx.runMutation(internal.ingestionDb.clearRulebookChunks, {
+        rulebookId,
+      })
+    ) {
+      /* keep clearing */
+    }
     for (let i = 0; i < withEmbeddings.length; i += EMBED_COMMIT_BATCH) {
       await ctx.runMutation(internal.ingestionDb.insertCommittedChunks, {
         rulebookId,

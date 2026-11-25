@@ -3,9 +3,9 @@
 import { useEffect, useRef, useState } from "react";
 import { GroundedMarkdown } from "@/components/chat/GroundedMarkdown";
 import { Copy, Check, ThumbsUp, ThumbsDown } from "lucide-react";
-import { useMutation } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import type { Doc } from "@/convex/_generated/dataModel";
+import type { Doc, Id } from "@/convex/_generated/dataModel";
 import { usePreferences } from "@/lib/usePreferences";
 import { timeOfDay } from "@/lib/format";
 
@@ -20,8 +20,24 @@ export type SourceRef = {
   breadcrumb?: string;
   page?: number;
   variantName?: string;
+  /** Full passage, or (newer chat messages, when `chunkId` is set) a snippet. */
   text: string;
+  /** Source chunk — when set, the full passage is fetched on open. */
+  chunkId?: Id<"chunks">;
 };
+
+/**
+ * The opened citation's passage. Newer messages store only a snippet + chunkId,
+ * so fetch the full text on open (one tiny query, only while open); show the
+ * snippet meanwhile, or if the chunk has since been re-ingested away.
+ */
+function PassageText({ source, answer }: { source: SourceRef; answer: string }) {
+  const full = useQuery(
+    api.chat.citationText,
+    source.chunkId ? { chunkId: source.chunkId } : "skip",
+  );
+  return <>{highlightPassage(full ?? source.text, answer)}</>;
+}
 
 function MessageActions({ message }: { message: Doc<"messages"> }) {
   const rate = useMutation(api.chat.rateMessage);
@@ -234,7 +250,7 @@ export function Sources({
             {open.variantName && <span className="italic">· {open.variantName}</span>}
           </div>
           <blockquote className="max-h-52 overflow-y-auto whitespace-pre-wrap border-l-2 border-accent/40 pl-3 leading-relaxed text-foreground/90">
-            {highlightPassage(open.text, answer)}
+            <PassageText source={open} answer={answer} />
           </blockquote>
           <p className="mt-1.5 text-2xs text-muted">from {open.bgTitle}</p>
         </div>
