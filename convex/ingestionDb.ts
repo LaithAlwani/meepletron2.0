@@ -10,6 +10,11 @@ import type { Id } from "./_generated/dataModel";
 import { internal } from "./_generated/api";
 import { requireAdmin } from "./lib/auth";
 import { recordUsage } from "./lib/stats";
+import {
+  deleteRulebookChunks,
+  embeddingsCopied,
+  insertChunk,
+} from "./lib/chunks";
 import { refreshChatReady } from "./games";
 
 const batchPlanValidator = v.array(
@@ -314,15 +319,15 @@ const normChunkType = (t: string): "text" | "table" | "list" | "legend" =>
 const normScope = (s: string): "main" | "variant" =>
   s === "variant" ? "variant" : "main";
 
-/** Delete a rulebook's existing committed chunks (call before re-inserting). */
+/**
+ * Delete one batch of a rulebook's committed chunks (+ their embedding rows).
+ * Returns true while more may remain — the caller loops until false (one
+ * transaction per batch keeps each well under the read-byte limit).
+ */
 export const clearRulebookChunks = internalMutation({
   args: { rulebookId: v.id("rulebooks") },
-  handler: async (ctx, { rulebookId }) => {
-    const existing = await ctx.db
-      .query("chunks")
-      .withIndex("by_rulebook", (q) => q.eq("rulebookId", rulebookId))
-      .take(5000);
-    for (const c of existing) await ctx.db.delete("chunks", c._id);
+  handler: async (ctx, { rulebookId }): Promise<boolean> => {
+    return await deleteRulebookChunks(ctx, rulebookId);
   },
 });
 
@@ -344,18 +349,25 @@ export const insertCommittedChunks = internalMutation({
     ),
   },
   handler: async (ctx, { rulebookId, gameId, chunks }) => {
+    // Keep the inline vector too until the split migration has flipped the
+    // flag, so the legacy retrieval path still finds freshly committed chunks.
+    const legacyCopy = !(await embeddingsCopied(ctx));
     for (const c of chunks) {
-      await ctx.db.insert("chunks", {
-        rulebookId,
-        gameId,
-        breadcrumb: c.breadcrumb,
-        page: c.page,
-        chunkType: normChunkType(c.chunkType),
-        scope: normScope(c.scope),
-        variantName: c.variantName,
-        text: c.text,
-        embedding: c.embedding,
-      });
+      await insertChunk(
+        ctx,
+        {
+          rulebookId,
+          gameId,
+          breadcrumb: c.breadcrumb,
+          page: c.page,
+          chunkType: normChunkType(c.chunkType),
+          scope: normScope(c.scope),
+          variantName: c.variantName,
+          text: c.text,
+        },
+        c.embedding,
+        legacyCopy,
+      );
     }
   },
 });

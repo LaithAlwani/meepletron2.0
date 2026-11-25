@@ -17,6 +17,7 @@ import {
 } from "./lib/aiModels";
 import { DEFAULT_CHAT_MODEL } from "./lib/chatConfig";
 import { finite } from "./lib/num";
+import { searchChunkVectors, type ChunkHitId } from "./lib/chunks";
 import {
   buildRerankPrompt,
   buildRewritePrompt,
@@ -60,6 +61,7 @@ export type Annotation = {
   scope: string;
   variantName?: string;
   text: string;
+  chunkId?: Id<"chunks">;
 };
 
 /**
@@ -200,10 +202,12 @@ export async function buildAnswer(
   const rerankTopN = Math.max(config.rerankTopN, 5);
 
   // Hydrated chunks, shared across the primary and relaxed passes so the retry
-  // never re-reads a chunk doc (each carries a ~6 KB embedding) it already has.
+  // never re-reads a chunk doc it already has. Keyed by vector-hit id (a chunk
+  // id on the legacy index, a chunkEmbeddings id after the split migration).
   // A null entry = the id was looked up but the chunk no longer exists.
-  type Hydrated = RetrievedChunk & { chunkId: Id<"chunks"> };
-  const hydratedById = new Map<Id<"chunks">, Hydrated | null>();
+  type Hydrated = RetrievedChunk & { chunkId: Id<"chunks">; hitId: ChunkHitId };
+  const hydratedById = new Map<ChunkHitId, Hydrated | null>();
+  const useEmbeddingTable = config.chunkEmbeddingsReady;
   // Only the top `rerankCandidates` survivors reach the reranker; hydrate that
   // many by score plus a few spares (legend chunks / deleted ids get dropped
   // after hydration) instead of every vector hit.
@@ -221,7 +225,7 @@ export async function buildAnswer(
     topK: number,
     threshold: number,
   ) => {
-    const scoreById = new Map<Id<"chunks">, number>();
+    const scoreById = new Map<ChunkHitId, number>();
     for (const text of embedTexts) {
       if (!text.trim()) continue;
       const { embedding, tokens } = await embedQuery(text);
@@ -232,13 +236,11 @@ export async function buildAnswer(
         completionTokens: 0,
         totalTokens: finite(tokens),
       });
-      const hits = await ctx.vectorSearch("chunks", "by_embedding", {
+      const hits = await searchChunkVectors(ctx, {
         vector: embedding,
         limit: topK,
-        filter: (q) => {
-          const exprs = rulebookIds.map((id) => q.eq("rulebookId", id));
-          return exprs.length === 1 ? exprs[0] : q.or(...exprs);
-        },
+        rulebookIds,
+        useEmbeddingTable,
       });
       for (const h of hits) {
         const prev = scoreById.get(h._id);
@@ -257,7 +259,7 @@ export async function buildAnswer(
         chunkIds: missing,
       });
       for (const id of missing) hydratedById.set(id, null);
-      for (const c of fetched) hydratedById.set(c.chunkId, c);
+      for (const c of fetched) hydratedById.set(c.hitId, c);
     }
     const hydrated = wanted
       .map((id) => hydratedById.get(id))
@@ -271,11 +273,11 @@ export async function buildAnswer(
           [...hydrated]
             .sort(
               (a, b) =>
-                (scoreById.get(b.chunkId) ?? 0) - (scoreById.get(a.chunkId) ?? 0),
+                (scoreById.get(b.hitId) ?? 0) - (scoreById.get(a.hitId) ?? 0),
             )
             .slice(0, 8)
             .map((c) => ({
-              s: Number((scoreById.get(c.chunkId) ?? 0).toFixed(3)),
+              s: Number((scoreById.get(c.hitId) ?? 0).toFixed(3)),
               h: (c.breadcrumb || c.chunkType || "?").slice(0, 60),
             })),
         )}`,
@@ -352,6 +354,7 @@ export async function buildAnswer(
     scope: c.scope,
     variantName: c.variantName,
     text: c.text,
+    chunkId: c.chunkId,
   }));
 
   const system = buildSystemPrompt(sourceTitles, formatContext(ranked, legend));

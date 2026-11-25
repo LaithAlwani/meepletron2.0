@@ -4,6 +4,8 @@ import { requireAdmin } from "./lib/auth";
 import { r2, deleteMedia } from "./r2";
 import { rulebookKey } from "./lib/r2keys";
 import { refreshChatReady } from "./games";
+import { internal } from "./_generated/api";
+import { deleteRulebookChunks } from "./lib/chunks";
 
 /**
  * Admin: mint an R2 upload URL for a rulebook/download file, foldered under the
@@ -78,11 +80,14 @@ export const deleteRulebook = mutation({
     const rb = await ctx.db.get("rulebooks", rulebookId);
     if (!rb) return;
 
-    const chunks = await ctx.db
-      .query("chunks")
-      .withIndex("by_rulebook", (q) => q.eq("rulebookId", rulebookId))
-      .take(2000);
-    for (const c of chunks) await ctx.db.delete("chunks", c._id);
+    // One batch inline; a big rulebook's remainder is purged in follow-up
+    // transactions (orphaned chunks are unreachable — retrieval only searches
+    // rulebooks that still exist).
+    if (await deleteRulebookChunks(ctx, rulebookId)) {
+      await ctx.scheduler.runAfter(0, internal.chunkMigration.purgeRulebookChunks, {
+        rulebookId,
+      });
+    }
 
     const drafts = await ctx.db
       .query("migrationDrafts")

@@ -2,7 +2,13 @@ import { v } from "convex/values";
 import { query } from "./_generated/server";
 import { requireAdmin } from "./lib/auth";
 import { finite } from "./lib/num";
-import { monthKey, type TokensByModel } from "./lib/stats";
+import {
+  COUNTER_SHARDS,
+  mergeTokens,
+  monthKey,
+  sumCounterRows,
+  type TokensByModel,
+} from "./lib/stats";
 import { rowCost } from "./lib/pricing";
 
 const USAGE_SAMPLE = 20000;
@@ -40,15 +46,21 @@ export const dashboardStats = query({
   handler: async (ctx, { monthStart }) => {
     await requireAdmin(ctx);
 
-    const [catalogue, counters, monthly, userStats] = await Promise.all([
+    // adminCounters / usageMonthly are sharded (lib/stats.ts): sum every row —
+    // the legacy unsharded singleton plus up to COUNTER_SHARDS shards.
+    const [catalogue, counterRows, monthlyRows, userStats] = await Promise.all([
       ctx.db.query("catalogueStats").first(),
-      ctx.db.query("adminCounters").first(),
+      ctx.db.query("adminCounters").take(COUNTER_SHARDS * 2 + 2),
       ctx.db
         .query("usageMonthly")
         .withIndex("by_month", (q) => q.eq("month", monthKey(monthStart)))
-        .first(),
+        .take(COUNTER_SHARDS * 2 + 2),
       ctx.db.query("userStats").first(),
     ]);
+    const counters = sumCounterRows(counterRows);
+    const monthly = {
+      tokensByModel: mergeTokens(monthlyRows.map((r) => r.tokensByModel)),
+    };
 
     // Prefer the daily-stamped counter; bridge with a live scan until it exists.
     let users: number;
@@ -65,8 +77,8 @@ export const dashboardStats = query({
       registeredUsers = users - guestUsers;
     }
 
-    const total = sumTokens(counters?.tokensByModel);
-    const month = sumTokens(monthly?.tokensByModel);
+    const total = sumTokens(counters.tokensByModel);
+    const month = sumTokens(monthly.tokensByModel);
 
     return {
       users,
@@ -75,9 +87,9 @@ export const dashboardStats = query({
       baseGames: catalogue?.baseGameCount ?? 0,
       expansions: catalogue?.expansionCount ?? 0,
       messages: {
-        total: counters?.messagesTotal ?? 0,
-        byUser: counters?.messagesByUser ?? 0,
-        byAi: counters?.messagesByAi ?? 0,
+        total: counters.messagesTotal,
+        byUser: counters.messagesByUser,
+        byAi: counters.messagesByAi,
       },
       tokensMonth: { input: month.input, output: month.output },
       tokensTotal: { input: total.input, output: total.output },

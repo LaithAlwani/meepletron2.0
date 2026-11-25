@@ -6,6 +6,11 @@ import { slugify } from "./lib/slug";
 import { embedDocuments } from "./lib/embedding";
 import { buildSearchText } from "./lib/gameSearch";
 import { refreshChatReady } from "./games";
+import {
+  deleteRulebookChunks,
+  embeddingsCopied,
+  insertChunk,
+} from "./lib/chunks";
 
 type SeedChunk = {
   breadcrumb: string;
@@ -156,23 +161,25 @@ export const insertChunks = internalMutation({
   },
   handler: async (ctx, { rulebookId, gameId, chunks }) => {
     // Clear existing chunks for this rulebook (idempotent re-seed).
-    const existing = await ctx.db
-      .query("chunks")
-      .withIndex("by_rulebook", (q) => q.eq("rulebookId", rulebookId))
-      .take(500);
-    for (const c of existing) await ctx.db.delete("chunks", c._id);
+    // (The seed is a handful of chunks — one batch clears it.)
+    await deleteRulebookChunks(ctx, rulebookId, 500);
 
+    const legacyCopy = !(await embeddingsCopied(ctx));
     for (const c of chunks) {
-      await ctx.db.insert("chunks", {
-        rulebookId,
-        gameId,
-        breadcrumb: c.breadcrumb,
-        page: c.page,
-        chunkType: c.chunkType,
-        scope: c.scope,
-        text: c.text,
-        embedding: c.embedding,
-      });
+      await insertChunk(
+        ctx,
+        {
+          rulebookId,
+          gameId,
+          breadcrumb: c.breadcrumb,
+          page: c.page,
+          chunkType: c.chunkType,
+          scope: c.scope,
+          text: c.text,
+        },
+        c.embedding,
+        legacyCopy,
+      );
     }
     await ctx.db.patch("rulebooks", rulebookId, {
       isIngested: true,
