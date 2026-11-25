@@ -45,25 +45,6 @@ export const resetDailyBudgets = internalMutation({
   },
 });
 
-export const repairUserCounters = internalMutation({
-  args: { cursor: v.optional(v.union(v.string(), v.null())) },
-  handler: async (ctx, { cursor }) => {
-    const users = await ctx.db
-      .query("users")
-      .paginate({ cursor: cursor ?? null, numItems: 200 });
-    for (const u of users.page) {
-      if (!Number.isFinite(u.tokensUsedToday ?? 0)) {
-        await ctx.db.patch("users", u._id, { tokensUsedToday: 0 });
-      }
-    }
-    if (!users.isDone) {
-      await ctx.scheduler.runAfter(0, internal.maintenance.repairUserCounters, {
-        cursor: users.continueCursor,
-      });
-    }
-  },
-});
-
 export const repairUsageLog = internalMutation({
   args: { cursor: v.optional(v.union(v.string(), v.null())) },
   handler: async (ctx, { cursor }) => {

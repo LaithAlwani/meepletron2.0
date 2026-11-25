@@ -559,6 +559,9 @@ export const updateDraftChunk = mutation({
         });
       }
     }
+    // The review page keeps a local copy and patches it with this result,
+    // instead of re-reading every draft chunk on each edit.
+    return await ctx.db.get("draftChunks", draftChunkId);
   },
 });
 

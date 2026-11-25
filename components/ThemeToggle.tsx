@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 import { Sun, Moon, Monitor, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/cn";
 
@@ -17,16 +17,35 @@ function applyTheme(theme: Theme) {
   if (meta) meta.setAttribute("content", isDark ? "#191512" : "#faf6ee");
 }
 
-/** Shared theme state — reads/writes localStorage and applies globally. */
-function useTheme() {
-  const [theme, setThemeState] = useState<Theme>("system");
-  const [mounted, setMounted] = useState(false);
+const THEME_EVENT = "theme-change";
 
-  useEffect(() => {
-    const stored = (localStorage.getItem("theme") as Theme | null) ?? "system";
-    setThemeState(stored);
-    setMounted(true);
-  }, []);
+function readTheme(): Theme {
+  try {
+    return (localStorage.getItem("theme") as Theme | null) ?? "system";
+  } catch {
+    return "system";
+  }
+}
+
+function subscribeTheme(onChange: () => void) {
+  window.addEventListener(THEME_EVENT, onChange);
+  window.addEventListener("storage", onChange);
+  return () => {
+    window.removeEventListener(THEME_EVENT, onChange);
+    window.removeEventListener("storage", onChange);
+  };
+}
+
+/** Shared theme state — reads/writes localStorage and applies globally.
+ *  `null` on the server / first hydration render (= not mounted yet). */
+function useTheme() {
+  const stored = useSyncExternalStore<Theme | null>(
+    subscribeTheme,
+    readTheme,
+    () => null,
+  );
+  const mounted = stored !== null;
+  const theme: Theme = stored ?? "system";
 
   useEffect(() => {
     if (!mounted) return;
@@ -40,8 +59,12 @@ function useTheme() {
   }, [theme, mounted]);
 
   function setTheme(next: Theme) {
-    setThemeState(next);
-    localStorage.setItem("theme", next);
+    try {
+      localStorage.setItem("theme", next);
+    } catch {
+      /* storage unavailable */
+    }
+    window.dispatchEvent(new Event(THEME_EVENT));
   }
 
   return { theme, setTheme, mounted };

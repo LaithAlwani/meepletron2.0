@@ -667,15 +667,11 @@ export const reserveBudget = internalMutation({
         });
       }
     } else {
-      // First request since the budget moved off `users`: carry over today's
-      // usage from the deprecated user fields if they're from today.
-      const legacyResetAt = user.tokensResetAt ?? 0;
-      const fresh = legacyResetAt >= todayStartMs;
-      used = fresh ? finite(user.tokensUsedToday) : 0;
+      used = 0;
       await ctx.db.insert("userBudgets", {
         userId,
-        tokensUsedToday: used,
-        tokensResetAt: fresh ? legacyResetAt : todayStartMs,
+        tokensUsedToday: 0,
+        tokensResetAt: todayStartMs,
       });
     }
     // Admins have no daily cap.

@@ -3,10 +3,14 @@
 import { buttonClasses } from "@/components/ui/buttonStyles";
 import { use, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useQuery, useAction, useMutation } from "convex/react";
+import { useQuery, useAction, useMutation, useConvex } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Doc, Id } from "@/convex/_generated/dataModel";
-import { ChunkCard, InsertChunkForm } from "@/components/admin/ChunkCard";
+import {
+  ChunkCard,
+  InsertChunkForm,
+  DraftChunksSync,
+} from "@/components/admin/ChunkCard";
 import { friendlyError } from "@/lib/friendlyError";
 import { Plus, ChevronDown, ArrowUp } from "lucide-react";
 
@@ -46,7 +50,40 @@ export default function IngestReviewPage({
   const rbId = rulebookId as Id<"rulebooks">;
 
   const status = useQuery(api.ingestionDb.getIngestStatus, { rulebookId: rbId });
-  const chunks = useQuery(api.ingestionDb.listDraftChunks, { rulebookId: rbId });
+
+  // While parsing, chunks stream in, so the list is live. Once parsed (the
+  // review phase) a live query would re-read every draft chunk on each edit —
+  // so load it once and let the cards patch this copy (see DraftChunksSync).
+  const reviewing =
+    status?.status === "parsed" || status?.status === "reviewing";
+  const convex = useConvex();
+  const [snap, setSnap] = useState<Doc<"draftChunks">[]>();
+  const [snapVersion, setSnapVersion] = useState(0);
+  const live = useQuery(
+    api.ingestionDb.listDraftChunks,
+    reviewing && snap ? "skip" : { rulebookId: rbId },
+  );
+  useEffect(() => {
+    if (!reviewing) return;
+    let alive = true;
+    void convex
+      .query(api.ingestionDb.listDraftChunks, { rulebookId: rbId })
+      .then((rows) => {
+        if (alive) setSnap(rows);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [reviewing, snapVersion, convex, rbId]);
+  const chunks = reviewing && snap ? snap : live;
+  const sync = useMemo(
+    () => ({
+      replace: (row: Doc<"draftChunks">) =>
+        setSnap((cur) => cur?.map((c) => (c._id === row._id ? row : c))),
+      reload: () => setSnapVersion((v) => v + 1),
+    }),
+    [],
+  );
   const commit = useAction(api.ingestion.commitIngestion);
   const restart = useAction(api.ingestion.startIngestion);
   const pause = useMutation(api.ingestionDb.pauseIngestion);
@@ -174,7 +211,7 @@ export default function IngestReviewPage({
     }
   }
 
-  return (
+  const view = (
     <div className="max-w-3xl space-y-5">
       <Link
         href={`/admin/boardgames/${gameId}`}
@@ -520,6 +557,9 @@ export default function IngestReviewPage({
 
       <ScrollTopButton />
     </div>
+  );
+  return (
+    <DraftChunksSync.Provider value={sync}>{view}</DraftChunksSync.Provider>
   );
 }
 

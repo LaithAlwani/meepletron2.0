@@ -37,8 +37,6 @@ export const seedSampleGame = internalMutation({
       minAge: "10",
       minPlayTime: 60,
       maxPlayTime: 90,
-      description:
-        "Trade, build, and settle the island of Catan in this classic game of resource management and negotiation.",
       designers: ["Klaus Teuber"],
       artists: [],
       publishers: ["Kosmos"],

@@ -1,11 +1,21 @@
 "use client";
 
 import { buttonClasses } from "@/components/ui/buttonStyles";
-import { useState } from "react";
+import { createContext, useContext, useState } from "react";
 import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Doc, Id } from "@/convex/_generated/dataModel";
 import { Plus, Trash2, Pencil } from "lucide-react";
+
+/**
+ * The review page holds a one-shot copy of the draft chunks (a live query
+ * would re-read all of them on every edit). Cards report their changes here:
+ * an edit patches that copy with the saved row; inserts/deletes reload it.
+ */
+export const DraftChunksSync = createContext<{
+  replace: (chunk: Doc<"draftChunks">) => void;
+  reload: () => void;
+} | null>(null);
 
 /** Inline form to insert a brand-new chunk (at top, or after a given chunk). */
 export function InsertChunkForm({
@@ -22,6 +32,7 @@ export function InsertChunkForm({
   onDone: () => void;
 }) {
   const insert = useMutation(api.ingestionDb.insertDraftChunk);
+  const sync = useContext(DraftChunksSync);
   const [breadcrumb, setBreadcrumb] = useState(defaultBreadcrumb);
   const [text, setText] = useState("");
   const [page, setPage] = useState(defaultPage ? String(defaultPage) : "");
@@ -39,6 +50,7 @@ export function InsertChunkForm({
         text: text.trim(),
         page: Number.isFinite(parsedPage) ? parsedPage : undefined,
       });
+      sync?.reload();
       onDone();
     } finally {
       setSaving(false);
@@ -103,8 +115,13 @@ export function ChunkCard({
   index?: number;
   total?: number;
 }) {
-  const update = useMutation(api.ingestionDb.updateDraftChunk);
+  const updateRaw = useMutation(api.ingestionDb.updateDraftChunk);
   const remove = useMutation(api.ingestionDb.deleteDraftChunk);
+  const sync = useContext(DraftChunksSync);
+  async function update(args: Parameters<typeof updateRaw>[0]) {
+    const saved = await updateRaw(args);
+    if (saved) sync?.replace(saved);
+  }
   const [editing, setEditing] = useState(false);
   const [text, setText] = useState(chunk.text);
   const [breadcrumb, setBreadcrumb] = useState(chunk.breadcrumb);
@@ -131,6 +148,7 @@ export function ChunkCard({
   async function handleDelete() {
     if (!window.confirm("Delete this chunk? This can't be undone.")) return;
     await remove({ draftChunkId: chunk._id });
+    sync?.reload();
   }
 
   return (

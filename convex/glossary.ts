@@ -14,6 +14,7 @@ import { generateObject } from "ai";
 import { z } from "zod";
 import { resolveContentModel } from "./rag";
 import { embedQuery } from "./lib/embedding";
+import { searchChunkVectors } from "./lib/chunks";
 import { requireAdmin } from "./lib/auth";
 
 const NO_THINK = {
@@ -103,13 +104,10 @@ export const generateForGame = internalAction({
     const { embedding } = await embedQuery(
       "components contents what's in the box list of pieces and quantities",
     );
-    const hits = await ctx.vectorSearch("chunks", "by_embedding", {
+    const hits = await searchChunkVectors(ctx, {
       vector: embedding,
       limit: 6,
-      filter: (q) => {
-        const e = rulebookIds.map((id) => q.eq("rulebookId", id));
-        return e.length === 1 ? e[0] : q.or(...e);
-      },
+      rulebookIds,
     });
     const hydrated = await ctx.runQuery(internal.chat.hydrateChunks, {
       chunkIds: hits.map((h) => h._id),

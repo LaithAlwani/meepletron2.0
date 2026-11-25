@@ -11,6 +11,7 @@ import { generateObject } from "ai";
 import { z } from "zod";
 import { resolveContentModel } from "./rag";
 import { embedQuery } from "./lib/embedding";
+import { searchChunkVectors } from "./lib/chunks";
 import { requireAdmin } from "./lib/auth";
 
 /**
@@ -37,13 +38,10 @@ export const generateForGame = internalAction({
     const { embedding } = await embedQuery(
       "starting resources setup money cards hand limit tie-breaker turn order end of game trigger final scoring points commonly forgotten rules",
     );
-    const hits = await ctx.vectorSearch("chunks", "by_embedding", {
+    const hits = await searchChunkVectors(ctx, {
       vector: embedding,
       limit: 12,
-      filter: (q) => {
-        const e = setup.rulebookIds.map((id) => q.eq("rulebookId", id));
-        return e.length === 1 ? e[0] : q.or(...e);
-      },
+      rulebookIds: setup.rulebookIds,
     });
     const hydrated = await ctx.runQuery(internal.chat.hydrateChunks, {
       chunkIds: hits.map((h) => h._id),

@@ -11,6 +11,7 @@ import {
 import type { Doc, Id } from "./_generated/dataModel";
 import { internal } from "./_generated/api";
 import { deleteMedia } from "./r2";
+import { deleteRulebookChunks } from "./lib/chunks";
 import { publicUrl } from "./lib/r2keys";
 import { requireAdmin } from "./lib/auth";
 import { slugify, slugifyUnique } from "./lib/slug";
@@ -1654,11 +1655,12 @@ export async function purgeGame(ctx: MutationCtx, game: Doc<"games">) {
     .withIndex("by_game", (q) => q.eq("gameId", gameId))
     .take(100);
   for (const rb of rulebooks) {
-    const chunks = await ctx.db
-      .query("chunks")
-      .withIndex("by_rulebook", (q) => q.eq("rulebookId", rb._id))
-      .take(1000);
-    for (const c of chunks) await ctx.db.delete("chunks", c._id);
+    // Chunks + their embedding rows; a big rulebook finishes out of band.
+    if (await deleteRulebookChunks(ctx, rb._id)) {
+      await ctx.scheduler.runAfter(0, internal.chunkMigration.purgeRulebookChunks, {
+        rulebookId: rb._id,
+      });
+    }
     await deleteMedia(ctx, rb.storageKey, rb.storageId);
     await ctx.db.delete("rulebooks", rb._id);
   }
