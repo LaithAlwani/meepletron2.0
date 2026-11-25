@@ -8,7 +8,6 @@ import { buildSearchText } from "./lib/gameSearch";
 import { refreshChatReady } from "./games";
 import {
   deleteRulebookChunks,
-  embeddingsCopied,
   insertChunk,
 } from "./lib/chunks";
 
@@ -162,7 +161,6 @@ export const insertChunks = internalMutation({
     // (The seed is a handful of chunks — one batch clears it.)
     await deleteRulebookChunks(ctx, rulebookId, 500);
 
-    const legacyCopy = !(await embeddingsCopied(ctx));
     for (const c of chunks) {
       await insertChunk(
         ctx,
@@ -176,7 +174,6 @@ export const insertChunks = internalMutation({
           text: c.text,
         },
         c.embedding,
-        legacyCopy,
       );
     }
     await ctx.db.patch("rulebooks", rulebookId, {

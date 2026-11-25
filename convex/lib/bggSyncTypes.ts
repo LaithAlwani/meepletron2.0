@@ -46,11 +46,8 @@ export const bggCollectionRowValidator = bggCollectionItemValidator.extend({
   syncedAt: v.number(),
 });
 
-/** Which of a user's two sync pipelines a job belongs to. */
-export const bggSyncKindValidator = v.union(
-  v.literal("collection"),
-  v.literal("plays"),
-);
+/** Which sync pipeline a job belongs to (collection is the only one left). */
+export const bggSyncKindValidator = v.literal("collection");
 
 /**
  * Job lifecycle. `waiting` is the BGG-said-202 state — distinct from `running`

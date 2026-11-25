@@ -3,27 +3,10 @@
  * lives in its own `chunkEmbeddings` row (vector index `by_embedding`) and the
  * `chunks` doc keeps only text + `embeddingId`, so RAG hydration reads
  * text-sized docs. Every chunk insert / delete goes through here so the two
- * tables never drift. Migration + flag: convex/chunkMigration.ts.
+ * tables never drift.
  */
-import { internal } from "../_generated/api";
 import type { Doc, Id } from "../_generated/dataModel";
-import type { ActionCtx, MutationCtx, QueryCtx } from "../_generated/server";
-
-/** migrationFlags key: set once every chunk has a `chunkEmbeddings` row. */
-export const EMBEDDINGS_COPIED_FLAG = "chunkEmbeddingsCopied";
-
-/**
- * True once `chunkMigration.copyEmbeddings` has finished. Before then, RAG
- * still searches the legacy `chunks.by_embedding` index and writers keep the
- * inline copy so new chunks stay findable on that path.
- */
-export async function embeddingsCopied(ctx: QueryCtx): Promise<boolean> {
-  const row = await ctx.db
-    .query("migrationFlags")
-    .withIndex("by_key", (q) => q.eq("key", EMBEDDINGS_COPIED_FLAG))
-    .unique();
-  return row?.done === true;
-}
+import type { ActionCtx, MutationCtx } from "../_generated/server";
 
 export type ChunkFields = Omit<
   Doc<"chunks">,
@@ -31,20 +14,14 @@ export type ChunkFields = Omit<
 >;
 
 /**
- * Insert one chunk + its embedding row. `legacyCopy` also writes the vector
- * inline on the chunk (needed only until the copy migration flips the flag —
- * pass `!(await embeddingsCopied(ctx))`, read once per mutation).
+ * Insert one chunk + its embedding row.
  */
 export async function insertChunk(
   ctx: MutationCtx,
   fields: ChunkFields,
   embedding: number[],
-  legacyCopy: boolean,
 ): Promise<Id<"chunks">> {
-  const chunkId = await ctx.db.insert(
-    "chunks",
-    legacyCopy ? { ...fields, embedding } : fields,
-  );
+  const chunkId = await ctx.db.insert("chunks", fields);
   const embeddingId = await ctx.db.insert("chunkEmbeddings", {
     chunkId,
     rulebookId: fields.rulebookId,
@@ -88,14 +65,12 @@ export async function deleteRulebookChunks(
   return batch.length === limit;
 }
 
-/** A vector hit: a `chunks` id (legacy index) or a `chunkEmbeddings` id. */
-export type ChunkHitId = Id<"chunks"> | Id<"chunkEmbeddings">;
+/** A vector hit id. */
+export type ChunkHitId = Id<"chunkEmbeddings">;
 
 /**
- * Vector-search chunks scoped to `rulebookIds` (non-empty), on whichever index
- * the migration flag selects. Hits go straight to `internal.chat.hydrateChunks`
- * (accepts either id kind). `useEmbeddingTable` skips the flag read when the
- * caller already has it (buildAnswer reads it via getActiveConfig).
+ * Vector-search chunks scoped to `rulebookIds` (non-empty). Hits are
+ * `chunkEmbeddings` ids; pass them to `internal.chat.hydrateChunks`.
  */
 export async function searchChunkVectors(
   ctx: ActionCtx,
@@ -103,28 +78,13 @@ export async function searchChunkVectors(
     vector,
     limit,
     rulebookIds,
-    useEmbeddingTable,
   }: {
     vector: number[];
     limit: number;
     rulebookIds: Id<"rulebooks">[];
-    useEmbeddingTable?: boolean;
   },
 ): Promise<{ _id: ChunkHitId; _score: number }[]> {
-  const useNew =
-    useEmbeddingTable ??
-    (await ctx.runQuery(internal.chunkMigration.embeddingsReady, {}));
-  if (useNew) {
-    return await ctx.vectorSearch("chunkEmbeddings", "by_embedding", {
-      vector,
-      limit,
-      filter: (q) => {
-        const e = rulebookIds.map((id) => q.eq("rulebookId", id));
-        return e.length === 1 ? e[0] : q.or(...e);
-      },
-    });
-  }
-  return await ctx.vectorSearch("chunks", "by_embedding", {
+  return await ctx.vectorSearch("chunkEmbeddings", "by_embedding", {
     vector,
     limit,
     filter: (q) => {

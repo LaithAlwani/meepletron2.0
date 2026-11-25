@@ -12,7 +12,6 @@ import { requireAdmin } from "./lib/auth";
 import { recordUsage } from "./lib/stats";
 import {
   deleteRulebookChunks,
-  embeddingsCopied,
   insertChunk,
 } from "./lib/chunks";
 import { refreshChatReady } from "./games";
@@ -349,9 +348,6 @@ export const insertCommittedChunks = internalMutation({
     ),
   },
   handler: async (ctx, { rulebookId, gameId, chunks }) => {
-    // Keep the inline vector too until the split migration has flipped the
-    // flag, so the legacy retrieval path still finds freshly committed chunks.
-    const legacyCopy = !(await embeddingsCopied(ctx));
     for (const c of chunks) {
       await insertChunk(
         ctx,
@@ -366,7 +362,6 @@ export const insertCommittedChunks = internalMutation({
           text: c.text,
         },
         c.embedding,
-        legacyCopy,
       );
     }
   },

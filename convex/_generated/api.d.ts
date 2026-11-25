@@ -63,7 +63,6 @@ import type * as lib_stats from "../lib/stats.js";
 import type * as lib_topGamesCategories from "../lib/topGamesCategories.js";
 import type * as lib_userTotals from "../lib/userTotals.js";
 import type * as maintenance from "../maintenance.js";
-import type * as migrations from "../migrations.js";
 import type * as otp_EmailOtp from "../otp/EmailOtp.js";
 import type * as r2 from "../r2.js";
 import type * as rag from "../rag.js";
@@ -141,7 +140,6 @@ declare const fullApi: ApiFromModules<{
   "lib/topGamesCategories": typeof lib_topGamesCategories;
   "lib/userTotals": typeof lib_userTotals;
   maintenance: typeof maintenance;
-  migrations: typeof migrations;
   "otp/EmailOtp": typeof otp_EmailOtp;
   r2: typeof r2;
   rag: typeof rag;

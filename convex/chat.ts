@@ -21,7 +21,6 @@ import {
 import { rowCost } from "./lib/pricing";
 import { stripCitationMarkers } from "./lib/prompts";
 import { annotationValidator, slimAnnotation } from "./lib/annotations";
-import { embeddingsCopied } from "./lib/chunks";
 
 /** Daily token budgets: guests get a smaller allowance to nudge sign-up. */
 export const DAILY_TOKEN_LIMIT = 50_000;
@@ -557,26 +556,18 @@ async function titleFor(
  */
 export const hydrateChunks = internalQuery({
   args: {
-    chunkIds: v.array(v.union(v.id("chunks"), v.id("chunkEmbeddings"))),
+    // Vector-hit ids (`chunkEmbeddings`); mapped back to the text-only chunk
+    // through `by_embedding_id`, never reading the 6 KB embedding doc.
+    chunkIds: v.array(v.id("chunkEmbeddings")),
   },
   handler: async (ctx, { chunkIds }) => {
     const cache = new Map<string, string>();
     const out = [];
     for (const id of chunkIds) {
-      const legacyId = ctx.db.normalizeId("chunks", id);
-      const embeddingId = legacyId
-        ? null
-        : ctx.db.normalizeId("chunkEmbeddings", id);
-      const c = legacyId
-        ? await ctx.db.get("chunks", legacyId)
-        : embeddingId
-          ? await ctx.db
-              .query("chunks")
-              .withIndex("by_embedding_id", (q) =>
-                q.eq("embeddingId", embeddingId),
-              )
-              .first()
-          : null;
+      const c = await ctx.db
+        .query("chunks")
+        .withIndex("by_embedding_id", (q) => q.eq("embeddingId", id))
+        .first();
       if (!c) continue;
       out.push({
         hitId: id,
@@ -637,8 +628,6 @@ export const getActiveConfig = internalQuery({
     const merged = { ...CHAT_CONFIG_DEFAULTS, ...rows[0] };
     return {
       ...merged,
-      // Embeddings-split gate (chunkMigration.ts): which vector index RAG uses.
-      chunkEmbeddingsReady: await embeddingsCopied(ctx),
       contentModel: knownContentModel(merged.contentModel),
       // Token count — coerce a stray fractional (e.g. a mis-typed 0.5) to int.
       answerThinkingBudget: Math.round(merged.answerThinkingBudget),

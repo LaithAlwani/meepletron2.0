@@ -61,10 +61,6 @@ export default defineSchema({
         showPlays: v.optional(v.boolean()),
       }),
     ),
-    // DEPRECATED: the daily budget moved to `userBudgets`. No longer written;
-    // cleared by migrations:clearDeprecated. stage-2: remove.
-    tokensUsedToday: v.optional(v.number()),
-    tokensResetAt: v.optional(v.number()), // ms timestamp of the current budget window's start
     // Preserved timestamps from the old (Clerk) database on import (Convex's
     // `_creationTime` can't be overwritten). `importedAt` marks a reserved row
     // (imported, no auth account yet) so a later verified sign-in can adopt it.
@@ -144,9 +140,6 @@ export default defineSchema({
     minAge: v.optional(v.string()),
     minPlayTime: v.optional(v.number()),
     maxPlayTime: v.optional(v.number()),
-    // DEPRECATED: lives in `gameContent`. Moved + cleared by
-    // migrations:clearDeprecated. stage-2: remove.
-    description: v.optional(v.string()),
     designers: v.array(v.string()),
     artists: v.array(v.string()),
     publishers: v.array(v.string()),
@@ -309,8 +302,6 @@ export default defineSchema({
     scope: v.union(v.literal("main"), v.literal("variant")),
     variantName: v.optional(v.string()),
     text: v.string(),
-    // Legacy inline embedding (optional while the split migration runs).
-    embedding: v.optional(v.array(v.float64())),
     // This chunk's `chunkEmbeddings` row — what a vector hit maps back through
     // (via `by_embedding_id`) without re-reading the 6 KB embedding doc.
     embeddingId: v.optional(v.id("chunkEmbeddings")),
@@ -318,12 +309,7 @@ export default defineSchema({
     .index("by_rulebook", ["rulebookId"])
     .index("by_rulebook_and_type", ["rulebookId", "chunkType"])
     .index("by_game", ["gameId"])
-    .index("by_embedding_id", ["embeddingId"])
-    .vectorIndex("by_embedding", {
-      vectorField: "embedding",
-      dimensions: 768, // gemini-embedding-001 @ 768 dims (see lib/embedding.ts)
-      filterFields: ["rulebookId", "chunkType"],
-    }),
+    .index("by_embedding_id", ["embeddingId"]),
 
   // One embedding per chunk, split off `chunks` so text reads stay small. Only
   // vector search touches these; nothing on the hot path reads the docs.
@@ -344,14 +330,6 @@ export default defineSchema({
       dimensions: 768, // gemini-embedding-001 @ 768 dims (see lib/embedding.ts)
       filterFields: ["rulebookId", "chunkType"],
     }),
-
-  // One-off migration switches (key → done). `chunkEmbeddingsCopied` flips RAG
-  // retrieval from `chunks.by_embedding` to `chunkEmbeddings.by_embedding`.
-  migrationFlags: defineTable({
-    key: v.string(),
-    done: v.boolean(),
-    updatedAt: v.number(),
-  }).index("by_key", ["key"]),
 
   chats: defineTable({
     userId: v.id("users"),
@@ -396,19 +374,7 @@ export default defineSchema({
     answer: v.string(),
     annotations: v.array(annotationValidator),
     order: v.number(),
-    // DEPRECATED vote tallies (voting removed). No longer written; cleared by
-    // migrations:clearDeprecated. stage-2: remove.
-    helpful: v.optional(v.number()),
-    notHelpful: v.optional(v.number()),
   }).index("by_game", ["gameId"]),
-
-  // DEPRECATED: FAQ voting was removed; nothing reads or writes this. Rows are
-  // deleted by migrations:clearDeprecated. stage-2: remove the table.
-  faqVotes: defineTable({
-    userId: v.id("users"),
-    faqId: v.id("gameFaqs"),
-    vote: v.union(v.literal("up"), v.literal("down")),
-  }).index("by_user_and_faq", ["userId", "faqId"]),
 
   // Rulebook-derived component list ("what's in the box"), keyed on the base game.
   // A top-level item may break a total into sub-types (one level deep) — e.g.
@@ -607,8 +573,7 @@ export default defineSchema({
     // Chat-ready base games, kept live by refreshChatReady (±1 on each flip)
     // and reset by the daily reconcile. Read by libraryCount's default view.
     chatReadyCount: v.optional(v.number()),
-    // DEPRECATED: marked the one-off chat-ready backfill; no longer read or
-    // written. stage-2: remove.
+    // Unused: left set on the existing stats row by the one-off backfill.
     chatReadyBackfilledAt: v.optional(v.number()),
     // Filter-drawer facets: the 40 most common categories / mechanics across
     // base games, denormalized off the daily recomputeSimilarGames scan. Read
@@ -728,11 +693,6 @@ export default defineSchema({
     linkedAt: v.number(),
     collectionSyncedAt: v.optional(v.number()),
     collectionCount: v.optional(v.number()),
-    // DEPRECATED (plays sync removed). Cleared by migrations:clearDeprecated.
-    // stage-2: remove.
-    playsSyncedAt: v.optional(v.number()),
-    playsCount: v.optional(v.number()),
-    playsSyncedThrough: v.optional(v.string()),
   })
     .index("by_user", ["userId"])
     .index("by_username_lower", ["usernameLower"]),
@@ -754,9 +714,6 @@ export default defineSchema({
     created: v.optional(v.number()), // new (stub) games created this run
     recentTitles: v.optional(v.array(v.string())), // last few titles, for the progress detail
     // Enrichment phase progress (filling stubs with BGG metadata + covers).
-    // DEPRECATED: the queue now lives in `bggEnrichQueue`. No longer read or
-    // written; cleared by migrations:clearDeprecated. stage-2: remove.
-    enrichQueue: v.optional(v.array(v.id("games"))),
     enrichTotal: v.optional(v.number()), // queue length when enrichment began
     enrichProcessed: v.optional(v.number()), // items handled so far (the cursor)
     currentTitle: v.optional(v.string()), // the game being enriched right now

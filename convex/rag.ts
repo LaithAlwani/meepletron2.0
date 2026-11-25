@@ -202,12 +202,11 @@ export async function buildAnswer(
   const rerankTopN = Math.max(config.rerankTopN, 5);
 
   // Hydrated chunks, shared across the primary and relaxed passes so the retry
-  // never re-reads a chunk doc it already has. Keyed by vector-hit id (a chunk
-  // id on the legacy index, a chunkEmbeddings id after the split migration).
+  // never re-reads a chunk doc it already has. Keyed by vector-hit id (a
+  // chunkEmbeddings id).
   // A null entry = the id was looked up but the chunk no longer exists.
   type Hydrated = RetrievedChunk & { chunkId: Id<"chunks">; hitId: ChunkHitId };
   const hydratedById = new Map<ChunkHitId, Hydrated | null>();
-  const useEmbeddingTable = config.chunkEmbeddingsReady;
   // Only the top `rerankCandidates` survivors reach the reranker; hydrate that
   // many by score plus a few spares (legend chunks / deleted ids get dropped
   // after hydration) instead of every vector hit.
@@ -240,7 +239,6 @@ export async function buildAnswer(
         vector: embedding,
         limit: topK,
         rulebookIds,
-        useEmbeddingTable,
       });
       for (const h of hits) {
         const prev = scoreById.get(h._id);

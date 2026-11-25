@@ -77,7 +77,6 @@ export function resolveTopBar(pathname: string): TopBarRoute | null {
   }
 
   // /plays/<playId>
-  if (seg[0] === "plays" && seg[1]) return { title: "", back: "/plays" };
 
   // /top-games/<listId>
   if (seg[0] === "top-games" && seg[1]) return { title: "", back: "/top-games" };

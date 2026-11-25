@@ -947,10 +947,8 @@ async function gameDetail(ctx: QueryCtx, game: Doc<"games">) {
   ]);
   return {
     ...(await withMedia(ctx, game)),
-    // Description lives in the gameContent sidecar; fall back to the game doc
-    // until migrations:clearDeprecated has moved every row over.
-    // stage-2: remove the `game.description` fallback.
-    description: content?.description ?? game.description,
+    // Description lives in the gameContent sidecar.
+    description: content?.description,
     // For expansions, the base game they belong to (null for base games).
     parent: parentDoc ? await withMedia(ctx, parentDoc) : null,
     // Lean rows: the detail page's Expansions list only shows a cover + title
