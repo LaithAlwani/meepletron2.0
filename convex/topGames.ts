@@ -3,8 +3,11 @@ import { paginationOptsValidator } from "convex/server";
 import {
   query,
   mutation,
+  internalMutation,
   type QueryCtx,
+  type MutationCtx,
 } from "./_generated/server";
+import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import { getCurrentUser, requireUser } from "./lib/auth";
 import { DEFAULT_CATEGORY, isTopCategory } from "./lib/topGamesCategories";
@@ -46,16 +49,72 @@ const HM_DRAFT_MAX = 50;
 /* -------------------------------------------------------------------------- */
 
 type ListDoc = Doc<"topGamesLists">;
+type ListEntry = ListDoc["entries"][number];
 
 /** Compact game shape for list rows — cover + slug + title, nothing heavy. */
-async function gameThumb(ctx: QueryCtx, gameId: Id<"games">) {
+type GameThumb = {
+  _id: Id<"games">;
+  slug: string;
+  title: string;
+  thumbUrl: string | null;
+};
+
+async function gameThumb(
+  ctx: QueryCtx,
+  gameId: Id<"games">,
+): Promise<GameThumb | null> {
   const g = await ctx.db.get("games", gameId);
   if (!g) return null;
   return {
     _id: g._id,
     slug: g.slug,
     title: g.title,
-    year: g.year ?? null,
+    thumbUrl: await gameThumbUrl(ctx, g),
+  };
+}
+
+/** One query's memo of game lookups, so each distinct game is read once. */
+type ThumbCache = Map<Id<"games">, Promise<GameThumb | null>>;
+
+/**
+ * An entry's game row. Entries carry a slug/thumb snapshot (taken when the game
+ * was added, refreshed on finalize), so list views normally read no game docs
+ * — and don't rerun when those games are written. Older entries without the
+ * snapshot fall back to one (memoized) get. The snapshot can lag a later cover
+ * / slug / title change or a game deletion until the list is next finalized —
+ * those are rare and the staleness is accepted.
+ */
+function entryThumb(
+  ctx: QueryCtx,
+  e: ListEntry,
+  cache: ThumbCache,
+): Promise<GameThumb | null> {
+  if (e.slug !== undefined) {
+    return Promise.resolve({
+      _id: e.gameId,
+      slug: e.slug,
+      title: e.title,
+      thumbUrl: e.thumbUrl ?? null,
+    });
+  }
+  let p = cache.get(e.gameId);
+  if (!p) {
+    p = gameThumb(ctx, e.gameId);
+    cache.set(e.gameId, p);
+  }
+  return p;
+}
+
+/** A fresh entry snapshot from a game doc (mutations only). */
+async function snapshotEntry(
+  ctx: MutationCtx,
+  g: Doc<"games">,
+  title: string,
+): Promise<ListEntry> {
+  return {
+    gameId: g._id,
+    title,
+    slug: g.slug,
     thumbUrl: await gameThumbUrl(ctx, g),
   };
 }
@@ -164,6 +223,7 @@ async function computeList(
   const priors = await priorLists(ctx, list, !ownerView);
   const prevYear = list.year - 1;
   const prevList = priors.find((p) => p.year === prevYear) ?? null;
+  const cache: ThumbCache = new Map();
 
   const items = await Promise.all(
     list.entries.map(async (entry, i) => {
@@ -192,7 +252,7 @@ async function computeList(
         rank,
         gameId: g,
         title: entry.title,
-        game: await gameThumb(ctx, g),
+        game: await entryThumb(ctx, entry, cache),
         movement,
         tag,
         history,
@@ -215,7 +275,7 @@ async function computeList(
             gameId: e.gameId,
             title: e.title,
             lastRank: e.rank,
-            game: await gameThumb(ctx, e.gameId),
+            game: await entryThumb(ctx, e, cache),
           })),
       )
     : [];
@@ -273,12 +333,12 @@ async function coverSample(
     [idx[i], idx[j]] = [idx[j], idx[i]];
   }
   const covers: string[] = [];
+  const cache: ThumbCache = new Map();
   for (const i of idx.slice(0, n + 4)) {
     if (covers.length >= n) break;
-    const g = await ctx.db.get("games", list.entries[i].gameId);
+    const g = await entryThumb(ctx, list.entries[i], cache);
     if (!g) continue;
-    const url = await gameThumbUrl(ctx, g);
-    if (url) covers.push(url);
+    if (g.thumbUrl) covers.push(g.thumbUrl);
   }
   return covers;
 }
@@ -315,6 +375,16 @@ async function ownedList(
   const list = await ctx.db.get("topGamesLists", id);
   if (!list || list.userId !== userId) throw new Error("List not found");
   return list;
+}
+
+/** Refresh the persisted community roll-ups a public list feeds (all sizes +
+ *  its own size). Scheduled so it runs after this write commits. */
+async function scheduleCommunityRecompute(ctx: MutationCtx, list: ListDoc) {
+  await ctx.scheduler.runAfter(0, internal.topGames.recomputeCommunity, {
+    category: list.category ?? DEFAULT_CATEGORY,
+    year: list.year,
+    sizes: [list.size],
+  });
 }
 
 /* -------------------------------------------------------------------------- */
@@ -387,22 +457,25 @@ export const setEntries = mutation({
     const list = await ownedList(ctx, id, user._id);
     if (list.status !== "draft") throw new Error("Finalized lists are read-only.");
 
-    const prevTitles = new Map(list.entries.map((e) => [e.gameId, e.title]));
+    const prevEntries = new Map(list.entries.map((e) => [e.gameId, e]));
     const seen = new Set<Id<"games">>();
     const entries: ListDoc["entries"] = [];
     // Allow overflow past `size` — those become honorable-mention candidates.
     for (const gid of gameIds.slice(0, list.size + HM_DRAFT_MAX)) {
       if (seen.has(gid)) continue;
       seen.add(gid);
-      let title = prevTitles.get(gid);
-      if (title === undefined) {
+      let entry = prevEntries.get(gid);
+      // New games (and older entries without a slug/thumb snapshot) are read
+      // once; entries that already carry a snapshot are reused as-is.
+      if (entry === undefined || entry.slug === undefined) {
         const g = await ctx.db.get("games", gid);
-        if (!g) continue; // skip a game that no longer exists
-        title = g.title;
+        if (g) entry = await snapshotEntry(ctx, g, entry?.title ?? g.title);
+        else if (entry === undefined) continue; // skip a game that no longer exists
       }
-      entries.push({ gameId: gid, title });
+      entries.push(entry);
     }
     await ctx.db.patch("topGamesLists", id, { entries, updatedAt: Date.now() });
+    if (list.visibility === "public") await scheduleCommunityRecompute(ctx, list);
   },
 });
 
@@ -430,12 +503,24 @@ export const finalize = mutation({
     const user = await requireUser(ctx);
     const list = await ownedList(ctx, id, user._id);
     if (list.entries.length === 0) throw new Error("Add at least one game first.");
+    // Refresh each kept entry's slug/thumb snapshot (the stored title stays —
+    // it's the list's historical record). A game that no longer exists loses
+    // its snapshot, so readers resolve it to null as before.
+    const entries = await Promise.all(
+      list.entries.slice(0, list.size + HM_KEPT).map(async (e) => {
+        const g = await ctx.db.get("games", e.gameId);
+        return g
+          ? await snapshotEntry(ctx, g, e.title)
+          : { gameId: e.gameId, title: e.title };
+      }),
+    );
     await ctx.db.patch("topGamesLists", id, {
       status: "finalized",
       finalizedAt: Date.now(),
       updatedAt: Date.now(),
-      entries: list.entries.slice(0, list.size + HM_KEPT),
+      entries,
     });
+    if (list.visibility === "public") await scheduleCommunityRecompute(ctx, list);
   },
 });
 
@@ -444,12 +529,13 @@ export const reopen = mutation({
   args: { id: v.id("topGamesLists") },
   handler: async (ctx, { id }) => {
     const user = await requireUser(ctx);
-    await ownedList(ctx, id, user._id);
+    const list = await ownedList(ctx, id, user._id);
     await ctx.db.patch("topGamesLists", id, {
       status: "draft",
       visibility: "private",
       updatedAt: Date.now(),
     });
+    if (list.visibility === "public") await scheduleCommunityRecompute(ctx, list);
   },
 });
 
@@ -466,6 +552,7 @@ export const setVisibility = mutation({
       throw new Error("Finalize the list before making it public.");
     }
     await ctx.db.patch("topGamesLists", id, { visibility, updatedAt: Date.now() });
+    if (list.visibility !== visibility) await scheduleCommunityRecompute(ctx, list);
   },
 });
 
@@ -477,6 +564,7 @@ export const remove = mutation({
     const list = await ctx.db.get("topGamesLists", id);
     if (!list || list.userId !== user._id) return;
     await ctx.db.delete("topGamesLists", id);
+    if (list.visibility === "public") await scheduleCommunityRecompute(ctx, list);
   },
 });
 
@@ -702,6 +790,113 @@ export const publicCollectionPage = query({
   },
 });
 
+type CommunityRollup = Omit<
+  Doc<"topGamesCommunity">,
+  "_id" | "_creationTime" | "category" | "year" | "updatedAt"
+>;
+
+/**
+ * Live Borda roll-up for (category, year), for each requested size key (null =
+ * all sizes). Reads the capped public-list window once and derives every key
+ * from it. Used by the `community` fallback and by `recomputeCommunity`.
+ */
+async function computeCommunity(
+  ctx: QueryCtx,
+  cat: string,
+  year: number,
+  sizeKeys: (number | null)[],
+): Promise<CommunityRollup[]> {
+  const all = await ctx.db
+    .query("topGamesLists")
+    .withIndex("by_visibility_category_year", (q) =>
+      q.eq("visibility", "public").eq("category", cat).eq("year", year),
+    )
+    .take(COMMUNITY_LIST_CAP);
+
+  return await Promise.all(
+    sizeKeys.map(async (size) => {
+      const lists = size ? all.filter((l) => l.size === size) : all;
+
+      const agg = new Map<
+        Id<"games">,
+        { title: string; points: number; appearances: number; rankSum: number }
+      >();
+      for (const list of lists) {
+        // Each list's ranked top games (up to the shared window) count — not
+        // its honorable mentions, and never more than COMMUNITY_WINDOW entries.
+        const cutoff = Math.min(list.size, COMMUNITY_WINDOW);
+        list.entries.slice(0, cutoff).forEach((e, i) => {
+          const rank = i + 1;
+          const points = COMMUNITY_WINDOW - rank + 1;
+          const cur = agg.get(e.gameId);
+          if (cur) {
+            cur.points += points;
+            cur.appearances += 1;
+            cur.rankSum += rank;
+            if (!cur.title) cur.title = e.title;
+          } else {
+            agg.set(e.gameId, {
+              title: e.title,
+              points,
+              appearances: 1,
+              rankSum: rank,
+            });
+          }
+        });
+      }
+
+      const ranked = [...agg.entries()]
+        .map(([gameId, a]) => ({
+          gameId,
+          title: a.title,
+          points: a.points,
+          appearances: a.appearances,
+          avgRank: a.rankSum / a.appearances,
+        }))
+        .sort(
+          (a, b) =>
+            b.points - a.points ||
+            b.appearances - a.appearances ||
+            a.avgRank - b.avgRank,
+        )
+        .slice(0, COMMUNITY_TOP);
+
+      const items = await Promise.all(
+        ranked.map(async (r, i) => ({
+          rank: i + 1,
+          gameId: r.gameId,
+          title: r.title,
+          appearances: r.appearances,
+          avgRank: Math.round(r.avgRank * 10) / 10,
+          game: await gameThumb(ctx, r.gameId),
+        })),
+      );
+
+      return {
+        size,
+        listsCounted: lists.length,
+        // The cap applies to the pre-size-filter fetch; surface it when hit.
+        capped: all.length >= COMMUNITY_LIST_CAP,
+        items,
+      };
+    }),
+  );
+}
+
+function communityDoc(
+  ctx: QueryCtx,
+  category: string,
+  year: number,
+  size: number | null,
+) {
+  return ctx.db
+    .query("topGamesCommunity")
+    .withIndex("by_category_year_size", (q) =>
+      q.eq("category", category).eq("year", year).eq("size", size),
+    )
+    .first();
+}
+
 /**
  * Community Top games for a (category, year): a Borda-style roll-up of every
  * public list in that category, regardless of each list's own size. Each list
@@ -709,6 +904,10 @@ export const publicCollectionPage = query({
  * points, so a Top 10 and a Top 100 count on the same scale. Games are ranked by
  * total points, then appearances, then average rank. Reads at most
  * COMMUNITY_LIST_CAP lists (surfaced to the UI). Public — works signed out.
+ *
+ * Served from the persisted `topGamesCommunity` row (one small doc, so it no
+ * longer reruns on every public-list edit or game write); computed live only
+ * when that row doesn't exist yet.
  */
 export const community = query({
   args: {
@@ -719,77 +918,100 @@ export const community = query({
   },
   handler: async (ctx, { category, year, size }) => {
     const cat = category ?? DEFAULT_CATEGORY;
-    const all = await ctx.db
-      .query("topGamesLists")
-      .withIndex("by_visibility_category_year", (q) =>
-        q.eq("visibility", "public").eq("category", cat).eq("year", year),
-      )
-      .take(COMMUNITY_LIST_CAP);
-    const lists = size ? all.filter((l) => l.size === size) : all;
-
-    const agg = new Map<
-      Id<"games">,
-      { title: string; points: number; appearances: number; rankSum: number }
-    >();
-    for (const list of lists) {
-      // Each list's ranked top games (up to the shared window) count — not its
-      // honorable mentions, and never more than COMMUNITY_WINDOW entries.
-      const cutoff = Math.min(list.size, COMMUNITY_WINDOW);
-      list.entries.slice(0, cutoff).forEach((e, i) => {
-        const rank = i + 1;
-        const points = COMMUNITY_WINDOW - rank + 1;
-        const cur = agg.get(e.gameId);
-        if (cur) {
-          cur.points += points;
-          cur.appearances += 1;
-          cur.rankSum += rank;
-          if (!cur.title) cur.title = e.title;
-        } else {
-          agg.set(e.gameId, {
-            title: e.title,
-            points,
-            appearances: 1,
-            rankSum: rank,
-          });
-        }
-      });
-    }
-
-    const ranked = [...agg.entries()]
-      .map(([gameId, a]) => ({
-        gameId,
-        title: a.title,
-        points: a.points,
-        appearances: a.appearances,
-        avgRank: a.rankSum / a.appearances,
-      }))
-      .sort(
-        (a, b) =>
-          b.points - a.points ||
-          b.appearances - a.appearances ||
-          a.avgRank - b.avgRank,
-      )
-      .slice(0, COMMUNITY_TOP);
-
-    const items = await Promise.all(
-      ranked.map(async (r, i) => ({
-        rank: i + 1,
-        gameId: r.gameId,
-        title: r.title,
-        appearances: r.appearances,
-        avgRank: Math.round(r.avgRank * 10) / 10,
-        game: await gameThumb(ctx, r.gameId),
-      })),
-    );
-
+    const sizeKey = size ? size : null;
+    const r =
+      (await communityDoc(ctx, cat, year, sizeKey)) ??
+      (await computeCommunity(ctx, cat, year, [sizeKey]))[0];
     return {
       category: cat,
       year,
       size: size ?? null,
-      listsCounted: lists.length,
-      // The cap applies to the pre-size-filter fetch; surface it when we hit it.
-      capped: all.length >= COMMUNITY_LIST_CAP,
-      items,
+      listsCounted: r.listsCounted,
+      capped: r.capped,
+      items: r.items,
     };
+  },
+});
+
+/**
+ * Recompute + persist the community roll-ups for (category, year): the
+ * all-sizes row plus each given size. Scheduled by the list mutations that
+ * change the public set or a public list's entries (finalize / reopen /
+ * setVisibility / remove); skips the write when nothing changed so subscribers
+ * aren't invalidated for nothing.
+ */
+export const recomputeCommunity = internalMutation({
+  args: {
+    category: v.string(),
+    year: v.number(),
+    sizes: v.array(v.number()),
+  },
+  handler: async (ctx, { category, year, sizes }) => {
+    const keys: (number | null)[] = [null, ...new Set(sizes.filter((s) => s))];
+    const results = await computeCommunity(ctx, category, year, keys);
+    for (const r of results) {
+      const existing = await communityDoc(ctx, category, year, r.size);
+      if (
+        existing &&
+        existing.listsCounted === r.listsCounted &&
+        existing.capped === r.capped &&
+        JSON.stringify(existing.items) === JSON.stringify(r.items)
+      ) {
+        continue;
+      }
+      const doc = { category, year, ...r, updatedAt: Date.now() };
+      if (existing) await ctx.db.replace("topGamesCommunity", existing._id, doc);
+      else await ctx.db.insert("topGamesCommunity", doc);
+    }
+  },
+});
+
+/**
+ * One-off backfill (safe to re-run): add the slug/thumb snapshot to entries
+ * that lack it, and persist the community roll-up for every public list's
+ * (category, year, size). Pages through all lists, rescheduling itself.
+ * `npx convex run topGames:backfillTopGames` (add --prod for prod).
+ */
+const BACKFILL_PAGE = 5;
+export const backfillTopGames = internalMutation({
+  args: { cursor: v.optional(v.union(v.string(), v.null())) },
+  handler: async (ctx, { cursor }) => {
+    const page = await ctx.db
+      .query("topGamesLists")
+      .paginate({ cursor: cursor ?? null, numItems: BACKFILL_PAGE });
+
+    const rollups = new Map<
+      string,
+      { category: string; year: number; sizes: number[] }
+    >();
+    for (const list of page.page) {
+      if (list.entries.some((e) => e.slug === undefined)) {
+        const entries = await Promise.all(
+          list.entries.map(async (e) => {
+            if (e.slug !== undefined) return e;
+            const g = await ctx.db.get("games", e.gameId);
+            return g ? await snapshotEntry(ctx, g, e.title) : e;
+          }),
+        );
+        // Entries only — updatedAt is user-facing, leave it alone.
+        await ctx.db.patch("topGamesLists", list._id, { entries });
+      }
+      if (list.visibility === "public") {
+        const category = list.category ?? DEFAULT_CATEGORY;
+        const key = `${category}|${list.year}`;
+        const cur = rollups.get(key) ?? { category, year: list.year, sizes: [] };
+        cur.sizes.push(list.size);
+        rollups.set(key, cur);
+      }
+    }
+    for (const r of rollups.values()) {
+      await ctx.scheduler.runAfter(0, internal.topGames.recomputeCommunity, r);
+    }
+
+    if (!page.isDone) {
+      await ctx.scheduler.runAfter(0, internal.topGames.backfillTopGames, {
+        cursor: page.continueCursor,
+      });
+    }
   },
 });

@@ -198,15 +198,25 @@ export const cleanupStaleDrafts = internalMutation({
  * left alone. Each purge is scheduled separately to bound its transaction.
  */
 export const cleanupAbandonedGuests = internalMutation({
-  args: { cursor: v.optional(v.union(v.string(), v.null())) },
-  handler: async (ctx, { cursor }) => {
-    const cutoff = Date.now() - ABANDONED_GUEST_MS;
+  args: {
+    cursor: v.optional(v.union(v.string(), v.null())),
+    // Fixed on the first page and threaded through continuations, so every
+    // page paginates the same index range (a cursor needs a stable query).
+    cutoff: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const cutoff = args.cutoff ?? Date.now() - ABANDONED_GUEST_MS;
+    // Only guests (isAnonymous === true) created before the cutoff — exactly
+    // the rows the old full-table scan acted on; everything else is skipped
+    // by the index range instead of being read.
     const page = await ctx.db
       .query("users")
-      .paginate({ cursor: cursor ?? null, numItems: 100 });
+      .withIndex("by_isAnonymous", (q) =>
+        q.eq("isAnonymous", true).lt("_creationTime", cutoff),
+      )
+      .paginate({ cursor: args.cursor ?? null, numItems: 100 });
 
     for (const u of page.page) {
-      if (u.isAnonymous !== true || u._creationTime >= cutoff) continue;
       const chats = await ctx.db
         .query("chats")
         .withIndex("by_user", (q) => q.eq("userId", u._id))
@@ -225,7 +235,7 @@ export const cleanupAbandonedGuests = internalMutation({
       await ctx.scheduler.runAfter(
         0,
         internal.maintenance.cleanupAbandonedGuests,
-        { cursor: page.continueCursor },
+        { cursor: page.continueCursor, cutoff },
       );
     }
   },
@@ -240,15 +250,20 @@ export const cleanupAbandonedGuests = internalMutation({
  * purge is scheduled separately to bound its transaction.
  */
 export const cleanupEmptyGuests = internalMutation({
-  args: { cursor: v.optional(v.union(v.string(), v.null())) },
-  handler: async (ctx, { cursor }) => {
-    const cutoff = Date.now() - EMPTY_GUEST_MS;
+  args: {
+    cursor: v.optional(v.union(v.string(), v.null())),
+    cutoff: v.optional(v.number()), // see cleanupAbandonedGuests
+  },
+  handler: async (ctx, args) => {
+    const cutoff = args.cutoff ?? Date.now() - EMPTY_GUEST_MS;
     const page = await ctx.db
       .query("users")
-      .paginate({ cursor: cursor ?? null, numItems: 100 });
+      .withIndex("by_isAnonymous", (q) =>
+        q.eq("isAnonymous", true).lt("_creationTime", cutoff),
+      )
+      .paginate({ cursor: args.cursor ?? null, numItems: 100 });
 
     for (const u of page.page) {
-      if (u.isAnonymous !== true || u._creationTime >= cutoff) continue;
       const chats = await ctx.db
         .query("chats")
         .withIndex("by_user", (q) => q.eq("userId", u._id))
@@ -263,6 +278,7 @@ export const cleanupEmptyGuests = internalMutation({
     if (!page.isDone) {
       await ctx.scheduler.runAfter(0, internal.maintenance.cleanupEmptyGuests, {
         cursor: page.continueCursor,
+        cutoff,
       });
     }
   },

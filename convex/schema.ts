@@ -113,7 +113,10 @@ export default defineSchema({
     .index("email", ["email"])
     .index("phone", ["phone"])
     .index("by_upgrade_token", ["upgradeToken"])
-    .index("by_username_lower", ["usernameLower"]),
+    .index("by_username_lower", ["usernameLower"])
+    // Guest sweeps / counters range over anonymous rows only (eq true), by
+    // `_creationTime` (appended to every index), instead of scanning all users.
+    .index("by_isAnonymous", ["isAnonymous"]),
 
   // Board games + expansions unified. `isExpansion` + `parentId` discriminate.
   games: defineTable({
@@ -851,7 +854,14 @@ export default defineSchema({
     // public ⇒ finalized only; reopening to draft forces this back to private.
     visibility: v.union(v.literal("private"), v.literal("public")),
     entries: v.array(
-      v.object({ gameId: v.id("games"), title: v.string() }),
+      v.object({
+        gameId: v.id("games"),
+        title: v.string(),
+        // Denormalized at add/finalize time so list views don't read every
+        // game doc. Absent on older entries → readers fall back to a get.
+        slug: v.optional(v.string()),
+        thumbUrl: v.optional(v.union(v.string(), v.null())),
+      }),
     ),
     finalizedAt: v.optional(v.number()),
     updatedAt: v.number(),
@@ -868,4 +878,36 @@ export default defineSchema({
     .index("by_user_and_status", ["userId", "status"])
     // Community roll-up across all users for a category/year.
     .index("by_visibility_category_year", ["visibility", "category", "year"]),
+
+  // Persisted community roll-up for `topGames.community`, one row per
+  // (category, year, size) — size null = all sizes. Recomputed (scheduled) when
+  // a public list's membership changes: finalize / reopen / setVisibility /
+  // remove. `community` reads this one doc and falls back to the live compute
+  // when no row exists yet. `items` is the exact query output (≤ 25 rows).
+  topGamesCommunity: defineTable({
+    category: v.string(),
+    year: v.number(),
+    size: v.union(v.number(), v.null()),
+    listsCounted: v.number(),
+    capped: v.boolean(),
+    items: v.array(
+      v.object({
+        rank: v.number(),
+        gameId: v.id("games"),
+        title: v.string(),
+        appearances: v.number(),
+        avgRank: v.number(),
+        game: v.union(
+          v.null(),
+          v.object({
+            _id: v.id("games"),
+            slug: v.string(),
+            title: v.string(),
+            thumbUrl: v.union(v.string(), v.null()),
+          }),
+        ),
+      }),
+    ),
+    updatedAt: v.number(),
+  }).index("by_category_year_size", ["category", "year", "size"]),
 });
