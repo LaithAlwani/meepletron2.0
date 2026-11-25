@@ -29,8 +29,6 @@ const FIXED: Record<string, TopBarRoute> = {
   "/profile": { title: "Profile", back: null },
 
   "/boardgames/all": { title: "All games", back: "/boardgames" },
-  "/plays/people": { title: "Friends", back: "/plays" },
-  "/notifications": { title: "Notifications", back: "/boardgames" },
   "/tuckbox": { title: "Tuckbox", back: "/boardgames" },
   "/privacy": { title: "Privacy Policy", back: "/boardgames" },
   "/terms": { title: "Terms of Service", back: "/boardgames" },
@@ -75,8 +73,6 @@ export function resolveTopBar(pathname: string): TopBarRoute | null {
     // /boardgames/<slug> — the game's own title arrives from the page.
     if (seg[1]) return { title: "", back: "/boardgames" };
   }
-
-  // /plays/<playId>
 
   // /top-games/<listId>
   if (seg[0] === "top-games" && seg[1]) return { title: "", back: "/top-games" };

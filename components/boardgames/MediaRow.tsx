@@ -29,7 +29,7 @@ export function MediaThumb({
 }
 
 /**
- * A game list row (chats, favourites): thumbnail + title with optional subtitle
+ * A game list row (chats): thumbnail + title with optional subtitle
  * and meta. The main content links to `href` when given; `trailing` renders an
  * extra action to the right (chevron, Chat button, …).
  */

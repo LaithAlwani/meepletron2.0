@@ -6,8 +6,7 @@ export default function robots(): MetadataRoute.Robots {
     rules: {
       userAgent: "*",
       allow: "/",
-      // Private / user-specific pages. "/plays$" blocks the personal "My plays"
-      // index only — the public "/plays/<id>" detail pages stay crawlable.
+      // Private / user-specific pages.
       disallow: [
         "/admin",
         "/api",
@@ -15,9 +14,7 @@ export default function robots(): MetadataRoute.Robots {
         "/profile",
         "/settings",
         "/collection",
-        "/favorites",
         "/chats",
-        "/plays$",
       ],
     },
     sitemap: `${SITE_URL}/sitemap.xml`,

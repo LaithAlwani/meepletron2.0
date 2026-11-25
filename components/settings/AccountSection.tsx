@@ -529,7 +529,7 @@ export function DangerZone() {
     const ok = await confirm({
       title: "Delete your account?",
       message:
-        "This permanently deletes your account, all your chats, and your favorites. This can't be undone.",
+        "This permanently deletes your account and all your chats. This can't be undone.",
       confirmText: "Delete account",
       danger: true,
     });
@@ -554,8 +554,8 @@ export function DangerZone() {
         <div className="min-w-0">
           <p className="text-sm font-medium text-foreground">Delete account</p>
           <p className="mt-0.5 text-xs text-muted">
-            Permanently removes your account, chats, and favorites. This
-            can&apos;t be undone.
+            Permanently removes your account and chats. This can&apos;t be
+            undone.
           </p>
         </div>
         <button

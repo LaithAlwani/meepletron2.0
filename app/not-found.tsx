@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { buttonClasses } from "@/components/ui/buttonStyles";
 import Link from "next/link";
 import Image from "next/image";
-import { LayoutGrid, Heart } from "lucide-react";
+import { LayoutGrid, MessageCircle } from "lucide-react";
 
 export const metadata: Metadata = {
   title: "Page not found",
@@ -33,10 +33,10 @@ export default function NotFound() {
             <LayoutGrid className="h-4 w-4" /> Browse board games
           </Link>
           <Link
-            href="/favorites"
+            href="/chats"
             className={buttonClasses("ghost", "md")}
           >
-            <Heart className="h-4 w-4" /> Your favourites
+            <MessageCircle className="h-4 w-4" /> Your chats
           </Link>
         </div>
       </div>

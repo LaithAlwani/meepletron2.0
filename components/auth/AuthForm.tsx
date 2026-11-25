@@ -176,7 +176,7 @@ export function AuthForm() {
       {isGuest && (
         <div className="mb-4 rounded-lg border border-accent/40 bg-accent/10 px-4 py-2.5 text-center text-sm">
           You&apos;re a guest — {flow === "signIn" ? "signing in" : "signing up"}{" "}
-          will keep your current chats and favourites.
+          will keep your current chats.
         </div>
       )}
 
