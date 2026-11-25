@@ -24,7 +24,10 @@ export function useInfiniteScroll(
 ) {
   const sentinelRef = useRef<HTMLDivElement | null>(null);
   const cb = useRef(onLoadMore);
-  cb.current = onLoadMore;
+  // Track the latest callback after each render (refs can't be written during render).
+  useEffect(() => {
+    cb.current = onLoadMore;
+  });
 
   useEffect(() => {
     const el = sentinelRef.current;

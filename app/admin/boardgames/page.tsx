@@ -1,7 +1,14 @@
 "use client";
 
 import { buttonClasses } from "@/components/ui/buttonStyles";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import Link from "next/link";
 import { useConvex, useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
@@ -48,21 +55,36 @@ function useDebounced<T>(value: T, ms: number): T {
  * filters/search survive navigating away from the page and back (handy when
  * working through a few games in a row). Session-scoped: cleared when the tab
  * closes. First render uses `initial` (matching SSR) and the stored value is
- * applied on mount to avoid a hydration mismatch.
+ * read after hydration (useSyncExternalStore's server snapshot) to avoid a
+ * hydration mismatch.
  */
+const noSubscribe = () => () => {};
 function usePersistentState<T>(key: string, initial: T): [T, (v: T) => void] {
-  const [value, setValue] = useState<T>(initial);
-  useEffect(() => {
+  // Set in this session (wins over storage, even if the storage write failed).
+  const [local, setLocal] = useState<{ v: T } | null>(null);
+  const raw = useSyncExternalStore(
+    noSubscribe,
+    () => {
+      try {
+        return sessionStorage.getItem(key);
+      } catch {
+        return null; // unavailable storage
+      }
+    },
+    () => null,
+  );
+  let value = initial;
+  if (local) value = local.v;
+  else if (raw !== null) {
     try {
-      const raw = sessionStorage.getItem(key);
-      if (raw !== null) setValue(JSON.parse(raw) as T);
+      value = JSON.parse(raw) as T;
     } catch {
-      // ignore malformed/unavailable storage
+      // ignore malformed storage
     }
-  }, [key]);
+  }
   const set = useCallback(
     (v: T) => {
-      setValue(v);
+      setLocal({ v });
       try {
         sessionStorage.setItem(key, JSON.stringify(v));
       } catch {
@@ -183,10 +205,14 @@ export default function AdminGamesPage() {
   const baseCount = all?.filter((g) => !g.isExpansion).length ?? 0;
   const expCount = all?.filter((g) => g.isExpansion).length ?? 0;
 
-  // Reset the window whenever the filtered set changes.
-  useEffect(() => {
+  // Reset the window whenever the filtered set changes (adjusted during render,
+  // not in an effect — React's "storing information from previous renders").
+  const filterKey = JSON.stringify([q, typeFilter, statusFilter]);
+  const [prevFilterKey, setPrevFilterKey] = useState(filterKey);
+  if (prevFilterKey !== filterKey) {
+    setPrevFilterKey(filterKey);
     setVisible(PAGE);
-  }, [q, typeFilter, statusFilter]);
+  }
 
   // Auto-load more rows as the sentinel scrolls into view.
   const canLoadMore = visible < filtered.length;

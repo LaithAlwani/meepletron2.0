@@ -15,7 +15,7 @@
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
-    "test:bgg-xml": "node --experimental-strip-types --no-warnings scripts/bggXml.test.mts",
+    "test:bgg-xml": "node --experimental-strip-types --no-warnings --import ./scripts/resolveTs.mjs scripts/bggXml.test.mts",
     "test:bgg-thing": "node --experimental-strip-types --no-warnings scripts/bggThing.test.mts"
   },
   "dependencies": {

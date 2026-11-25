@@ -57,7 +57,6 @@ export function FlatNetPreview({
 }: Props) {
   const wrapMode = !!wrapAsset;
   const { pageWidth, pageHeight, panels, foldLines, cutLines } = layout;
-  const unitToPt = layout.unit === "mm" ? 2.83465 : 72;
 
   // Line styles mirror the PDF renderer (lib/tuckbox/pdf.ts) so the on-screen
   // preview matches the printed output exactly. Values are in the layout's unit

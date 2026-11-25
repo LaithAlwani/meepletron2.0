@@ -67,11 +67,7 @@ export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
       // The rest only seeds brand-new users (existingUserId is null on first
       // sign-in). The Anonymous provider sets `isAnonymous` itself.
       if (existingUserId) return;
-      await ctx.db.patch("users", userId, {
-        role: "user",
-        tokensUsedToday: 0,
-        tokensResetAt: Date.now(),
-      });
+      await ctx.db.patch("users", userId, { role: "user" });
     },
   },
 });

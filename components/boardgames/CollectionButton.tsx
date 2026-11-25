@@ -59,6 +59,12 @@ export function CollectionButton({
   });
   // Hidden until measured + placed, so the pre-position frame never flashes.
   const [placed, setPlaced] = useState(false);
+  // Closing un-places the menu (adjusted during render, not in an effect).
+  const [prevOpen, setPrevOpen] = useState(open);
+  if (prevOpen !== open) {
+    setPrevOpen(open);
+    if (!open) setPlaced(false);
+  }
 
   const inCollection = !!(
     state &&
@@ -90,10 +96,7 @@ export function CollectionButton({
   // the button by default, flipped above when there's more room; left-aligned to
   // the button unless that overflows, then right-aligned — always clamped.
   useEffect(() => {
-    if (!open) {
-      setPlaced(false);
-      return;
-    }
+    if (!open) return;
     const btn = btnRef.current?.getBoundingClientRect();
     const menu = menuRef.current?.getBoundingClientRect();
     if (!btn || !menu) return;

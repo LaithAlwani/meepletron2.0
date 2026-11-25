@@ -279,7 +279,6 @@ const SEARCH_CANDIDATES = 150;
 async function filteredLibrary(
   ctx: QueryCtx,
   f: LibraryFilters,
-  flagsReady: boolean,
 ): Promise<Doc<"games">[]> {
   const search = (f.term ?? "").trim();
   const terms = search.toLowerCase().split(/\s+/).filter(Boolean);
@@ -290,7 +289,7 @@ async function filteredLibrary(
   // Without a term (genre/mechanic/chat-only filters), fall back to the bounded
   // scan. Expansions are included; only stubs are held back. Chat-only reads
   // just the flagged chat-ready set (much smaller than the catalogue).
-  const flagChat = !!f.chatOnly && flagsReady;
+  const flagChat = !!f.chatOnly;
   const base =
     search.length >= 2
       ? await ctx.db
@@ -313,13 +312,9 @@ async function filteredLibrary(
             .withIndex("by_isStub_and_isExpansion", (q) => q.eq("isStub", false))
             .order("desc")
             .take(2000);
-  // Pre-backfill fallback only; once flags exist the check is per-row.
-  const chatIds =
-    f.chatOnly && !flagsReady ? await chatEnabledBaseIds(ctx) : null;
   return base.filter((g) => {
     if (!matchesLibraryFilters(g, f.players, f.time, f.hasExpansions)) return false;
     if (flagChat && g.chatReady !== true) return false;
-    if (chatIds && !chatIds.has(g._id)) return false;
     if (!hasAnyValue(g.categories, f.categories)) return false;
     if (!hasAnyValue(g.gameMechanics, f.mechanics)) return false;
     if (terms.length) {
@@ -463,14 +458,12 @@ function chatLibraryBase(ctx: QueryCtx, sort: GameSortKey) {
   }
 }
 
-/** Filters that can't be index-served (array-contains genre/mechanic, a
- *  full-text search, or chat-only before the flags are backfilled) and so need
- *  the bounded in-memory scan instead. */
-function needsLibraryScan(f: LibraryFilters, flagsReady: boolean): boolean {
+/** Filters that can't be index-served (array-contains genre/mechanic, or a
+ *  full-text search) and so need the bounded in-memory scan instead. */
+function needsLibraryScan(f: LibraryFilters): boolean {
   return (
     (f.categories?.length ?? 0) > 0 ||
     (f.mechanics?.length ?? 0) > 0 ||
-    (!!f.chatOnly && !flagsReady) ||
     (f.term ?? "").trim().length >= 2
   );
 }
@@ -491,10 +484,8 @@ export const libraryGames = query({
       ? (sortArg as GameSortKey)
       : DEFAULT_SORT;
 
-    const flagsReady = f.chatOnly ? await chatFlagsReady(ctx) : false;
-
     // Plain browse (incl. chat-only) → the fast index-ordered path (~one page).
-    if (!needsLibraryScan(f, flagsReady)) {
+    if (!needsLibraryScan(f)) {
       const needsFilter =
         f.players != null || f.time != null || !!f.hasExpansions;
       const base = libraryBase(ctx, sort, !!f.chatOnly);
@@ -534,7 +525,7 @@ export const libraryGames = query({
     // When searching, name matches lead and publisher/designer-only matches
     // trail, each group kept in the chosen sort order.
     const filtered = rankByNameMatch(
-      sortLibrary(await filteredLibrary(ctx, f, flagsReady), sort),
+      sortLibrary(await filteredLibrary(ctx, f), sort),
       f.term,
     );
     const offset = Number(paginationOpts.cursor ?? "0") || 0;
@@ -567,13 +558,12 @@ export const libraryCount = query({
       !f.categories?.length &&
       !f.mechanics?.length;
     const stats = await ctx.db.query("catalogueStats").first();
-    const flagsReady = stats?.chatReadyBackfilledAt != null;
     if (unfiltered && stats) {
       if (!f.chatOnly) return stats.baseGameCount;
-      if (flagsReady && stats.chatReadyCount != null) return stats.chatReadyCount;
+      if (stats.chatReadyCount != null) return stats.chatReadyCount;
     }
     // Not populated yet, or real filters active — count the (bounded) scan.
-    const filtered = await filteredLibrary(ctx, f, flagsReady);
+    const filtered = await filteredLibrary(ctx, f);
     return filtered.length;
   },
 });
@@ -599,26 +589,14 @@ function topFacets(
 
 /** Distinct genres (categories) + mechanics for the filter drawer, most common
  *  first. Reads the lists denormalized onto catalogueStats by the daily
- *  recomputeSimilarGames; scans base games only until that has run once. */
+ *  recomputeSimilarGames (empty until that has run once). */
 export const filterFacets = query({
   args: {},
   handler: async (ctx) => {
     const stats = await ctx.db.query("catalogueStats").first();
-    if (stats?.facetCategories && stats.facetMechanics) {
-      return {
-        categories: stats.facetCategories,
-        mechanics: stats.facetMechanics,
-      };
-    }
-    const base = await ctx.db
-      .query("games")
-      .withIndex("by_isStub_and_isExpansion", (q) =>
-        q.eq("isStub", false).eq("isExpansion", false),
-      )
-      .take(2000);
     return {
-      categories: topFacets(base, (g) => g.categories),
-      mechanics: topFacets(base, (g) => g.gameMechanics),
+      categories: stats?.facetCategories ?? [],
+      mechanics: stats?.facetMechanics ?? [],
     };
   },
 });
@@ -640,8 +618,7 @@ function familyBaseId(g: Doc<"games">): Id<"games"> {
 }
 
 /** Ground truth, derived from rulebooks: chat-ready base ids → base doc.
- *  Scans rulebooks (~a few hundred) — used for the reconcile and as the
- *  pre-backfill fallback, never on the hot path once flags are populated. */
+ *  Scans rulebooks (~a few hundred) — used only by the daily reconcile. */
 async function chatReadyFromRulebooks(
   ctx: QueryCtx,
 ): Promise<Map<Id<"games">, Doc<"games">>> {
@@ -660,13 +637,6 @@ async function chatReadyFromRulebooks(
   return bases;
 }
 
-/** True once backfillChatReady has populated the flags. Until then, readers
- *  fall back to the rulebook scan so a fresh deploy is never wrong. */
-async function chatFlagsReady(ctx: QueryCtx): Promise<boolean> {
-  const stats = await ctx.db.query("catalogueStats").first();
-  return stats?.chatReadyBackfilledAt != null;
-}
-
 /** Every flagged game (any stub state), via the by_chat index. */
 async function flaggedChatReady(ctx: QueryCtx): Promise<Doc<"games">[]> {
   const out: Doc<"games">[] = [];
@@ -681,20 +651,6 @@ async function flaggedChatReady(ctx: QueryCtx): Promise<Doc<"games">[]> {
     );
   }
   return out;
-}
-
-/**
- * Base-game ids whose family (the base game itself or any of its expansions)
- * has at least one ingested rulebook — i.e. the games Meepletron can actually
- * chat about. "download" add-ons don't count. Reads the denormalized flag.
- */
-export async function chatEnabledBaseIds(
-  ctx: QueryCtx,
-): Promise<Set<Id<"games">>> {
-  if (!(await chatFlagsReady(ctx))) {
-    return new Set((await chatReadyFromRulebooks(ctx)).keys());
-  }
-  return new Set((await flaggedChatReady(ctx)).map((g) => g._id));
 }
 
 /** Does any game in this base's family have a chat rulebook? Indexed reads only. */
@@ -753,7 +709,7 @@ export async function refreshChatReady(
   await setChatReady(ctx, base, await familyHasChatRules(ctx, baseId));
 }
 
-/** Rebuild every flag + the count from rulebooks; marks the flags as populated. */
+/** Rebuild every flag + the count from rulebooks. */
 async function reconcileChatReady(ctx: MutationCtx) {
   const want = await chatReadyFromRulebooks(ctx);
   const flagged = await flaggedChatReady(ctx);
@@ -773,34 +729,18 @@ async function reconcileChatReady(ctx: MutationCtx) {
   }
   let count = 0;
   for (const g of want.values()) if (g.isStub === false) count++;
-  const now = Date.now();
   const stats = await ctx.db.query("catalogueStats").first();
   if (stats) {
-    await ctx.db.patch("catalogueStats", stats._id, {
-      chatReadyCount: count,
-      chatReadyBackfilledAt: now,
-    });
+    await ctx.db.patch("catalogueStats", stats._id, { chatReadyCount: count });
   } else {
     await ctx.db.insert("catalogueStats", {
       baseGameCount: 0,
       chatReadyCount: count,
-      chatReadyBackfilledAt: now,
-      updatedAt: now,
+      updatedAt: Date.now(),
     });
   }
   return { chatReady: count, changed };
 }
-
-/**
- * Populate / repair the chat-ready flags. Run once after deploying them:
- *   npx convex run games:backfillChatReady          (dev)
- *   npx convex run --prod games:backfillChatReady   (prod)
- * Also re-run daily by recomputeSimilarGames as a drift safety net.
- */
-export const backfillChatReady = internalMutation({
-  args: {},
-  handler: async (ctx) => await reconcileChatReady(ctx),
-});
 
 type LibraryTime = "quick" | "standard" | "epic";
 
@@ -943,14 +883,9 @@ export const recomputeSimilarGames = internalMutation({
       .take(2000);
 
     // Denormalize the catalogue totals off the back of this scan, so the library
-    // header (games.libraryCount) and the admin dashboard (admin.dashboardStats)
-    // read one small doc instead of re-scanning every game on every view + write.
-    const expansionCount = (
-      await ctx.db
-        .query("games")
-        .withIndex("by_isExpansion", (q) => q.eq("isExpansion", true))
-        .take(20000)
-    ).length;
+    // header (games.libraryCount) reads one small doc instead of re-scanning
+    // every game on every view + write. (expansionCount, for the admin
+    // dashboard, is kept live ±1 by adjustExpansionCount — not recounted here.)
     // Filter-drawer facets off the same scan (games.filterFacets reads them).
     const facetCategories = topFacets(games, (g) => g.categories);
     const facetMechanics = topFacets(games, (g) => g.gameMechanics);
@@ -958,7 +893,6 @@ export const recomputeSimilarGames = internalMutation({
     if (stats) {
       await ctx.db.patch("catalogueStats", stats._id, {
         baseGameCount: games.length,
-        expansionCount,
         facetCategories,
         facetMechanics,
         updatedAt: Date.now(),
@@ -966,7 +900,6 @@ export const recomputeSimilarGames = internalMutation({
     } else {
       await ctx.db.insert("catalogueStats", {
         baseGameCount: games.length,
-        expansionCount,
         facetCategories,
         facetMechanics,
         updatedAt: Date.now(),
@@ -1014,7 +947,8 @@ async function gameDetail(ctx: QueryCtx, game: Doc<"games">) {
   return {
     ...(await withMedia(ctx, game)),
     // Description lives in the gameContent sidecar; fall back to the game doc
-    // for rows not yet backfilled.
+    // until migrations:clearDeprecated has moved every row over.
+    // stage-2: remove the `game.description` fallback.
     description: content?.description ?? game.description,
     // For expansions, the base game they belong to (null for base games).
     parent: parentDoc ? await withMedia(ctx, parentDoc) : null,
@@ -1268,6 +1202,21 @@ async function adjustBaseGameCount(
   });
 }
 
+/** Nudge catalogueStats.expansionCount (all expansions, incl. stubs) by ±1.
+ *  Call wherever a game becomes / stops being an expansion: insert, delete,
+ *  or an isExpansion flip. No-op until the stats doc has a count. */
+export async function adjustExpansionCount(
+  ctx: MutationCtx,
+  delta: number,
+): Promise<void> {
+  if (delta === 0) return;
+  const stats = await ctx.db.query("catalogueStats").first();
+  if (!stats || stats.expansionCount == null) return;
+  await ctx.db.patch("catalogueStats", stats._id, {
+    expansionCount: Math.max(0, stats.expansionCount + delta),
+  });
+}
+
 /** Upsert a game's detail-only description into the gameContent sidecar, so it
  *  stays off the hot `games` doc that card/list reads pay for. */
 async function setGameDescription(
@@ -1337,6 +1286,7 @@ export const createGame = mutation({
     await setGameDescription(ctx, gameId, args.description);
     // A new non-expansion game joins the library — keep the cached total live.
     if (!args.isExpansion) await adjustBaseGameCount(ctx, 1);
+    else await adjustExpansionCount(ctx, 1);
     // Adopt any collection rows already pointing at this BGG id.
     if (args.bggId) {
       await ctx.scheduler.runAfter(0, internal.bggSync.relinkGameToBggRows, {
@@ -1398,6 +1348,10 @@ export const updateGame = mutation({
     // the cached total so it stays live between reconciling recomputes.
     if (game.isStub && !(rest.isExpansion ?? game.isExpansion)) {
       await adjustBaseGameCount(ctx, 1);
+    }
+
+    if (rest.isExpansion !== undefined && rest.isExpansion !== game.isExpansion) {
+      await adjustExpansionCount(ctx, rest.isExpansion ? 1 : -1);
     }
 
     // Re-parenting moves this game's rulebooks to a different family.
@@ -1603,6 +1557,9 @@ export const applyStubEnrichment = internalMutation({
     if (bggImageUrl) patch.bggImageUrl = bggImageUrl;
     if (bggThumbUrl) patch.bggThumbUrl = bggThumbUrl;
     if (isExpansion !== undefined) patch.isExpansion = isExpansion;
+    if (isExpansion !== undefined && isExpansion !== game.isExpansion) {
+      await adjustExpansionCount(ctx, isExpansion ? 1 : -1);
+    }
     if (parentId) {
       patch.parentId = parentId;
       const parent = await ctx.db.get("games", parentId);
@@ -1758,6 +1715,7 @@ export async function purgeGame(ctx: MutationCtx, game: Doc<"games">) {
   // A deleted chat-ready game leaves the chat-ready count.
   if (game.chatReady) await setChatReady(ctx, game, false);
   await ctx.db.delete("games", gameId);
+  if (game.isExpansion) await adjustExpansionCount(ctx, -1);
 
   // If this was an expansion, recompute its parent's hasExpansions flag — but
   // only if the parent still exists (a bulk prune may have already deleted it).

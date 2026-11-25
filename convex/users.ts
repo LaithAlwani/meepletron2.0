@@ -2,7 +2,6 @@ import { v, ConvexError } from "convex/values";
 import { query, mutation, internalQuery, internalMutation } from "./_generated/server";
 import type { QueryCtx } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
-import { internal } from "./_generated/api";
 import { userTotalsDoc } from "./lib/userTotals";
 import { getCurrentUser, requireUser, requireAdmin } from "./lib/auth";
 import { r2, deleteMedia } from "./r2";
@@ -32,7 +31,7 @@ export const me = query({
 });
 
 /** All-time tokens summed across a user's chat messages — the slow path, used
- *  only to seed `userTotals` (and as the read fallback until it exists). */
+ *  only to seed `userTotals`. */
 async function scanUserTokens(
   ctx: QueryCtx,
   chats: { _id: Id<"chats"> }[],
@@ -51,8 +50,8 @@ async function scanUserTokens(
 }
 
 /** The current user's lightweight profile stats: chats + all-time tokens used.
- *  Tokens come from the per-user `userTotals` counter (message scan fallback
- *  until it's seeded). Self-only. */
+ *  Tokens come from the per-user `userTotals` counter (0 until it's seeded on
+ *  the first answer). Self-only. */
 export const myProfileStats = query({
   args: {},
   handler: async (ctx) => {
@@ -63,15 +62,12 @@ export const myProfileStats = query({
       .withIndex("by_user", (q) => q.eq("userId", user._id))
       .take(2000);
     const totals = await userTotalsDoc(ctx, user._id);
-    const tokensUsed = totals
-      ? totals.tokensUsedTotal
-      : await scanUserTokens(ctx, chats);
-    return { chats: chats.length, tokensUsed };
+    return { chats: chats.length, tokensUsed: totals?.tokensUsedTotal ?? 0 };
   },
 });
 
 /** Create a user's `userTotals` from a message scan (no-op if it exists).
- *  Scheduled by lib/userTotals.bumpUserTokens and backfillUserTotals. */
+ *  Scheduled by lib/userTotals.bumpUserTokens. */
 export const seedUserTotals = internalMutation({
   args: { userId: v.id("users") },
   handler: async (ctx, { userId }) => {
@@ -88,37 +84,11 @@ export const seedUserTotals = internalMutation({
 });
 
 /**
- * Seed `userTotals` for every user that lacks one. Paginates users, schedules a
- * per-user seed (each its own transaction), self-reschedules:
- *   npx convex run users:backfillUserTotals '{}'
- */
-export const backfillUserTotals = internalMutation({
-  args: { cursor: v.optional(v.union(v.string(), v.null())) },
-  handler: async (ctx, { cursor }) => {
-    const res = await ctx.db
-      .query("users")
-      .paginate({ numItems: 100, cursor: cursor ?? null });
-    for (const u of res.page) {
-      if (u.isAnonymous) continue; // guests are purged; scan fallback is fine
-      if (await userTotalsDoc(ctx, u._id)) continue;
-      await ctx.scheduler.runAfter(0, internal.users.seedUserTotals, {
-        userId: u._id,
-      });
-    }
-    if (!res.isDone) {
-      await ctx.scheduler.runAfter(0, internal.users.backfillUserTotals, {
-        cursor: res.continueCursor,
-      });
-    }
-  },
-});
-
-/**
  * The current user's daily token budget, from the `userBudgets` row (kept off
  * the user doc so per-answer writes don't rerun every user-doc reader). A
  * missing row, or a window older than the caller's `todayStartMs` (UTC
  * midnight, passed in since queries can't read the clock), means nothing used
- * today. Until the row exists, the deprecated user fields are the fallback.
+ * today.
  */
 export const myBudget = query({
   args: { todayStartMs: v.number() },
@@ -132,10 +102,7 @@ export const myBudget = query({
       .query("userBudgets")
       .withIndex("by_user", (q) => q.eq("userId", user._id))
       .unique();
-    const win = row ?? {
-      tokensUsedToday: user.tokensUsedToday ?? 0,
-      tokensResetAt: user.tokensResetAt ?? 0,
-    };
+    const win = row ?? { tokensUsedToday: 0, tokensResetAt: 0 };
     const usedToday =
       win.tokensResetAt < todayStartMs ? 0 : finite(win.tokensUsedToday);
     const used = Math.min(usedToday, limit);

@@ -1,7 +1,13 @@
 "use client";
 
 import { buttonClasses } from "@/components/ui/buttonStyles";
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import Link from "next/link";
 import { useQuery, useMutation } from "convex/react";
 import { Download, Upload, Check, FolderOpen } from "lucide-react";
@@ -59,6 +65,7 @@ const DEFAULT_CONFIG_IN: TuckboxConfig = {
 };
 const DEFAULT_CARD_THICKNESS_IN = 0.0126;
 const UNIT_STORAGE_KEY = "tuckbox-unit";
+const noSubscribe = () => () => {};
 
 const FACE_KEYS: FaceKey[] = [
   "front",
@@ -242,14 +249,17 @@ export function TuckboxDesigner({
 
   // Restore the user's preferred unit (default: inches). The initial state is
   // the inches default, so we only switch when they last chose mm. Runs once,
-  // client-only; doesn't mark the design edited.
-  useEffect(() => {
+  // on the first client render after hydration (adjusted during render, not in
+  // an effect); doesn't mark the design edited.
+  const isClient = useSyncExternalStore(noSubscribe, () => true, () => false);
+  const [unitRestored, setUnitRestored] = useState(false);
+  if (isClient && !unitRestored) {
+    setUnitRestored(true);
     if (localStorage.getItem(UNIT_STORAGE_KEY) === "mm") {
       setConfig(DEFAULT_CONFIG_MM);
       setCardThickness(DEFAULT_CARD_THICKNESS_MM);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }
 
   // Full-view tool: on desktop the tool fills the viewport and its panels scroll
   // internally, so the page itself must never scroll. Pixel-perfect height math
@@ -488,82 +498,84 @@ export function TuckboxDesigner({
     return key;
   }
 
-  // Latest-state save closure, refreshed each render so the debounce always
-  // persists current values.
+  // Latest-state save closure, refreshed after each render so the debounce
+  // always persists current values (refs can't be written during render).
   const doSaveRef = useRef<() => Promise<void>>(async () => {});
-  doSaveRef.current = async () => {
-    const hasContent =
-      Object.keys(assets).length > 0 || !!wrapAsset || boxId != null;
-    if (!hasContent) return;
-    setSaveState("saving");
-    try {
-      const faces = [];
-      for (const face of FACE_KEYS) {
-        const a = assets[face];
-        if (!a) continue;
-        const key = await ensureUploaded(a.url);
-        faces.push({
-          face,
-          key,
-          naturalWidth: a.naturalWidth,
-          naturalHeight: a.naturalHeight,
-          transform: {
-            zoom: a.transform.zoom,
-            anchorX: a.transform.anchorX,
-            anchorY: a.transform.anchorY,
-            rotation: a.transform.rotation,
-          },
-        });
-      }
-      let wrap:
-        | {
-            key: string;
-            naturalWidth: number;
-            naturalHeight: number;
+  useEffect(() => {
+    doSaveRef.current = async () => {
+      const hasContent =
+        Object.keys(assets).length > 0 || !!wrapAsset || boxId != null;
+      if (!hasContent) return;
+      setSaveState("saving");
+      try {
+        const faces = [];
+        for (const face of FACE_KEYS) {
+          const a = assets[face];
+          if (!a) continue;
+          const key = await ensureUploaded(a.url);
+          faces.push({
+            face,
+            key,
+            naturalWidth: a.naturalWidth,
+            naturalHeight: a.naturalHeight,
             transform: {
-              zoom: number;
-              anchorX: number;
-              anchorY: number;
-              rotation: number;
-            };
-          }
-        | undefined;
-      if (wrapAsset) {
-        const key = await ensureUploaded(wrapAsset.url);
-        wrap = {
-          key,
-          naturalWidth: wrapAsset.naturalWidth,
-          naturalHeight: wrapAsset.naturalHeight,
-          transform: {
-            zoom: wrapAsset.transform.zoom,
-            anchorX: wrapAsset.transform.anchorX,
-            anchorY: wrapAsset.transform.anchorY,
-            rotation: wrapAsset.transform.rotation,
-          },
-        };
+              zoom: a.transform.zoom,
+              anchorX: a.transform.anchorX,
+              anchorY: a.transform.anchorY,
+              rotation: a.transform.rotation,
+            },
+          });
+        }
+        let wrap:
+          | {
+              key: string;
+              naturalWidth: number;
+              naturalHeight: number;
+              transform: {
+                zoom: number;
+                anchorX: number;
+                anchorY: number;
+                rotation: number;
+              };
+            }
+          | undefined;
+        if (wrapAsset) {
+          const key = await ensureUploaded(wrapAsset.url);
+          wrap = {
+            key,
+            naturalWidth: wrapAsset.naturalWidth,
+            naturalHeight: wrapAsset.naturalHeight,
+            transform: {
+              zoom: wrapAsset.transform.zoom,
+              anchorX: wrapAsset.transform.anchorX,
+              anchorY: wrapAsset.transform.anchorY,
+              rotation: wrapAsset.transform.rotation,
+            },
+          };
+        }
+        const id = await saveMut({
+          id: boxId ?? undefined,
+          name: boxName.trim() || "Untitled box",
+          unit: config.unit,
+          cardWidth: config.cardWidth,
+          cardHeight: config.cardHeight,
+          cardCount,
+          cardThickness,
+          tolerance: config.tolerance,
+          materialThickness: config.materialThickness,
+          paperSize: config.paperSize,
+          orientation: config.orientation,
+          imageMode,
+          faces,
+          wrap,
+        });
+        if (!boxId) setBoxId(id);
+        setSaveState("saved");
+      } catch {
+        setSaveState("error");
       }
-      const id = await saveMut({
-        id: boxId ?? undefined,
-        name: boxName.trim() || "Untitled box",
-        unit: config.unit,
-        cardWidth: config.cardWidth,
-        cardHeight: config.cardHeight,
-        cardCount,
-        cardThickness,
-        tolerance: config.tolerance,
-        materialThickness: config.materialThickness,
-        paperSize: config.paperSize,
-        orientation: config.orientation,
-        imageMode,
-        faces,
-        wrap,
-      });
-      if (!boxId) setBoxId(id);
-      setSaveState("saved");
-    } catch {
-      setSaveState("error");
-    }
-  };
+    };
+  });
 
   // Debounced autosave — only once the user has actually edited something.
   useEffect(() => {

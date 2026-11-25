@@ -44,8 +44,8 @@ export async function deleteUserAndAuth(
 }
 
 /**
- * Delete a user's app data (favorites, chats and their messages, and anything
- * synced from BoardGameGeek).
+ * Delete a user's app data (chats and their messages, per-user counters /
+ * budget rows, and anything synced from BoardGameGeek).
  */
 export async function deleteUserAppData(
   ctx: MutationCtx,
@@ -83,9 +83,33 @@ export async function deleteUserAppData(
     .query("bggSyncJobs")
     .withIndex("by_user_and_kind", (q) => q.eq("userId", userId))
     .take(10);
-  for (const j of bggJobs) await ctx.db.delete("bggSyncJobs", j._id);
+  for (const j of bggJobs) {
+    await ctx.db.delete("bggSyncJobs", j._id);
+    // A job's enrichment queue can be thousands of rows — drained in batches.
+    await ctx.scheduler.runAfter(0, internal.bggSync.clearEnrichQueue, {
+      jobId: j._id,
+      before: Number.MAX_SAFE_INTEGER,
+    });
+  }
 
-  // The synced collection and plays can run to thousands of rows — far past a
+  // Per-user singleton rows (one each, by construction).
+  const budget = await ctx.db
+    .query("userBudgets")
+    .withIndex("by_user", (q) => q.eq("userId", userId))
+    .take(10);
+  for (const r of budget) await ctx.db.delete("userBudgets", r._id);
+  const totals = await ctx.db
+    .query("userTotals")
+    .withIndex("by_user", (q) => q.eq("userId", userId))
+    .take(10);
+  for (const r of totals) await ctx.db.delete("userTotals", r._id);
+  const counts = await ctx.db
+    .query("collectionCounts")
+    .withIndex("by_user", (q) => q.eq("userId", userId))
+    .take(10);
+  for (const r of counts) await ctx.db.delete("collectionCounts", r._id);
+
+  // The synced collection can run to thousands of rows — far past a
   // single transaction — so they cascade out of band. This is scheduled rather
   // than awaited on purpose: `deleteUserAndAuth` removes the user row moments
   // later, so the cascade keys off the raw id and never reads the user.

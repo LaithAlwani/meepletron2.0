@@ -9,7 +9,7 @@ import {
 } from "./_generated/server";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
-import { getCurrentUser, requireAdmin } from "./lib/auth";
+import { requireAdmin } from "./lib/auth";
 import { generateText } from "ai";
 import { resolveContentModel, buildAnswer, type Annotation } from "./rag";
 import { stripIconTokens } from "./lib/prompts";
@@ -71,8 +71,6 @@ export const replaceFaqs = internalMutation({
         answer: f.answer,
         annotations: f.annotations,
         order: order++,
-        helpful: 0,
-        notHelpful: 0,
       });
     }
   },
@@ -133,8 +131,8 @@ export const adminRegenerate = action({
 
 /**
  * Admin: manually save a game's FAQ (edit the AI's output). Patches existing
- * rows (keeping their votes; clearing citations only when the answer text
- * changed, since the old citations would no longer match), inserts new ones, and
+ * rows (clearing citations only when the answer text changed, since the old
+ * citations would no longer match), inserts new ones, and
  * deletes any that were removed.
  */
 export const adminSaveFaqs = mutation({
@@ -177,8 +175,6 @@ export const adminSaveFaqs = mutation({
           answer,
           annotations: [],
           order: order++,
-          helpful: 0,
-          notHelpful: 0,
         });
       }
     }
@@ -188,7 +184,7 @@ export const adminSaveFaqs = mutation({
   },
 });
 
-/** The FAQ for the detail page (this game's own), with the caller's votes. */
+/** The FAQ for the detail page (this game's own). */
 export const listForGame = query({
   args: { gameId: v.id("games") },
   handler: async (ctx, { gameId }) => {
@@ -197,31 +193,12 @@ export const listForGame = query({
       .withIndex("by_game", (q) => q.eq("gameId", gameId))
       .collect();
     faqs.sort((a, b) => a.order - b.order);
-
-    const user = await getCurrentUser(ctx);
-    return await Promise.all(
-      faqs.map(async (f) => {
-        let myVote: "up" | "down" | null = null;
-        if (user) {
-          const existing = await ctx.db
-            .query("faqVotes")
-            .withIndex("by_user_and_faq", (q) =>
-              q.eq("userId", user._id).eq("faqId", f._id),
-            )
-            .unique();
-          myVote = existing?.vote ?? null;
-        }
-        return {
-          _id: f._id,
-          question: f.question,
-          answer: f.answer,
-          annotations: f.annotations,
-          helpful: f.helpful,
-          notHelpful: f.notHelpful,
-          myVote,
-        };
-      }),
-    );
+    return faqs.map((f) => ({
+      _id: f._id,
+      question: f.question,
+      answer: f.answer,
+      annotations: f.annotations,
+    }));
   },
 });
 

@@ -21,7 +21,7 @@ const inputBase = `${fieldClasses} !w-auto px-3 py-1.5`;
 
 /**
  * Admin editor for a game's FAQ (fix the AI's output). Editing an answer clears
- * its citations (they'd no longer match); untouched entries keep their votes.
+ * its citations (they'd no longer match).
  */
 export function FaqEditor({
   gameId,

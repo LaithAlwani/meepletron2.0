@@ -30,7 +30,7 @@ import { slugifyUnique } from "./lib/slug";
 import { sortKeys, isGameSort, type GameSortKey } from "./lib/gameSort";
 import { coverUrls } from "./lib/gameCover";
 import { matchesGameFilters, type LibraryTime } from "./lib/gameFilters";
-import { chatEnabledBaseIds } from "./games";
+import { adjustExpansionCount } from "./games";
 
 /**
  * BoardGameGeek account linking + collection sync.
@@ -308,33 +308,11 @@ function tallyOf(r: CollectionFlags | null): CollectionTally {
   };
 }
 
-/** The old scan — fallback while a user has no `collectionCounts` doc. */
-async function scanCollectionCounts(
-  ctx: QueryCtx,
-  userId: Id<"users">,
-): Promise<CollectionTally> {
-  const rows = await ctx.db
-    .query("bggCollection")
-    .withIndex("by_user_and_sort_title", (q) => q.eq("userId", userId))
-    .take(5000);
-  const c = { all: 0, owned: 0, wishlist: 0, forTrade: 0, prevOwned: 0 };
-  for (const r of rows) {
-    const t = tallyOf(r);
-    c.all += t.all;
-    c.owned += t.owned;
-    c.wishlist += t.wishlist;
-    c.forTrade += t.forTrade;
-    c.prevOwned += t.prevOwned;
-  }
-  return c;
-}
-
 /**
  * Keep a user's `collectionCounts` doc in step with one bggCollection row change.
  * Call it in the SAME mutation as every insert / flag patch / delete of a row:
  * `before` = the row as it was (null on insert), `after` = as it now is (null on
- * delete). Only updates an existing doc — until the backfill creates one,
- * readers use the scan, so a missed call before then can't skew anything.
+ * delete). Creates the doc on a user's first counted change.
  */
 export async function applyCollectionCountDelta(
   ctx: MutationCtx,
@@ -357,7 +335,17 @@ export async function applyCollectionCountDelta(
     .query("collectionCounts")
     .withIndex("by_user", (q) => q.eq("userId", userId))
     .unique();
-  if (!doc) return;
+  if (!doc) {
+    await ctx.db.insert("collectionCounts", {
+      userId,
+      all: Math.max(0, b.all - a.all),
+      owned: Math.max(0, b.owned - a.owned),
+      wishlist: Math.max(0, b.wishlist - a.wishlist),
+      forTrade: Math.max(0, b.forTrade - a.forTrade),
+      prevOwned: Math.max(0, b.prevOwned - a.prevOwned),
+    });
+    return;
+  }
   await ctx.db.patch("collectionCounts", doc._id, {
     all: Math.max(0, doc.all + b.all - a.all),
     owned: Math.max(0, doc.owned + b.owned - a.owned),
@@ -367,7 +355,7 @@ export async function applyCollectionCountDelta(
   });
 }
 
-/** Two-level counts for the collection tabs: one small doc (scan fallback). */
+/** Two-level counts for the collection tabs: one small doc (zeros if none). */
 export const myCollectionCounts = query({
   args: {},
   handler: async (ctx) => {
@@ -378,49 +366,14 @@ export const myCollectionCounts = query({
       .query("collectionCounts")
       .withIndex("by_user", (q) => q.eq("userId", user._id))
       .unique();
-    if (doc) {
-      return {
-        all: doc.all,
-        owned: doc.owned,
-        wishlist: doc.wishlist,
-        forTrade: doc.forTrade,
-        prevOwned: doc.prevOwned,
-      };
-    }
-    return await scanCollectionCounts(ctx, user._id);
-  },
-});
-
-/**
- * Create/refresh every user's `collectionCounts` doc from a scan. Paginates
- * users and self-reschedules. Run ONLY once every bggCollection write path calls
- * `applyCollectionCountDelta` (incl. collection.ts setFlags), or counts drift:
- *   npx convex run bggSync:backfillCollectionCounts '{}'
- */
-export const backfillCollectionCounts = internalMutation({
-  args: { cursor: v.optional(v.union(v.string(), v.null())) },
-  handler: async (ctx, { cursor }) => {
-    const res = await ctx.db
-      .query("users")
-      .paginate({ numItems: 20, cursor: cursor ?? null });
-    for (const u of res.page) {
-      const existing = await ctx.db
-        .query("collectionCounts")
-        .withIndex("by_user", (q) => q.eq("userId", u._id))
-        .unique();
-      const c = await scanCollectionCounts(ctx, u._id);
-      if (existing) {
-        await ctx.db.patch("collectionCounts", existing._id, c);
-      } else {
-        // Every user gets a doc (even at zero) so a later first add counts.
-        await ctx.db.insert("collectionCounts", { userId: u._id, ...c });
-      }
-    }
-    if (!res.isDone) {
-      await ctx.scheduler.runAfter(0, internal.bggSync.backfillCollectionCounts, {
-        cursor: res.continueCursor,
-      });
-    }
+    if (!doc) return zero;
+    return {
+      all: doc.all,
+      owned: doc.owned,
+      wishlist: doc.wishlist,
+      forTrade: doc.forTrade,
+      prevOwned: doc.prevOwned,
+    };
   },
 });
 
@@ -632,18 +585,8 @@ export const myCollection = query({
       categories,
       mechanics,
     };
-    // Chat-ready is a per-game flag once backfilled (one stats doc read); only
-    // before that do we fall back to the full chat-enabled id set.
-    const flagsReady =
-      !!chatOnly &&
-      (await ctx.db.query("catalogueStats").first())?.chatReadyBackfilledAt !=
-        null;
-    const chatIds =
-      chatOnly && !flagsReady ? await chatEnabledBaseIds(ctx) : null;
     const keep = (game: Doc<"games">) =>
-      matchesGameFilters(game, gf) &&
-      (!chatOnly ||
-        (flagsReady ? game.chatReady === true : !!chatIds?.has(game._id)));
+      matchesGameFilters(game, gf) && (!chatOnly || game.chatReady === true);
 
     const searchTerm = (term ?? "").trim();
     const searching = searchTerm.length >= 2;
@@ -747,7 +690,7 @@ async function resetJob(
     userId: Id<"users">;
     accountId: Id<"bggAccounts">;
     username: string;
-    kind: "collection" | "plays";
+    kind: "collection";
     mode: "incremental" | "full";
     minDate?: string;
   },
@@ -763,7 +706,6 @@ async function resetJob(
     total: undefined,
     created: 0,
     recentTitles: [],
-    enrichQueue: undefined,
     enrichTotal: undefined,
     enrichProcessed: undefined,
     currentTitle: undefined,
@@ -973,6 +915,7 @@ async function linkOrCreateGame(
     // searchText deliberately left unset: a stub has nothing worth matching,
     // and this keeps it out of full-text search even before the isStub filter.
   });
+  if (item.isExpansion) await adjustExpansionCount(ctx, 1);
   return { gameId, created: true };
 }
 
@@ -1091,7 +1034,6 @@ export const finishCollection = internalMutation({
     // driver step. The queue lives in `bggEnrichQueue`, not on this doc.
     await ctx.db.patch("bggSyncJobs", jobId, {
       status: "enriching",
-      enrichQueue: undefined,
       enrichTotal: undefined,
       enrichProcessed: 0,
       currentTitle: undefined,
@@ -1181,8 +1123,7 @@ export const buildEnrichQueue = internalMutation({
  * One driver step, in one transaction: pop the next queued game, advance the
  * counter, narrate its title, and say whether it still needs a BGG call (another
  * user's sync may have filled it meanwhile). Finishes the job when the queue is
- * empty. Jobs that were mid-enrichment at deploy still carry the legacy
- * `enrichQueue` array on the doc and are drained from it instead.
+ * empty.
  */
 export const claimNextEnrich = internalMutation({
   args: { jobId: v.id("bggSyncJobs") },
@@ -1198,27 +1139,18 @@ export const claimNextEnrich = internalMutation({
     if (!job || job.status !== "enriching") return { kind: "stop" };
     const now = Date.now();
 
-    let gameId: Id<"games"> | null = null;
-    if (job.enrichQueue) {
-      const idx = job.enrichProcessed ?? 0;
-      gameId = idx < job.enrichQueue.length ? job.enrichQueue[idx] : null;
-    } else {
-      const next = await ctx.db
-        .query("bggEnrichQueue")
-        .withIndex("by_job_and_run", (q) =>
-          q.eq("jobId", jobId).eq("runStartedAt", job.runStartedAt),
-        )
-        .first();
-      if (next) {
-        gameId = next.gameId;
-        await ctx.db.delete("bggEnrichQueue", next._id);
-      }
-    }
+    const next = await ctx.db
+      .query("bggEnrichQueue")
+      .withIndex("by_job_and_run", (q) =>
+        q.eq("jobId", jobId).eq("runStartedAt", job.runStartedAt),
+      )
+      .first();
+    const gameId = next?.gameId ?? null;
+    if (next) await ctx.db.delete("bggEnrichQueue", next._id);
 
     if (!gameId) {
       await ctx.db.patch("bggSyncJobs", jobId, {
         status: "done",
-        enrichQueue: undefined,
         currentTitle: undefined,
         finishedAt: now,
         updatedAt: now,

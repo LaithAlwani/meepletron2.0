@@ -3,6 +3,7 @@ import { mutation } from "./_generated/server";
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { deleteUserAndAuth } from "./lib/purge";
 import { recordMessages } from "./lib/stats";
+import { userTotalsDoc } from "./lib/userTotals";
 
 const UPGRADE_TTL_MS = 15 * 60 * 1000;
 
@@ -89,6 +90,29 @@ export const completeUpgrade = mutation({
         chatsMoved++;
       }
     }
+
+    // All-time token total: fold the guest's into the account's, then drop the
+    // guest's row. (The daily budget isn't carried — it resets daily.)
+    const guestTotals = await userTotalsDoc(ctx, guest._id);
+    if (guestTotals) {
+      const mine = await userTotalsDoc(ctx, currentUserId);
+      if (mine) {
+        await ctx.db.patch("userTotals", mine._id, {
+          tokensUsedTotal: mine.tokensUsedTotal + guestTotals.tokensUsedTotal,
+        });
+      } else {
+        await ctx.db.insert("userTotals", {
+          userId: currentUserId,
+          tokensUsedTotal: guestTotals.tokensUsedTotal,
+        });
+      }
+      await ctx.db.delete("userTotals", guestTotals._id);
+    }
+    const guestBudget = await ctx.db
+      .query("userBudgets")
+      .withIndex("by_user", (q) => q.eq("userId", guest._id))
+      .unique();
+    if (guestBudget) await ctx.db.delete("userBudgets", guestBudget._id);
 
     // Guest row has no data left — delete it and its auth rows.
     await deleteUserAndAuth(ctx, guest._id);
