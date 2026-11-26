@@ -13,6 +13,7 @@ import {
 } from "./lib/aiModels";
 import { isChatModelAllowed } from "./lib/chatConfig";
 import { buildAnswer } from "./rag";
+import { offTopicReply } from "./lib/offTopic";
 import { createIconTokenStripper } from "./lib/prompts";
 
 const http = httpRouter();
@@ -157,11 +158,12 @@ const chat = httpAction(async (ctx, request) => {
     modelOverride,
   });
 
-  // No relevant rulebook content → tell the user, and NEVER let the model
-  // answer from its own knowledge.
+  // No relevant rulebook content → answer without the model, so it can NEVER
+  // reach for its own knowledge. Which reply depends on what was actually
+  // said: a greeting or a "what can you do?" gets oriented rather than told
+  // to rephrase using the game's terminology (see lib/offTopic).
   if (empty || !system) {
-    const text =
-      "I couldn't find anything about that in the loaded rulebook(s). I only answer from what's in the rulebook, so try rephrasing using the game's own terms — for example the phase, action, or component involved — or it may not be covered here.";
+    const text = offTopicReply(query, sourceTitles);
     return staticAnswer(ctx, origin, text, () =>
       ctx.runMutation(internal.chat.saveAssistantMessage, {
         chatId,

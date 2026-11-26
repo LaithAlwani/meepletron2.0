@@ -1,0 +1,46 @@
+# Runs on every push and pull request: GitHub spins up a fresh machine, installs
+# the dependencies and runs the checks below, then marks the commit with a tick
+# or a cross. Nothing here needs a secret or costs anything.
+#
+# Deliberately NOT included: `npm run test:rules`. Those scenarios call a real
+# model, so they need a provider key and cost money per run — they're for
+# running by hand before a prompt change, not on every push.
+name: Checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      # The free half of the guideline tests: that the scenario assertions
+      # themselves still catch a fabricated answer.
+      - name: Scenario expectations
+        run: npm run test:scenarios
+
+      - name: Off-topic replies
+        run: npm run test:offtopic
+
+      - name: BGG parsers
+        run: npm run test:bgg-thing
+
+      - name: BGG XML
+        run: npm run test:bgg-xml
