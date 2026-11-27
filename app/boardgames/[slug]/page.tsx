@@ -17,6 +17,7 @@ import {
   X,
 } from "lucide-react";
 import { api } from "@/convex/_generated/api";
+import { useGameDetail } from "@/lib/useGameDetail";
 import { useTopBarTitle } from "@/components/topbar/MobileTopBar";
 import { formatPlayTime } from "@/lib/format";
 import { CollectionButton } from "@/components/boardgames/CollectionButton";
@@ -193,10 +194,11 @@ export default function GameDetailPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug: handle } = use(params);
-  const game = useQuery(api.games.getByHandle, { handle });
-  useTopBarTitle(game?.title);
   const me = useQuery(api.users.me);
   const isAdmin = me?.role === "admin";
+  // Cached for visitors (no live subscription); live for admins.
+  const game = useGameDetail(handle, isAdmin);
+  useTopBarTitle(game?.title);
 
   const lenis = useLenis();
   useEffect(() => {
