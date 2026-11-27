@@ -99,7 +99,8 @@ export function ChatPane({
   slug: string;
   embedded?: boolean;
 }) {
-  const game = useQuery(api.games.getByHandle, { handle: slug });
+  // Lean header query (game + parent only), not the full getByHandle detail.
+  const game = useQuery(api.games.chatHeaderByHandle, { handle: slug });
   const router = useRouter();
 
   // One chat per family: an expansion routes to the base game's chat, carrying
@@ -144,7 +145,7 @@ function ChatView({
   gameId: Id<"games">;
   slug: string;
   embedded: boolean;
-  // Title + cover of the chat's game, from ChatPane's (reactive) getByHandle —
+  // Title + cover of the chat's game, from ChatPane's (reactive) chatHeaderByHandle —
   // no second subscription to the same game here.
   game: { title: string; imageUrl: string | null; thumbnailUrl: string | null };
 }) {

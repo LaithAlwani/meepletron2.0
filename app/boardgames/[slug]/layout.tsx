@@ -1,15 +1,12 @@
 import type { Metadata } from "next";
-import { Suspense, cache } from "react";
-import { fetchQuery } from "convex/nextjs";
-import { api } from "@/convex/_generated/api";
+import { Suspense } from "react";
+import { getGameCached } from "@/lib/gameCache";
 import { decodeHtmlEntities } from "@/lib/htmlEntities";
 import { SITE_URL } from "@/lib/site";
 
-// Shared between generateMetadata and the layout body so the game is fetched
-// once per request, not twice.
-const getGame = cache((slug: string) =>
-  fetchQuery(api.games.getByHandle, { handle: slug }).catch(() => null),
-);
+// Shared between generateMetadata and the layout body (and the how-to-play and
+// chat routes): one fetch per request, cached across requests for an hour.
+const getGame = getGameCached;
 
 /** Decode entities and drop inline citation markers ("[1]") for clean prose. */
 function clean(text: string): string {

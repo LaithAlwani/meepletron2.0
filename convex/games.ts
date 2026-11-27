@@ -996,6 +996,42 @@ export const getByHandle = query({
 });
 
 /**
+ * Just what the chat page's header needs (title, cover, slug, and the parent for
+ * expansions) — reads the game + its parent (1–2 docs) instead of getByHandle's
+ * full detail (up to 100 expansions + 50 rulebooks + content). The chat pane
+ * subscribes to this live, so keeping it small keeps bandwidth down.
+ */
+export const chatHeaderByHandle = query({
+  args: { handle: v.string() },
+  handler: async (ctx, { handle }) => {
+    let game = await ctx.db
+      .query("games")
+      .withIndex("by_slug", (q) => q.eq("slug", handle))
+      .first();
+    if (!game) {
+      const asId = ctx.db.normalizeId("games", handle);
+      if (asId) game = await ctx.db.get("games", asId);
+    }
+    if (!game) return null;
+    const header = async (g: Doc<"games">) => ({
+      _id: g._id,
+      slug: g.slug,
+      title: g.title,
+      ...(await coverUrls(ctx, g)),
+    });
+    const parentDoc =
+      game.isExpansion && game.parentId
+        ? await ctx.db.get("games", game.parentId)
+        : null;
+    return {
+      ...(await header(game)),
+      isExpansion: game.isExpansion,
+      parent: parentDoc ? await header(parentDoc) : null,
+    };
+  },
+});
+
+/**
  * Chat sources for a game family, grouped by game (base first, then expansions
  * that have ingested rulebooks). Only ingested rulebooks — the ones the chat can
  * actually retrieve from. `gameId` is resolved to its base game.

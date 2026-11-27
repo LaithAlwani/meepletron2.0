@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
-import { fetchQuery } from "convex/nextjs";
-import { api } from "@/convex/_generated/api";
+import { getGameCached } from "@/lib/gameCache";
 
 /**
  * The chat page itself is a client component, which can't export metadata, so
@@ -14,9 +13,7 @@ export async function generateMetadata({
   params: Promise<{ slug: string }>;
 }): Promise<Metadata> {
   const { slug } = await params;
-  const game = await fetchQuery(api.games.getByHandle, { handle: slug }).catch(
-    () => null,
-  );
+  const game = await getGameCached(slug);
   if (!game) return {};
   return {
     title: `${game.title} | Chat`,

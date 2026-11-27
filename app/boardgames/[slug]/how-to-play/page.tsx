@@ -18,6 +18,7 @@ import { InlineAsk } from "@/components/boardgames/InlineAsk";
 import { Markdown } from "@/components/ui/Markdown";
 import { decodeHtmlEntities } from "@/lib/htmlEntities";
 import { SITE_URL } from "@/lib/site";
+import { getGameCached } from "@/lib/gameCache";
 import { formatPlayTime } from "@/lib/format";
 
 /** Decode HTML entities and strip inline citation markers ("[1]") so the text
@@ -28,7 +29,7 @@ function clean(text: string): string {
 }
 
 async function load(slug: string) {
-  const game = await fetchQuery(api.games.getByHandle, { handle: slug });
+  const game = await getGameCached(slug);
   if (!game) return null;
   const gameId = game._id as Id<"games">;
   const [faqs, reminders] = await Promise.all([
@@ -44,9 +45,7 @@ export async function generateMetadata({
   params: Promise<{ slug: string }>;
 }): Promise<Metadata> {
   const { slug } = await params;
-  const game = await fetchQuery(api.games.getByHandle, { handle: slug }).catch(
-    () => null,
-  );
+  const game = await getGameCached(slug);
   if (!game) return {};
   const title = `${game.title} rules & rulebook — how to play`;
   const description = `${game.title} rules made simple: setup, turns, scoring and how to win. Download the official ${game.title} rulebook (PDF) and get answers to the most-asked ${game.title} rules questions.`;
